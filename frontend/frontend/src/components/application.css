@@ -1,0 +1,115 @@
+/* ========================================== */
+/* Application Admin - Create Timesheet Modal */
+/* ========================================== */
+
+.timesheet-form-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 900px;
+  background-color: var(--clean-card-bg);
+  border-radius: var(--clean-radius);
+  box-shadow: var(--clean-shadow);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.timesheet-form-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 25px;
+  border-bottom: 1px solid var(--clean-accent);
+  background-color: var(--clean-primary);
+  color: var(--clean-card-bg);
+  font-weight: 700;
+}
+
+.timesheet-form-modal .modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.timesheet-form-modal .modal-close-btn {
+  font-size: 1.5rem;
+  color: var(--clean-card-bg);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.timesheet-form-modal .modal-close-btn:hover {
+  color: var(--clean-danger);
+}
+
+.timesheet-form-modal .form-content {
+  padding: 20px 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.timesheet-form-modal .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.timesheet-form-modal .form-input,
+.timesheet-form-modal .form-select {
+  padding: 8px 12px;
+  border-radius: var(--clean-radius);
+  border: 1px solid var(--clean-accent);
+  font-size: 1rem;
+  color: var(--clean-text);
+  background-color: var(--clean-card-bg);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.timesheet-form-modal .form-input:focus,
+.timesheet-form-modal .form-select:focus {
+  border-color: var(--clean-highlight);
+  box-shadow: 0 2px 6px rgba(56, 163, 165, 0.3);
+}
+
+.timesheet-form-modal .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--clean-accent);
+}
+
+.timesheet-form-modal .btn {
+  padding: 8px 16px;
+  border-radius: var(--clean-radius);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  border: none;
+}
+
+.timesheet-form-modal .btn-primary {
+  background-color: var(--clean-highlight);
+  color: var(--clean-card-bg);
+}
+
+.timesheet-form-modal .btn-primary:hover {
+  background-color: #2b7a78;
+}
+
+.timesheet-form-modal .btn-secondary {
+  background-color: var(--clean-accent);
+  color: var(--clean-primary);
+}
+
+.timesheet-form-modal .btn-secondary:hover {
+  background-color: #dbe4f0;
+}

@@ -1,0 +1,135 @@
+/* Color Palette Refined (Conceptual)
+   --darkest: #424874
+   --lightest: #f4eeff
+   --accent: #A6B1E1 (Used for borders/subtle text)
+   --primary: #4e40e0 (New primary for count/emphasis)
+   --light: #dcd6f7
+*/
+
+/* Container */
+.container {
+  padding: 40px;
+  max-width: 1200px;
+  margin: 20px auto 50px auto; /* Increased top/bottom margin for better flow */
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  background-color: #ffffff;
+  border-radius: 16px; /* Slightly more rounded corners */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05); /* Lighter, more modern shadow */
+}
+
+/* Header */
+.header {
+  margin-bottom: 50px;
+  text-align: center;
+  color: #424874; /* DARKEST */
+  font-weight: 800; /* Bolder header */
+  font-size: 1.5em; /* Slightly larger */
+  padding-bottom: 15px;
+  border-bottom: 5px solid #A376A2; /* Thicker, softer divider */
+  width: fit-content;
+  margin: 0 auto 60px auto; /* Increased bottom margin */
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+/* Card container */
+.cardContainer {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+/* Base Card */
+.card {
+  position: relative;
+  background-color: #f4eeff; /* LIGHTEST */
+  border-radius: 12px;
+  text-align: center;
+  flex-basis: 300px;
+  flex-grow: 1;
+  max-width: 380px; /* Slightly wider max-width */
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); /* Clearer initial shadow */
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); /* Smoother transition */
+  cursor: pointer;
+  border: 1px solid transparent; /* Start with transparent border */
+  color: #424874; /* DARKEST */
+}
+
+/* Card Hover */
+.cardHover {
+  transform: translateY(-8px); /* More pronounced lift */
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.2); /* Deeper shadow on hover */
+  background-color: #ffffff; /* White background on hover */
+  border-color: #1A2A4F; /* Highlight border with primary color */
+}
+
+/* Card Header Bar - Use a primary brand color for clear status differentiation */
+.cardHeaderBar {
+  padding: 15px 10px; /* Increased vertical padding */
+  font-weight: 700;
+  font-size: 1.1em; /* Slightly larger text */
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: #A376A2; /* New Primary/Brand color for strong contrast */
+  color: #ffffff; /* White text on primary color */
+}
+
+/* Card Body */
+.cardBody {
+  padding: 40px 30px 35px 30px; /* Increased vertical padding */
+  background-color: #FFF1F1; /* LIGHTEST base */
+  min-height: 120px; /* Ensure consistent card height */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Count - High contrast and size for immediate focus */
+.count {
+  font-size: 5em; /* Larger count */
+  font-weight: 900;
+  margin: 10px 0 8px 0;
+  color: #A376A2; /* New Primary/Brand color for the main number */
+  line-height: 1;
+}
+
+/* Count Text */
+.countText {
+  font-size: 1em; /* Slightly larger, better readability */
+  color: #424874; /* DARKEST */
+  font-weight: 600; /* Bolder descriptive text */
+  opacity: 0.9;
+  letter-spacing: 0.5px;
+}
+
+/* Loading State */
+.loadingState {
+  text-align: center;
+  padding: 80px; /* More prominent loading area */
+  color: #424874;
+  opacity: 0.7;
+  font-size: 1.5em;
+  font-weight: 600;
+  border-radius: 12px;
+  background-color: #f4eeff;
+}
+
+/* Error State */
+.errorState {
+  text-align: center;
+  padding: 30px;
+  color: #424874;
+  background-color: #ffd6d6; /* Soft red for error */
+  border: 2px solid #ff0000; /* Clear red border */
+  border-radius: 12px;
+  font-size: 1.2em;
+  font-weight: 700;
+  margin: 40px auto;
+  max-width: 800px;
+}

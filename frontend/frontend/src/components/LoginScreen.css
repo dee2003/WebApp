@@ -1,0 +1,166 @@
+/* ---------------------------------- */
+/* 1. Global & Centering (Light Blue Theme) */
+/* ---------------------------------- */
+body, #root {
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Arial, sans-serif; 
+    /* Very light, cool gray background */
+    background-color: #f7f9fb; 
+}
+
+.login-container {
+    display: flex;
+    justify-content: center; 
+    align-items: center; 
+    height: 100%;
+    padding: 20px;
+}
+
+/* ---------------------------------- */
+/* 2. Form Card Styling (Crisp White Card) */
+/* ---------------------------------- */
+.login-card {
+    max-width: 380px; 
+    width: 100%;
+    
+    background-color: white;
+    /* Spacious padding */
+    padding: 30px 40px 40px 40px; 
+    border-radius: 6px; 
+    /* Subtle shadow for a lift-off-the-page look */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); 
+    border: 1px solid #e1e8ed; /* Extra light border for refinement */
+    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+/* ---------------------------------- */
+/* 3. Logo and Header Styling         */
+/* ---------------------------------- */
+.company-logo {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.company-logo img {
+    max-width: 100px; 
+    height: auto;
+    margin-bottom: 5px; 
+}
+
+.company-logo h1 {
+    font-size: 1.4em; 
+    color: #334455; /* Neutral, dark header text */
+    font-weight: 500;
+    width: 100%;
+    
+    /* Pushing the form fields down */
+    margin: 10px 0 35px 0; 
+    padding-bottom: 5px;
+}
+
+/* ---------------------------------- */
+/* 4. Input Field Styling (Teal Focus) */
+/* ---------------------------------- */
+.login-form {
+    width: 100%;
+}
+
+.form-group {
+    margin-bottom: 15px; 
+    width: 100%;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600; 
+    text-align: left;
+    color: #1a202c; /* Very dark text for high contrast */
+    font-size: 0.9em;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 12px; 
+    border: 1px solid #ccd6e0; /* Neutral, light border */
+    border-radius: 4px; /* Slightly rounded */
+    box-sizing: border-box;
+    font-size: 1em;
+    transition: border-color 0.1s, box-shadow 0.2s;
+    appearance: none;
+}
+
+.form-control:focus {
+    /* Bright Teal/Light Blue focus color */
+    border-color: #00bcd4; 
+    outline: none;
+    /* Subtle shadow using the focus color */
+    box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.3); 
+}
+
+/* ---------------------------------- */
+/* 5. Button and Message Styling (Vibrant Teal Primary Button) */
+/* ---------------------------------- */
+.btn-primary {
+    /* Vibrant Teal/Cyan - Professional and modern */
+    /* background-color: #38a3a5;#00a8cc  */
+    background-color: #00a8cc;
+    color: white; 
+    padding: 10px 20px;
+    border: none; /* Removed dark border for a flatter look */
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 700;
+    transition: background-color 0.2s ease;
+    margin-top: 20px; 
+}
+
+.btn-primary:hover {
+    /* Darker shade of teal on hover */
+    background-color: #008fa0; 
+}
+
+.btn--full-width {
+    width: 100%;
+}
+
+/* Error Message Styling (Soft Red) */
+p[style] { 
+    margin: 10px 0;
+    padding: 8px;
+    border-radius: 3px;
+    background-color: #fde8e8; /* Very light red background */
+    color: #d84315 !important; /* Darker, clear error text */
+    border: 1px solid #f9cdcd;
+    width: 100%;
+    box-sizing: border-box;
+    font-weight: 500;
+    font-size: 0.9em;
+}
+
+.form-hint {
+    margin-top: 15px;
+    font-size: 0.8em;
+    color: #7f8c8d;
+}
+.form-group select {
+  appearance: none;             /* Removes default browser style */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: white url("data:image/svg+xml;utf8,<svg fill='black' height='16' width='16' xmlns='http://www.w3.org/2000/svg'><path d='M4 6l4 4 4-4z'/></svg>") no-repeat right 10px center;
+  background-size: 16px;
+  padding-right: 30px;          /* Adds space for the arrow */
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  height: 38px;
+  font-size: 14px;
+}

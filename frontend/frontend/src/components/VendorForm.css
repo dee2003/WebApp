@@ -1,0 +1,164 @@
+/* ===== Vendor Form Page (Scoped Styles) ===== */
+.vendor-form-page {
+  font-family: "Segoe UI", Arial, sans-serif;
+  color: #000;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ---- Section Header ---- */
+.vendor-form-page h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #000;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #dcdcdc;
+  padding-bottom: 4px;
+}
+
+/* ---- Form Groups ---- */
+.vendor-form-page .form-group {
+  margin-bottom: 12px;
+  padding: 4px 0;
+}
+
+/* ---- Labels ---- */
+.vendor-form-page label {
+  font-weight: 600;
+  color: #000;
+  margin-bottom: 4px !important;
+  display: block;
+}
+
+/* ---- Checkbox List ---- */
+.vendor-form-page .checkbox-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-left: 0.2rem;
+}
+
+/* ---- Checkbox Items ---- */
+.vendor-form-page .checkbox-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: #000;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.vendor-form-page .checkbox-item:hover {
+  background-color: #f2f2f2;
+}
+
+/* ---- Checkbox Input ---- */
+.vendor-form-page .checkbox-item input[type="checkbox"] {
+  margin-right: 8px;
+  width: 17px;
+  height: 17px;
+  accent-color: #000; /* Black theme */
+}
+.vendor-form-page .vendor-subheading {
+  font-weight: 700;  /* mild boldness */
+  color: #000;
+  font-size: 15px;
+}
+
+/* ---- Vendor List Container ---- */
+.vendor-form-page .vendor-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+  width: 85%;
+}
+
+/* ---- Vendor List Items ---- */
+.vendor-form-page .vendor-item {
+  background: #fff;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+
+.vendor-form-page .vendor-item:hover {
+  background-color: #f8f8f8;
+}
+
+/* ---- Checkbox inside vendor item ---- */
+.vendor-form-page .vendor-item input[type="checkbox"] {
+  accent-color: #000;
+  margin-right: 8px;
+  width: 17px;
+  height: 17px;
+}
+
+/* ---- Vendor Name ---- */
+.vendor-form-page .vendor-name {
+  font-size: 15px;
+  font-weight: 400;
+  color: #000;
+  cursor: pointer;
+}
+
+.vendor-form-page .vendor-name:hover {
+  text-decoration: underline;
+}
+
+/* ---- Muted Text ---- */
+.vendor-form-page .text-muted {
+  color: #555 !important;
+  font-style: italic;
+  margin-left: 0.7rem;
+  font-size: 14px;
+}
+
+/* ---- Buttons ---- */
+.vendor-form-page .btn {
+  padding: 0.55rem 1.4rem;
+  border-radius: 5px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vendor-form-page .btn-primary {
+  background-color: #000;
+  color: #fff;
+}
+
+.vendor-form-page .btn-primary:hover:not(:disabled) {
+  background-color: #333;
+}
+
+.vendor-form-page .btn-secondary {
+  background-color: #ccc;
+  color: #000;
+}
+
+/* ---- Form Actions ---- */
+.vendor-form-page .form-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 720px) {
+  .vendor-form-page .checkbox-list {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .vendor-form-page .vendor-list {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+}

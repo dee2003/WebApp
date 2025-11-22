@@ -1,0 +1,212 @@
+/* Equipment Table Styling */
+.equipment-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background-color: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  table-layout: fixed; /* Keeps columns consistent */
+}
+
+/* Header Styling */
+.equipment-table th {
+  background-color: #dce7f5;
+  color: #3d5a80;
+  padding: 12px;
+  text-align: center; /* ✅ Center align header text */
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #c3d3eb;
+  white-space: nowrap;
+}
+
+/* Cell Styling */
+.equipment-table td {
+  font-family: 'Inter', 'Segoe UI', sans-serif; /* match previous table font */
+  font-size: 14px; /* adjust to preferred size similar to previous */
+color: var(--clean-text);
+ font-weight: 400;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e3e6ea;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  transition: all 0.3s ease;
+  line-height: 1.7;
+}
+
+
+/* Hover row effect */
+.equipment-table tr:hover {
+  background-color: #f5f7fa;
+  transition: background-color 0.2s ease-in-out;
+}
+
+/* Expandable text in name column */
+.equipment-table td.expandable {
+  max-width: 200px;
+  cursor: default;
+}
+
+/* Show full name inside the same cell when hovered */
+.equipment-table td.expandable:hover {
+  white-space: normal;
+  overflow: visible;
+  background-color: #f0f4fa;
+  border-radius: 6px;
+  z-index: 2;
+  position: relative;
+  max-width: none;
+}
+
+/* Fixed column widths */
+.equipment-table th:nth-child(1),
+.equipment-table td:nth-child(1) {  /* ID */
+  width: 60px;
+}
+.equipment-table th:nth-child(2),
+.equipment-table td:nth-child(2) {  /* Name */
+  width: 150px;        /* Keep decent space for long names */
+}
+.equipment-table th:nth-child(4),
+.equipment-table td:nth-child(4) {  /* Name */
+  width: 100px;        /* Keep decent space for long names */
+}
+.equipment-table th:nth-child(3),
+.equipment-table td:nth-child(3) {  /* Name */
+  width: 200px;        /* Keep decent space for long names */
+}
+.equipment-table th:nth-child(5),
+.equipment-table td:nth-child(5) {  /* Category No. */
+  width: 100px;
+}
+
+.equipment-table th:nth-child(6),
+.equipment-table td:nth-child(6) {  /* VIN No. */
+  width: 150px;
+}
+
+.equipment-table th:last-child,
+.equipment-table td:last-child {  /* Actions */
+  width: 180px;
+}
+.equipment-table th:nth-child(7),
+.equipment-table td:nth-child(7) {  /* Status */
+  width: 90px;         /* ⬅️ smaller */
+}
+
+/* Status colors */
+.status-active {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.status-inactive {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.status-maintenance {
+  color: #ffc107;
+  font-weight: 600;
+}
+
+/* Pagination Styling */
+.pagination-controls {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+.pagination-controls button {
+  padding: 6px 12px;
+  border: 1px solid #dce7f5;
+  border-radius: 6px;
+  background-color: white;
+  color: #3d5a80;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.pagination-controls button:hover {
+  background-color: #3d5a80;
+  color: white;
+  border-color: #3d5a80;
+}
+
+/* Responsive scroll */
+.data-table-container {
+  overflow-x: auto;
+}
+
+.data-table-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.data-table-container::-webkit-scrollbar-thumb {
+  background: #c9d7ec;
+  border-radius: 10px;
+}
+/* Action Buttons inside Equipment Table */
+.equipment-table td:last-child {
+  white-space: nowrap;
+  overflow: visible; /* allow buttons to show */
+  text-align: center;
+  vertical-align: middle;
+  z-index: 1;
+}
+
+.equipment-table .btn-sm {
+  display: inline-block;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+/* Edit Button */
+.equipment-table .btn-edit {
+  background-color: var(--clean-primary, #3d5a80);
+  color: #fff;
+  border: 1px solid var(--clean-primary, #3d5a80);
+}
+
+.equipment-table .btn-edit:hover {
+  background-color: #324c6d;
+  border-color: #324c6d;
+}
+
+/* Status Buttons */
+.equipment-table .btn-status {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+  border: none;
+  transition: 0.3s ease;
+}
+
+.equipment-table .btn-status.active {
+  background-color: #ef4444; /* Red */
+}
+
+.equipment-table .btn-status.active:hover {
+  background-color: #dc2626;
+}
+
+.equipment-table .btn-status.inactive {
+  background-color: #22c55e; /* Green */
+}
+
+.equipment-table .btn-status.inactive:hover {
+  background-color: #16a34a;
+}

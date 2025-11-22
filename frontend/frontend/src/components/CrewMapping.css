@@ -1,0 +1,876 @@
+:root {
+    --clean-bg: #f9fbfd;
+    --clean-table-header-bg: #dce7f5;
+    --clean-card-bg: #ffffff;
+    --clean-primary: #3d5a80;
+    --clean-accent: #e5eaf3; /* Slightly lighter accent border */
+    --clean-highlight: #38a3a5;
+    --clean-success: #38a3a5;
+    --clean-danger: #e63946; /* Added danger color */
+    --clean-text: #293241;
+    --clean-medium: #8d99ae;
+    --clean-shadow: 0 6px 15px rgba(41, 50, 65, 0.07);
+    --clean-radius: 8px; /* Reduced to 8px for a slightly sharper professional look */
+}
+
+ .sidebar-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 10px;
+}
+.sidebar-top {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 12px;
+}
+/* Toggle button — top-left */
+.toggle-sidebar {
+  background: transparent;
+  border: none;
+  color: var(--clean-card-bg);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.toggle-sidebar:hover {
+  color: var(--clean-highlight);
+}
+
+/* Sidebar title */
+.sidebar-title {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: white;
+  margin-left: 8px;
+}
+
+body {
+    background-color: var(--clean-bg);
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    color: var(--clean-text);
+    line-height: 1.7;
+}
+
+/* --- General Components --- */
+.section-title {
+    color: var(--clean-primary);
+    font-size: 1.4rem;
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-weight: 600; /* Ensured good font weight */
+}
+
+/* --- Foreman Selection Card --- */
+.foreman-selection-card {
+    background-color: var(--clean-card-bg); /* Changed to card-bg for better contrast */
+    padding: 25px;
+    border-radius: var(--clean-radius);
+    margin-bottom: 20px;
+    border: 1px solid var(--clean-accent);
+    box-shadow: var(--clean-shadow); /* Added a subtle shadow */
+}
+
+.foreman-selection-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px; /* Reduced gap slightly */
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.foreman-selection-list li {
+    cursor: pointer;
+    padding: 10px 18px; /* Adjusted padding */
+    border: 1px solid var(--clean-accent); /* Thinner border */
+    border-radius: 6px;
+    background-color: var(--clean-card-bg);
+    color: var(--clean-primary);
+    font-weight: 500; /* Adjusted font weight */
+    transition: all 0.2s ease-in-out;
+}
+
+.foreman-selection-list li:hover {
+    border-color: var(--clean-highlight);
+    color: var(--clean-highlight);
+    box-shadow: 0 2px 5px rgba(56, 163, 165, 0.1);
+}
+
+.foreman-selection-list li.active-foreman {
+    border-color: var(--clean-highlight);
+    background-color: var(--clean-highlight);
+    color: var(--clean-card-bg);
+    transform: none; /* Removed transform for a flatter UI */
+    box-shadow: 0 2px 8px rgba(56, 163, 165, 0.4); /* Used clean-highlight in shadow */
+}
+
+.foreman-selection-list.disabled li {
+    cursor: not-allowed;
+    opacity: 0.7;
+    background-color: var(--clean-accent);
+}
+
+.foreman-selection-list.disabled li.active-foreman {
+    opacity: 1;
+}
+
+/* --- MODAL STRUCTURE --- */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(41, 50, 65, 0.75); /* Darker backdrop */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px); /* Slightly reduced blur */
+}
+
+.modal-content {
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    width: 90%;
+    max-width: 700px;
+    background-color: var(--clean-card-bg);
+    border-radius: var(--clean-radius);
+    overflow: hidden;
+    box-shadow: var(--clean-shadow);
+}
+
+/* Header */
+.modal-header {
+    flex-shrink: 0;
+    padding: 18px 25px; /* Slightly refined padding */
+    border-bottom: 1px solid var(--clean-accent);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.5rem; /* Slightly smaller heading */
+    color: var(--clean-primary);
+    font-weight: 700;
+}
+.btn-info {
+background-color: var(--clean-highlight); /* Teal/Success */
+color: var(--clean-card-bg); /* White text */
+border: 1px solid var(--clean-highlight);
+    /* Inherits padding/size from .btn-sm */
+}
+
+.btn-info:hover {
+/* Slightly darker highlight on hover */
+background-color: #2b7a78; 
+border-color: #2b7a78;
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--clean-medium);
+    transition: color 0.2s;
+}
+
+.btn-close:hover {
+    color: var(--clean-danger); /* Close button highlights with danger color */
+}
+
+/* --- Modal Body & Scroll --- */
+.modal-body, .modal-body-scrollable {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 20px 25px; /* Consistent horizontal padding */
+}
+
+/* --- Modal Actions/Footer (NON-FLOATING) --- */
+/* CRITICAL FIX: Removed position: sticky, bottom, z-index */
+.modal-actions, .form-actions {
+    flex-shrink: 0;
+    padding: 16px 25px;
+    border-top: 1px solid var(--clean-accent);
+    background-color: var(--clean-bg); /* Use lighter background for footer */
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.btn-save-cta {
+    min-width: 150px;
+    padding: 12px 25px; /* Reduced vertical padding */
+    font-size: 1rem;
+    font-weight: 600; /* Adjusted font weight */
+    text-transform: uppercase;
+    letter-spacing: 0.5px; /* Reduced letter spacing */
+    color: var(--clean-card-bg);
+    background-color: var(--clean-highlight);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 3px 6px rgba(56, 163, 165, 0.3);
+}
+
+.btn-save-cta:hover {
+    background-color: #2b7a78; /* Slightly darker teal on hover */
+    transform: none; /* Removed transform for a flatter UI */
+    box-shadow: 0 4px 8px rgba(56, 163, 165, 0.5);
+}
+
+/* --- Resource Grid & Cards --- */
+.resource-assignment-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Wider min-width */
+    gap: 20px;
+}
+
+.resource-card-section {
+    background-color: var(--clean-card-bg); /* Changed to card-bg */
+    border: 1px solid var(--clean-accent);
+    padding: 15px; /* Reduced padding */
+    border-radius: var(--clean-radius);
+    display: flex;
+    flex-direction: column;
+    max-height: 450px; /* Increased max height slightly */
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(41, 50, 65, 0.05);
+}
+
+.resource-card-title {
+    color: var(--clean-primary);
+    font-size: 1.1rem;
+    font-weight: 700;
+    border-bottom: 1px solid var(--clean-accent); /* Thinner border */
+    padding-bottom: 8px;
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+.resource-item-list {
+    overflow-y: auto;
+    flex-grow: 1;
+    max-height: 100%;
+    padding-right: 4px; /* Reduced padding for scrollbar */
+}
+
+/* Refined Scrollbar Styles */
+.resource-item-list::-webkit-scrollbar {
+    width: 6px;
+}
+.resource-item-list::-webkit-scrollbar-track {
+    background: var(--clean-bg);
+}
+.resource-item-list::-webkit-scrollbar-thumb {
+    background: #d3d9e6; /* Lighter thumb color */
+    border-radius: 3px;
+}
+.resource-item-list::-webkit-scrollbar-thumb:hover {
+    background: var(--clean-medium);
+}
+
+/* --- Resource Items --- */
+.toggle-resource-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px; /* Improved horizontal padding */
+    border-radius: 6px; /* Slightly larger radius */
+    margin-bottom: 8px; /* Increased bottom margin for separation */
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    background-color: var(--clean-card-bg);
+    border: 1px solid var(--clean-accent);
+    font-weight: 500;
+}
+
+.toggle-resource-item:not(.disabled-resource):hover {
+    background-color: var(--clean-bg); /* Use the main background color for subtle hover */
+    transform: none;
+    border-color: var(--clean-highlight);
+}
+
+.assignment-status-icon {
+    font-weight: 700;
+    font-size: 0.9rem;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    color: var(--clean-medium);
+    border: 1px solid var(--clean-medium); /* Use medium color for the initial border */
+    flex-shrink: 0; /* Prevent icon from shrinking */
+}
+.toggle-resource-item.assigned-resource {
+    /* Use a lightened success color for background */
+    background-color: #e9f5f5; 
+    color: var(--clean-primary); /* Keep text dark for readability */
+    font-weight: 600;
+    border: 2px solid var(--clean-highlight); /* Thickened border for clear highlight */
+}
+
+.assigned-resource .assignment-status-icon {
+    background-color: var(--clean-card-bg); /* White background */
+    color: var(--clean-success); /* Teal checkmark */
+    border-color: var(--clean-success);
+    transform: none; 
+}
+
+.toggle-resource-item.disabled-resource {
+    background-color: var(--clean-bg);
+    color: var(--clean-medium);
+    cursor: not-allowed;
+    opacity: 0.6;
+    border: 1px dashed var(--clean-accent); /* Dashed border for clearer disabled look */
+}
+
+/* --- Modal Size Variants (Simplified) --- */
+.modal-content.small {
+    max-width: 450px;
+}
+
+.modal-content.medium {
+    max-width: 750px;
+}
+
+.modal-content.large {
+    max-width: 1100px;
+}
+
+/* --- Admin Layout Fixes (Scoped for specific modals) --- */
+.admin-layout > .modal .modal-content {
+    max-height: 85vh;
+    max-width: 500px; /* Smaller default for admin modal */
+}
+
+.admin-layout .modal-body-scrollable {
+    padding: 1rem 1.5rem;
+}
+
+.admin-layout .phases-table-wrapper {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--clean-accent);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.admin-layout .modal-actions {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--clean-accent);
+    background-color: var(--clean-bg);
+}
+.disabled-resource .assignment-status-icon {
+    color: var(--clean-medium);
+    background-color: transparent;
+    border-color: var(--clean-accent);
+}
+
+
+
+
+.admin-sidebar .sidebar-header {
+    padding: 15px 15px 10px 15px; /* Top 15px, bottom 10px */
+    gap: 8px;                     /* Reduced space between elements */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
+    display: flex;
+    flex-direction: column;
+    align-items: center;          /* Keep centered */
+}
+
+.admin-sidebar .sidebar-header h3.sidebar-title {
+    margin-top: 0;     
+    padding-bottom: 5px; 
+    font-size: 1.8em;   
+    font-weight: 700; 
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--clean-card-bg);
+    border-bottom: 2px solid var(--clean-highlight); 
+    width: 80%;
+    text-align: center;
+}
+
+
+/* --- Center the table title --- */
+
+/* Hover Effect - Made softer */
+
+
+/* Ensure the logout button is visually separated */
+
+
+
+.sidebar-header .current-date {
+    /* *** FONT SIZE INCREASED (Slightly) & COLOR CHANGED *** */
+    font-size: 0.9rem; /* Increased from 0.75rem to 0.9rem */
+    font-weight: 400; /* Lighter weight for date */
+    color: #e0e6ec; /* Very light, professional gray */
+    line-height: 1.2; 
+    margin-bottom: 5px; 
+}
+
+/* ========================================================================= */
+/* --- DataTable Styling Improvements (FIXED & ENHANCED) --- */
+/* ========================================================================= */
+
+/* --- Base Table Header & Cell Styling (High Space & Middle Align) --- */
+.data-table th,
+.data-table td {
+    /* Increased Vertical Space (high space) */
+    padding: 16px 20px; 
+    /* Text Align Middle (vertical alignment) */
+    vertical-align: middle;
+    border: 1px solid #f1f1f1;
+}
+
+/* --- Table Header (<th>) --- */
+.data-table th {
+    white-space: nowrap;
+    text-align: center;
+    font-weight: 600;
+    color: var(--clean-primary);
+    background-color: var(--clean-table-header-bg);
+}
+
+/* --- General Table Data Cell (<td>) --- */
+.data-table td {
+    word-break: break-word; /* Allows long text to wrap in most cells */
+}
+
+/* --- NEW FIX FOR ID/NUMBER COLUMNS (First Column) --- */
+.data-table th:first-child,
+.data-table td:first-child {
+    white-space: nowrap;
+    text-align: center;
+    width: 80px; 
+}
+
+/* Ensure the Assigned Employees (2nd) and Assigned Equipment (3rd) columns are centered */
+.data-table th:nth-child(2),
+.data-table td:nth-child(2),
+.data-table th:nth-child(3), 
+.data-table td:nth-child(3) {
+    text-align: center;
+}
+
+/* --- Actions Column Styling (Shifted Left & Centered) --- */
+.data-table td:last-child {
+    /* ➡️ REDUCED WIDTH: Set the fixed width to move the column to the left */
+    width: 120px; 
+    
+    /* Force content to stay on one line, preventing button wrap */
+    white-space: nowrap; 
+    
+    /* Center the content (buttons) horizontally using text-align */
+    text-align: center; 
+    
+    /* Vertically center the content */
+    vertical-align: middle; 
+}
+
+/* 💡 Adjust button margins for tighter fit in the reduced width */
+.data-table td:last-child .btn-sm {
+    margin: 0 2px; /* Set margin to 2px for better spacing in 120px width */
+    display: inline-block;
+}
+
+/* ========================================================================= */
+/* --- Responsive Adjustments for Small Screens (Updated) --- */
+/* ========================================================================= */
+@media (max-width: 600px) {
+    /* On mobile, allow the ID column to be a bit more flexible */
+    .data-table th:first-child,
+    .data-table td:first-child {
+        width: auto;
+        min-width: 50px;
+    }
+
+    .data-table td:last-child {
+        /* Allow the width to auto-adjust on mobile */
+        width: auto; 
+        min-width: 120px; 
+        flex-wrap: wrap; 
+        justify-content: center;
+        text-align: center; 
+        white-space: normal; /* Allow wrap on mobile only */
+    }
+
+    /* Apply a small margin to mobile buttons to create the gap */
+    .data-table td:last-child .btn-sm {
+        margin: 4px 2px; 
+    }
+}
+
+/* ======== Button Styles ======== */
+/* ADD THIS to your CSS if the button is still large */
+.btn-view.btn-sm {
+    padding: 6px 10px !important; 
+    font-size: 13px !important;
+}
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  border: none;
+  font-weight: 500;
+}
+
+/* Edit Button — Blue */
+.btn-edit {
+background-color: var(--clean-primary); /* Dark Blue */
+color: var(--clean-card-bg); /* White text */
+border: 1px solid var(--clean-primary);
+}
+
+.btn-edit:hover {
+  background-color: #324c6d;
+  border-color: #324c6d;
+}
+
+/* Delete Button — Red */
+.btn-delete {
+background-color: var(--clean-danger); /* Red */
+color: var(--clean-card-bg); /* White text */
+border: 1px solid var(--clean-danger);
+}
+
+.btn-delete:hover {
+  background-color: #cc2b37;
+  border-color: #cc2b37;
+}
+.btn-view {
+background-color: var(--clean-highlight); /* Teal/Success */
+color: var(--clean-card-bg); /* White text */
+border: 1px solid var(--clean-highlight);
+}
+
+.btn-view:hover {
+  background-color: #2b7a78; /* Darker green on hover */
+  border-color: #2b7a78;
+}
+.sidebar-nav .icon {
+    margin-right: 8px;
+    font-size: 1.2rem;
+}
+
+.admin-sidebar.collapsed .icon {
+    margin-right: 0;
+}
+/* --- Replace the old .form-error-top style with this in CrewMapping.css --- */
+
+/* Enhanced styles for the top-level form error message */
+.form-error-top {
+  position: sticky; /* Makes the error message stick to the top */
+  top: 0;
+  background-color: #f8d7da;
+  color: #721c24;
+  border-bottom: 2px solid #dc3545; /* Stronger bottom border */
+  border-radius: 4px;
+  padding: 12px 15px;
+  margin: -16px -24px 16px -24px; /* Spans the full width of the modal body */
+  font-weight: bold; /* Makes text bolder */
+  font-size: 1rem;   /* Slightly larger font */
+  text-align: center;
+  z-index: 10; /* Ensures it stays above other form content */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Adds a subtle shadow */
+  
+  /* Animation for appearing */
+  animation: slideDownFadeIn 0.3s ease-in-out;
+}
+
+
+
+.btn-status {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s ease;
+  color: white;
+}
+
+.btn-status.active {
+  background-color: #ef4444; /* red */
+}
+
+.btn-status.active:hover {
+  background-color: #dc2626;
+}
+
+.btn-status.inactive {
+  background-color: #22c55e; /* green */
+}
+
+.btn-status.inactive:hover {
+  background-color: #16a34a;
+}
+
+/* Defines the animation */
+@keyframes slideDownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+
+/* Make sidebar take full height and scrollable */
+.admin-sidebar {
+    height: 100vh;            /* Full viewport height */
+    overflow-y: auto;         /* Vertical scroll if content overflows */
+    overflow-x: hidden;       /* No horizontal scroll */
+    position: fixed;          /* Sidebar stays fixed */
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+}
+
+/* Keep header & top controls fixed */
+.sidebar-top,
+.sidebar-header {
+    flex: 0 0 auto;           /* Fixed height, no scroll */
+}
+
+/* Sidebar navigation scroll */
+.sidebar-nav {
+    flex: 1 1 auto;           /* Fill remaining space */
+    overflow-y: auto;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    scrollbar-width: thin;         /* For Firefox */
+    scrollbar-color: rgba(56,163,165,0.5) rgba(30,30,47,0.2); /* thumb + track */
+}
+
+/* Chrome, Edge, Safari */
+.sidebar-nav::-webkit-scrollbar {
+    width: 6px;                  /* Thin scrollbar */
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+    background: rgba(30,30,47,0.2); /* Semi-transparent track */
+    border-radius: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(56,163,165,0.5); /* Teal-ish thumb */
+    border-radius: 4px;
+    border: 2px solid rgba(30,30,47,0.2); /* Small padding effect */
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+    background: rgba(56,163,165,0.8); /* Darker on hover */
+}
+
+/* Smooth scrolling */
+.sidebar-nav {
+    scroll-behavior: smooth;
+}
+/* ========================================================================= */
+/* --- Crew Mapping Table Specific Overrides --- */
+/* (Targets the existing .data-table class) */
+/* ========================================================================= */
+
+.data-table th,
+.data-table td {
+    /* 1. Increased Vertical Space (high space) */
+    /* Increased from 12px 15px to 16px 20px for a more spacious feel */
+    padding: 16px 20px; 
+    
+    /* 2. Text Align Middle (vertical alignment) */
+    /* This ensures text sits perfectly in the middle of the cell */
+    vertical-align: middle;
+}
+
+/* Ensure the Assigned Employees and Assigned Equipment columns are centered */
+.data-table th:nth-child(2),
+.data-table td:nth-child(2),
+.data-table th:nth-child(3), /* This targets the new 'Assigned Equipment' column */
+.data-table td:nth-child(3) {
+    text-align: center;
+}
+
+/* ⚠️ Note on Action Column: */
+/* Your existing CSS for the actions column already includes:
+.data-table td:last-child {
+    vertical-align: middle; 
+    text-align: center; 
+    width: 140px; 
+    white-space: nowrap; 
+}
+/*
+ * AuditLogViewer.css
+ * Styles specific to the AuditLogViewer component.
+ * Padding is increased for better page fit and readability.
+ */
+
+/* ========================================================================= */
+/* --- Audit Log Container and Title --- */
+/* ========================================================================= */
+
+.foreman-selection-card {
+    max-width: 100%; /* Avoid horizontal overflow */
+    box-sizing: border-box;
+}
+
+/* ========================================================================= */
+/* --- Audit Log Viewer Table (Page Fit & Flex Columns) --- */
+/* (Scoped to: .foreman-selection-card > .data-table) */
+/* ========================================================================= */
+
+/* Ensure the table itself can use all available width inside the card */
+.foreman-selection-card .data-table {
+    width: 100% !important; /* Override inline style if necessary */
+    table-layout: fixed;    /* Ensure column widths are respected */
+    max-height: 900vh;
+    overflow-y: auto;
+    display: block;
+    box-sizing: border-box;
+}
+
+/* Default vertical alignment and word break */
+.foreman-selection-card .data-table th,
+.foreman-selection-card .data-table td {
+    vertical-align: middle;
+    text-align: left; 
+    word-break: break-word;    /* Allow long words to wrap */
+    padding: 16px 20px !important; /* Keep consistent spacing */
+    box-sizing: border-box;
+}
+
+/* Column 1: ID - Small, centered, fixed width */
+.foreman-selection-card .data-table th:nth-child(1),
+.foreman-selection-card .data-table td:nth-child(1) {
+    width: 5%;         /* Reduced fixed size */
+    text-align: center;
+}
+
+/* Column 2: Timestamp - FLEXIBLE but with min-width */
+.foreman-selection-card .data-table th:nth-child(2),
+.foreman-selection-card .data-table td:nth-child(2) {
+    width: 5%;        /* Relative width */
+    min-width: 140px;  /* Ensure readability */
+    white-space: normal;
+    text-align: center;
+}
+
+/* Column 3: User ID - Fixed width, centered */
+.foreman-selection-card .data-table th:nth-child(3),
+.foreman-selection-card .data-table td:nth-child(3) {
+    width: 10%;
+    text-align: center;
+}
+
+/* Column 4: Action - Fixed width, centered */
+.foreman-selection-card .data-table th:nth-child(4),
+.foreman-selection-card .data-table td:nth-child(4) {
+    width: 20%;
+    text-align: center;
+}
+
+/* Column 5: Target Resource - Fixed width for resource name */
+.foreman-selection-card .data-table th:nth-child(5),
+.foreman-selection-card .data-table td:nth-child(5) {
+    width: 12%;
+    text-align: left;
+}
+
+/* Column 6: Resource ID - Fixed width, centered/number alignment */
+.foreman-selection-card .data-table th:nth-child(6),
+.foreman-selection-card .data-table td:nth-child(6) {
+    width: 8%;
+    text-align: center;
+}
+
+/* Column 7: Details - Takes up remaining space (flexible) */
+.foreman-selection-card .data-table th:nth-child(7),
+.foreman-selection-card .data-table td:nth-child(7) {
+    width: 40%;
+    min-width: 250px;  /* Ensure enough space for long details */
+    text-align: left;
+    white-space: normal; /* Allow wrapping */
+}
+
+/* Reset last-child rule if used elsewhere */
+.foreman-selection-card .data-table td:last-child {
+    width: 40%;
+    white-space: normal;
+    text-align: left;
+}
+
+/* ========================================================================= */
+/* --- Utility / Error Styles --- */
+/* ========================================================================= */
+
+/* Error message styling (affects error card border) */
+.foreman-selection-card[style*="var(--clean-danger)"] {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* Simple fade-in animation for loading/error messages */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.material-unit-cell ul {
+  list-style-type: disc;
+  padding-left: 20px;
+  margin: 0;
+}
+
+/* Hide all list items except the first one */
+.material-unit-cell ul li:not(:first-child) {
+  display: none;
+}
+
+/* On hover — show all items */
+.material-unit-cell:hover ul li {
+  display: list-item;
+}
+
+/* Optional styling for expansion effect */
+.material-unit-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.material-unit-cell:hover {
+  white-space: normal;
+  overflow: visible;
+  max-width: 600px;
+  background-color: #f9f9f9;
+  z-index: 1;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  border-radius: 4px;
+  padding: 4px 8px;
+}

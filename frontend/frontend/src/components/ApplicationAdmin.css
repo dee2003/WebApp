@@ -1,0 +1,574 @@
+.main-content {
+  flex-grow: 1; /* Allows the content to fill the remaining horizontal space */
+  padding: 20px;
+  font-family: 'Poppins', sans-serif;
+  background: #f9fafb;
+  min-height: 100vh;
+  overflow-x: hidden; /* Prevents horizontal scrolling */
+  /* The margin-left is controlled by your React component's inline style */
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: #1d7480;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section {
+  margin-bottom: 25px;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+/* 🎯 TABLE LAYOUT */
+.details-table {
+  width: 100%;
+  table-layout: fixed; /* Ensures columns are evenly spaced */
+  border-collapse: collapse;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  overflow: hidden; /* Important for keeping content within the rounded corners */
+}
+
+
+/* --- Header & Data Cells --- */
+.details-table th {
+  background: #f5f6f8;
+  font-weight: 600;
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+  white-space: nowrap;
+}
+/* 🎯 DATA CELLS */
+.details-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+  text-align: left;
+  vertical-align: top;
+  word-wrap: break-word;
+  white-space: normal;
+}
+
+/* 🎯 LAST ROW CLEAN LOOK */
+.details-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* 🎯 LISTS INSIDE TABLES */
+.details-table ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+
+.details-table li {
+  margin-bottom: 4px;
+}
+
+/* 🎯 RESPONSIVE TABLE */
+@media (max-width: 768px) {
+  .details-table th,
+  .details-table td {
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+
+  .section-title {
+    font-size: 1rem;
+  }
+}
+.section-row {
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.section.half {
+  flex: 1;
+  min-width: 45%;
+}
+
+.details-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.details-table th,
+.details-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.section-title {
+  color: #1d7480;
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+
+/* 🎯 Optional: Make each section card-like */
+.section {
+  background: #fff;
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  margin-bottom: 25px;
+}
+.details-table ul {
+  list-style-type: disc;        /* adds bullet points */
+  padding-left: 20px;           /* indent bullets */
+  margin: 0;                    /* remove extra margin */
+}
+
+.details-table li {
+  margin-bottom: 4px;           /* small space between items */
+  word-wrap: break-word;        /* wrap long text nicely */
+  word-break: break-word;
+  white-space: normal;
+}
+/* Two-column layout for compact sections */
+.two-column {
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  flex-wrap: wrap; /* makes it responsive on smaller screens */
+}
+
+/* Each half takes equal width */
+.half-section {
+  flex: 1;
+  min-width: 400px; /* ensures readable width on small screens */
+}
+
+/* Tables inside these sections should fill available width */
+.half-section .details-table {
+  width: 100%;
+}
+
+
+
+
+
+/* ---- Timesheet List Layout ---- */
+
+/* .timesheet-list-container {
+  margin-top: 20px;
+  background: #ffffff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+} */
+
+/* .timesheet-header-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1.5fr 1.5fr;
+  background-color: #1d7480;
+  color: #fff;
+  font-weight: 600;
+  padding: 12px 16px;
+  text-align: left;
+} */
+
+/* ---- Timesheet List Layout ---- */
+
+.timesheet-list-container {
+  margin-top: 20px;
+  background: #ffffff;
+  border-radius: 10px;
+  overflow-x: auto;
+  white-space: nowrap;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+}
+
+.timesheet-header-row {
+  display: grid;
+  grid-template-columns:
+    120px   /* Date */
+    180px   /* Foreman */
+    250px   /* Job Name */
+    120px   /* Job Code */
+    140px   /* Contract No */
+    160px   /* Project Engineer */
+    5px;  /* Actions *//* 5 columns including Actions */
+  background-color: #1d7480; /* Keep your blue header */
+  color: #fff;
+  font-weight: 600;
+  padding: 12px 16px;
+  text-align: left;
+}
+
+.timesheet-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.timesheet-row {
+  display: grid;
+  grid-template-columns:
+    120px 180px 250px 120px 140px 160px 5px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #eaeaea;
+  transition: background 0.2s ease;
+  align-items: center;
+  cursor: pointer;
+}
+
+.timesheet-row:hover {
+  background-color: #f5f8ff;
+  cursor: pointer;
+}
+
+.timesheet-row span {
+  font-size: 0.95rem;
+  color: #333;
+  cursor: pointer;
+}
+
+.timesheet-row span:last-child {
+  cursor: default;
+}
+
+.empty-message {
+  text-align: center;
+  color: #777;
+  margin-top: 20px;
+  font-style: italic;
+}
+
+.view-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #1d7480;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.btn-danger {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-danger:hover {
+  background-color: #c0392b;
+}
+
+.alert {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.alert-success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.alert-error {
+  background-color: #fdecea;
+  color: #c62828;
+}
+
+
+
+
+/* Confirmation Popup */
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.confirm-box {
+  background: white;
+  padding: 25px;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  width: 340px;
+}
+
+.confirm-box h4 {
+  margin-bottom: 10px;
+  color: #c0392b;
+}
+
+.confirm-box p {
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn-secondary {
+  background-color: #7f8c8d;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background-color: #616a6b;
+}
+
+
+/* --- Pagination Controls Styling --- */
+
+.timesheet-list-container {
+    /* Ensure the list and controls are laid out nicely */
+    display: flex;
+    flex-direction: column;
+}
+
+.pagination-controls {
+    display: flex;
+    justify-content: center; /* Center the entire control block */
+    align-items: center;
+    padding: 20px 0;
+    margin-top: 15px;
+    border-top: 1px solid #e0e0e0; /* Subtle separator line */
+}
+
+.pagination-list {
+    display: flex;
+    list-style: none;
+    padding: 0;
+    margin: 0 15px; /* Space between Prev/Next buttons */
+}
+
+.page-item {
+    margin: 0 3px;
+}
+
+.page-link {
+    display: block;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.page-link:hover:not(.active) {
+    background-color: #f4f4f4;
+    border-color: #aaa;
+}
+
+.page-link.active {
+    background-color: #007bff; /* Primary button color */
+    color: white;
+    border-color: #007bff;
+    cursor: default;
+    font-weight: bold;
+}
+
+/* Style for Previous/Next buttons */
+.pagination-controls .btn-sm {
+    padding: 8px 15px;
+    margin: 0 5px;
+    background-color: #f8f9fa;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.pagination-controls .btn-sm:hover:not(:disabled) {
+    background-color: #e2e6ea;
+    border-color: #adadad;
+}
+
+.pagination-controls .btn-sm:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    background-color: #f8f9fa;
+    color: #6c757d;
+}
+
+.pagination-controls .btn-sm svg {
+    font-size: 0.8em; /* Adjust icon size */
+}
+
+
+
+
+
+.search-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.search-input {
+  flex-grow: 1;
+  border: none;
+  outline: none;
+  padding: 0 15px;
+  font-size: 14px;
+  color: #333;
+  height: 100%;
+}
+.search-input::placeholder {
+  color: #9e9e9e;
+}
+.search-submit-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #38a3a5;
+  border: none;
+  color: white;
+  padding: 0 30px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.search-submit-btn:hover {
+  background-color: #38a3a5;
+}
+.search-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.4);
+}
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 15px; /* Spacing between search bar and clear button */
+  margin-bottom: 20px;
+  flex-wrap: wrap; /* Allows "Clear" button to wrap on small screens */
+}
+.styled-search-container {
+  display: flex;
+  flex-grow: 1; /* Allows search bar to take available space */
+  max-width: 600px; /* You can adjust this max-width */
+  height: 44px;
+  border: 2px solid #38a3a5; /* Alibaba orange */
+  border-radius: 22px; /* Half of height for perfect rounding */
+  overflow: hidden;
+  background-color: #fff;
+}
+.search-wrapper {
+  display: flex;
+  flex-grow: 1;
+  align-items: center;
+}
+
+.search-dropdown-wrapper {
+  position: relative;
+  height: 100%;
+  border-right: 1px solid #eee; /* Separator line */
+}
+.search-dropdown {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-color: transparent;
+  border: none;
+  outline: none;
+  height: 100%;
+  padding: 0 35px 0 20px; /* Right padding for arrow */
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+}
+.dropdown-arrow {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: #757575;
+  pointer-events: none; /* Lets clicks pass through to the select */
+}
+
+.filter-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-item label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.filter-item input {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  width: 180px;
+}
+
+.btn.btn-outline.btn-sm {
+  height: 36px;
+  border-radius: 6px;
+}
+
+
+
+
+
+
+.admin-layout {
+  display: flex; /* Establishes a flex container for the sidebar and content */
+}

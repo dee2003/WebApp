@@ -1,0 +1,730 @@
+:root { --color-white: #fff; --color-black: #000; --color-cream-50: #fcfcf9; --color-gray-200: #f5f5f5; --color-gray-400: #777c7c; --color-charcoal-700: #1f2121; --color-teal-500: #21808d; --color-teal-600: #1d7480; --color-red-500: #c0152f; --color-green-500: #22c55e; --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1); --border-radius: 0.375rem; }
+body { margin: 0; font-family: var(--font-family-sans); background-color: var(--color-cream-50); color: var(--color-charcoal-700); }
+.login-container { max-width: 400px; margin: 10vh auto; padding: 2rem; background-color: var(--color-white); border-radius: var(--border-radius); box-shadow: var(--shadow-md); }
+.company-logo h1 { margin: 0; font-size: 1.5rem; text-align: center; letter-spacing: 1px; }
+.company-logo p { text-align: center; color: var(--color-gray-400); }
+.form-hint { text-align: center; font-size: 0.8rem; color: var(--color-gray-400); margin-top: 1rem; }
+.form-group { margin-bottom: 1rem; }
+.form-label, .modal-header h3 { font-weight: 500; }
+.form-control { width: 100%; padding: 0.75rem; font-size: 1rem; border: 1px solid #ccc; border-radius: var(--border-radius); box-sizing: border-box; }
+.btn { padding: 0.75rem 1.5rem; font-size: 0.9rem; font-weight: bold; border: 1px solid transparent; border-radius: var(--border-radius); cursor: pointer; }
+.btn-sm { padding: 0.25rem 0.75rem; font-size: 0.8rem; }
+.btn-delete { background-color: var(--color-red-500); color: var(--color-white); }
+.btn-primary { background-color: var(--color-teal-500); color: var(--color-white); }
+.btn-primary:hover { background-color: var(--color-teal-600); }
+.btn-secondary { background-color: var(--color-gray-200); border-color: #ddd; }
+.btn--full-width { width: 100%; }
+.btn-outline { background-color: transparent; border-color: var(--color-gray-400); }
+.sidebar-header .btn-outline { color: var(--color-white); border-color: var(--color-white); }
+.admin-layout { display: flex; min-height: 100vh; }
+.admin-sidebar { width: 250px; background-color: var(--color-charcoal-700); color: var(--color-white); padding: 10px; flex-shrink: 0; }
+.sidebar-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 1rem; border-bottom: 1px solid var(--color-gray-400); }
+.sidebar-nav { list-style: none; padding: 0; margin: 2rem 0 0; }
+.sidebar-nav button { background: none; border: none; display: block; width: 100%; padding: 0.75rem 1rem; color: var(--color-white); text-align: left; cursor: pointer; font-size: 1rem; border-radius: var(--border-radius); }
+.sidebar-nav button.active { background-color: var(--color-teal-500); }
+.admin-content { flex-grow: 1; padding: 2rem; background-color: var(--color-gray-200); }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid #ddd; }
+.section-header h2, .modal-header h3 { margin: 0; }
+.dashboard-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+.stat-number { font-size: 2.5rem; font-weight: bold; color: var(--color-teal-500); }
+.data-table { width: 100%; border-collapse: collapse; background: var(--color-white); box-shadow: var(--shadow-md); border-radius: var(--border-radius); overflow: hidden; }
+.data-table th, .data-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eee; }
+.data-table th { background-color: #f9f9f9; text-transform: uppercase; font-size: .8rem; color: var(--color-gray-400); }
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background-color: var(--color-white); padding: 2rem; border-radius: var(--border-radius); width: 90%; max-width: 500px; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.modal-actions { margin-top: 1.5rem; display: flex; justify-content: flex-end; }
+.tabs-nav { margin-bottom: 1rem; }
+.tabs-nav .tab-btn { background: #eee; border: none; padding: .5rem 1rem; cursor: pointer; }
+.tabs-nav .tab-btn.active { background: var(--color-teal-500); color: var(--color-white); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.mobile-view { max-width: 500px; margin: 0 auto; background-color: var(--color-white); min-height: 100vh; box-shadow: var(--shadow-md); }
+.mobile-view .header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid #eee; }
+.mobile-view .tab-navigation { display: flex; overflow-x: auto; border-bottom: 1px solid #eee; background: #f9f9f9; }
+.mobile-view .tab-navigation button { background: none; border: none; padding: 1rem 0.75rem; font-size: 0.8rem; cursor: pointer; white-space: nowrap; border-bottom: 3px solid transparent; }
+.mobile-view .tab-navigation button.active { border-bottom-color: var(--color-teal-500); color: var(--color-teal-500); font-weight: bold; }
+.roster-row { display: grid; align-items: center; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0; grid-template-columns: 2fr repeat(4, 1fr) auto; }
+.roster-header { font-weight: bold; }
+/* =========================================================
+   UNIVERSAL BUTTON STYLES
+   ========================================================= */
+
+button,
+.btn {
+  font-family: var(--font-family-sans);
+  font-weight: 600;
+  border-radius: var(--border-radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  box-shadow: var(--shadow-md);
+}
+
+/* --- Base sizes --- */
+.btn {
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+}
+.btn-sm {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+  box-shadow: none;
+}
+
+/* --- Primary buttons (Save, Add, Confirm) --- */
+.btn-primary {
+  background-color: var(--color-teal-500);
+  color: var(--color-white);
+  border-color: var(--color-teal-500);
+}
+.btn-primary:hover {
+  background-color: var(--color-teal-600);
+}
+.btn-primary:active {
+  transform: scale(0.97);
+  background-color: var(--color-teal-600);
+}
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- Secondary / Neutral buttons (Cancel, Close) --- */
+.btn-secondary {
+  background-color: var(--color-gray-200);
+  color: var(--color-charcoal-700);
+  border: 1px solid #ccc;
+}
+.btn-secondary:hover {
+  background-color: #e9e9e9;
+}
+.btn-secondary:active {
+  transform: scale(0.97);
+}
+
+/* --- Outline buttons (Logout, Filter, etc.) --- */
+.btn-outline {
+  background-color: transparent;
+  border: 1px solid var(--color-teal-500);
+  color: var(--color-teal-500);
+}
+.btn-outline:hover {
+  background-color: var(--color-teal-500);
+  color: var(--color-white);
+}
+.btn-outline:active {
+  background-color: var(--color-teal-600);
+}
+
+/* --- Delete buttons --- */
+.btn-delete {
+  background-color: var(--color-red-500);
+  color: var(--color-white);
+}
+.btn-delete:hover {
+  background-color: #a81229;
+}
+.btn-delete:active {
+  transform: scale(0.97);
+}
+
+/* --- Success buttons --- */
+.btn-success {
+  background-color: var(--color-green-500);
+  color: var(--color-white);
+}
+.btn-success:hover {
+  filter: brightness(0.9);
+}
+
+/* --- Sidebar button tweaks --- */
+.sidebar-nav button {
+  border: none;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: transparent;
+  color: var(--color-white);
+  text-align: left;
+  font-size: 1rem;
+  border-radius: var(--border-radius);
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+.sidebar-nav button:hover {
+  background-color: var(--color-teal-500);
+}
+.sidebar-nav button.active {
+  background-color: var(--color-teal-600);
+}
+.sidebar-nav button:active {
+  transform: scale(0.98);
+}
+
+/* --- Tab buttons --- */
+.tabs-nav .tab-btn {
+  background: var(--color-gray-200);
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+.tabs-nav .tab-btn:hover {
+  background: var(--color-teal-500);
+  color: var(--color-white);
+}
+.tabs-nav .tab-btn.active {
+  background: var(--color-teal-500);
+  color: var(--color-white);
+}
+
+/* --- General button animation --- */
+button:active {
+  transform: scale(0.98);
+}
+
+
+
+/* =========================================================
+   TIMESHEET FORM INLINE PAGE STYLES
+   ========================================================= */
+
+/* Main content wrapper for the form when it's a page */
+.timesheet-page-content {
+    /* Ensures the content within the main area is centered and constrained */
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.timesheet-page-container {
+    background-color: var(--color-white);
+    padding: 2rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-gray-200);
+}
+
+.page-header h2 {
+    margin: 0;
+    font-size: 1.75rem; /* Slightly larger title for a page */
+    color: var(--color-charcoal-700);
+}
+
+/* Close button is now removed from header, replaced by Cancel in actions. 
+   If you want a back button, style it here. */
+
+.form-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Two-column grid for form fields */
+.grid-2-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+/* Crew Info Boxes (Kept the same styling) */
+.grid-2-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+}
+
+/* Crew Info Boxes */
+.crew-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(calc(50% - 15px), 1fr));
+    gap: 20px;
+    padding-top: 10px;
+}
+
+.crew-info-box {
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid;
+}
+
+.crew-info-box h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid;
+}
+
+.crew-info-box p {
+    font-size: 13px;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.box-indigo {
+    background-color: #f0f3ff;
+    border-color: #c9d5ff;
+}
+.box-indigo h3, .box-indigo p { color: #3c4083; }
+
+.box-green {
+    background-color: #f0fff4;
+    border-color: #c0f4d3;
+}
+.box-green h3, .box-green p { color: #1c7a38; }
+
+.box-yellow {
+    background-color: #fffaf0;
+    border-color: #ffeeb3;
+}
+.box-yellow h3, .box-yellow p { color: #8a6c0c; }
+
+.box-red {
+    background-color: #fff0f0; /* Very light pink/red */
+    border-color: #ffc9c9; /* Light red border */
+}
+.box-red h3, .box-red p { color: #c0152f; } /* Using your primary red color for text */
+.box-red h3 { border-bottom-color: #ffc9c9; }
+/* Phase Selection */
+.phase-selection-fieldset {
+    margin-top: 20px;
+    padding: 20px;
+    border: 1px solid #4f46e5;
+    border-radius: 10px;
+    background-color: #f4f6ff;
+}
+
+.phase-selection-fieldset legend {
+    font-size: 18px;
+    font-weight: 700;
+    color: #4f46e5;
+    padding: 0 10px;
+}
+
+.phase-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.phase-list label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+    background-color: #dce0ff;
+    color: #3f35c4;
+    transition: background-color 0.15s;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.phase-list label:hover {
+    background-color: #c0c6ff;
+}
+
+.phase-list input[type="checkbox"] {
+    accent-color: #4f46e5;
+    width: 16px;
+    height: 16px;
+}
+
+
+/* Important: This is a hack, need to style the parent label instead */
+
+.phase-list label.selected-phase {
+    background-color: #4f46e5; /* Dark violet/blue fill */
+    color: white; /* Changes all inner text to white */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    border-color: #4f46e5;
+}
+/* ... (Keep all .crew-info-box, .box-indigo, etc. styles as they are) ... */
+
+/* Phase Selection Fieldset (Kept the same styling) */
+.phase-selection-fieldset {
+    border: 1px solid var(--color-gray-400);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+/* ... (Keep all .phase-list, .selected-phase, etc. styles as they are) ... */
+
+/* Form Actions (Buttons) */
+.form-actions {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-gray-200);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+/* Remove @keyframes slideIn as it's not a modal */
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .timesheet-page-container {
+        padding: 1rem;
+    }
+    .grid-2-cols {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    .crew-info-grid {
+        grid-template-columns: 1fr;
+    }
+    .form-actions {
+        flex-direction: column-reverse;
+    }
+    .form-actions .btn {
+        width: 100%;
+    }
+}
+
+
+
+
+/* =========================================================
+   TIMESHEET FORM PAGE STYLES
+   ========================================================= */
+
+/* Main content wrapper for the form when it's a page */
+.timesheet-page-content {
+    /* Constrain the form within the admin-content area */
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* Container for the form itself */
+.timesheet-page-container {
+    background-color: var(--color-white);
+    padding: 2.5rem; /* Increased padding for a better feel */
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem; /* More space below the header */
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-gray-200);
+}
+
+.page-header h2 {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-charcoal-700);
+}
+
+.form-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem; /* Increased gap between form sections */
+}
+
+/* Two-column grid for form fields */
+.grid-2-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem 2rem; /* Horizontal and vertical gap */
+}
+
+/* General form group spacing */
+.form-group {
+    margin-bottom: 0; /* Handled by gap in grid-2-cols or form-content */
+}
+
+/* Form Labels - Enhanced visibility */
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 700; /* Bold label */
+    color: var(--color-charcoal-700);
+}
+
+/* Form Inputs, Selects - Unified and styled */
+.form-input,
+.form-select {
+    display: block;
+    width: 100%;
+    padding: 0.50rem;
+    font-size: 1rem;
+    border: 1px solid #ddd; /* Lighter border */
+    border-radius: var(--border-radius);
+    box-sizing: border-box;
+    background-color: white !important; /* Subtle off-white background */
+    color: var(--color-charcoal-700);
+    appearance: none; /* Custom styling for selects */
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-input:disabled {
+    background-color: var(--color-gray-200);
+    cursor: not-allowed;
+    color: var(--color-gray-400);
+}
+
+.form-input:focus,
+.form-select:focus {
+    outline: none;
+    border-color: var(--color-teal-500);
+    box-shadow: 0 0 0 3px rgba(33, 128, 141, 0.2); /* Wider focus ring */
+}
+
+/* Select arrow customization */
+.form-select {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23777c7c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.5rem; /* Make space for the icon */
+}
+
+/* Temperature input group styling */
+.temp-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.temp-input-group .form-input {
+    flex: 1;
+}
+.temp-input-group .form-select {
+    width: 60px; /* fixed width for unit select */
+    padding-right: 0.5rem;
+    text-align: center;
+    background-image: none;
+}
+
+/* Crew Info Boxes (Foreman Data Display) - Visual Pop */
+
+
+
+
+
+
+
+
+/* Form Actions (Buttons) */
+.form-actions {
+    margin-top: 2rem; /* Increased top margin */
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-gray-200);
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .timesheet-page-container {
+        padding: 1.5rem;
+    }
+    .grid-2-cols {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+    
+    .form-actions {
+        flex-direction: column-reverse;
+        gap: 0.5rem;
+    }
+    .form-actions .btn {
+        width: 100%;
+    }
+}
+
+
+
+/* =========================================================
+   STANDARD, MODERN VIEW TIMESHEETS STYLES
+   ========================================================= */
+
+/* Main Content Area */
+.timesheet-page-content {
+    padding: 30px; /* Increased padding */
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Control Bar */
+.timesheet-controls {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 25px;
+}
+
+.btn-toggle {
+    background-color: #f0f4f8; /* Very light background */
+    color: #4a5568; /* Darker gray text */
+    border: 1px solid #e2e8f0;
+    padding: 8px 16px;
+    border-radius: 8px; /* Slightly more rounded */
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-toggle:hover {
+    background-color: #e2e8f0;
+    color: #2d3748;
+}
+
+/* --- GRID VIEW --- */
+
+.timesheet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 30px;
+}
+
+/* Timesheet Card Base Style (Elevated Look) */
+.timesheet-card {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 12px; /* Smooth corners */
+    border: 1px solid #e2e8f0; /* Thin, subtle border */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); /* Soft, distinct shadow */
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.timesheet-card:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+    transform: translateY(-3px);
+}
+
+.timesheet-card.expanded {
+    border-color: #4f46e5; /* Primary color border when active */
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.2);
+}
+
+/* Card Header */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #edf2f7; /* Light separator line */
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+}
+
+.card-header h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #2d3748; /* Dark title */
+    margin: 0;
+}
+
+.card-header time {
+    font-size: 0.9rem;
+    color: #718096; /* Muted date color */
+    font-weight: 500;
+}
+
+/* Card Details (Collapsed) */
+.card-details p {
+    margin: 0.75rem 0;
+    font-size: 1rem;
+    color: #4a5568;
+}
+
+.card-details strong {
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.foreman-link {
+    font-weight: 600;
+    color: #4f46e5; /* Primary accent color */
+}
+
+/* Expanded Crew Details Box */
+.crew-details-box {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #f7fafc; /* Very light, dedicated info background */
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two columns for dense info */
+    gap: 10px 20px;
+}
+
+.crew-details-box p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: #4a5568;
+}
+
+/* --- LIST VIEW --- */
+
+.timesheet-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.timesheet-list .timesheet-card {
+    /* List view maintains elevated style but is flatter */
+    padding: 15px 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05); /* Much softer shadow */
+    border-left: 6px solid #4f46e5; /* Strong vertical line accent */
+    border: 1px solid #e2e8f0;
+}
+
+.timesheet-list .timesheet-card:hover {
+    background-color: #f7fafc;
+    transform: none;
+}
+
+.timesheet-list .card-header {
+    margin-bottom: 5px;
+    padding-bottom: 5px;
+    border-bottom: none;
+}
+
+.timesheet-list .card-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 5px 20px;
+}
+
+.timesheet-list .crew-details-box {
+    grid-column: span 2;
+    margin-top: 10px;
+}
+
+/* --- RESPONSIVENESS --- */
+
+@media (max-width: 600px) {
+    .timesheet-page-content {
+        padding: 15px;
+    }
+    .crew-details-box {
+        grid-template-columns: 1fr; /* Stack details vertically on mobile */
+    }
+}
