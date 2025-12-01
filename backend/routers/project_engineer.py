@@ -13,7 +13,7 @@ def get_project_engineer_dashboard(project_engineer_id: int, db: Session = Depen
     print(f"🧩 project_engineer_id = {project_engineer_id}")
 
     try:
-        # ✅ Timesheets: include foreman full name and job code
+        # 1. Corrected Timesheets Query
         timesheets = (
             db.query(
                 models.Timesheet.id,
@@ -32,18 +32,14 @@ def get_project_engineer_dashboard(project_engineer_id: int, db: Session = Depen
             .join(models.User, models.Timesheet.foreman_id == models.User.id)
             .filter(
                 models.JobPhase.project_engineer_id == project_engineer_id,
-                models.Timesheet.status == "SUBMITTED",
-                exists().where(
-                    (models.SupervisorSubmission.date == models.Timesheet.date)
-                    & (models.SupervisorSubmission.status == "SubmittedToEngineer")
-                ),
+                models.Timesheet.status == "APPROVED_BY_SUPERVISOR",
             )
             .all()
         )
 
         print(f"✅ Timesheets fetched: {len(timesheets)}")
 
-        # ✅ Tickets: include foreman full name, job code, and proper date
+        # 2. Corrected Tickets Query
         tickets = (
             db.query(
                 models.Ticket.id,
@@ -57,18 +53,22 @@ def get_project_engineer_dashboard(project_engineer_id: int, db: Session = Depen
                 models.JobPhase.job_code,
                 models.Ticket.image_path,
                 models.Ticket.status,
-                models.Timesheet.date.label("ts_date"),
                 models.Ticket.created_at,
+                models.Timesheet.date.label("ts_date"),
             )
             .join(models.JobPhase, models.Ticket.job_phase_id == models.JobPhase.id)
             .join(models.User, models.Ticket.foreman_id == models.User.id)
             .outerjoin(models.Timesheet, models.Ticket.timesheet_id == models.Timesheet.id)
-            .filter(models.JobPhase.project_engineer_id == project_engineer_id)
-            .filter(models.Timesheet.status == "SUBMITTED")
+            .filter(
+                models.JobPhase.project_engineer_id == project_engineer_id,
+                models.Ticket.status == "SUBMITTED"
+            )
             .all()
         )
 
-        # ✅ Format tickets properly
+        print(f"✅ Tickets fetched: {len(tickets)}")
+
+        # Format tickets properly
         tickets_data = []
         for tk in tickets:
             ticket_date = tk.ts_date or (tk.created_at.date() if tk.created_at else None)
@@ -82,7 +82,7 @@ def get_project_engineer_dashboard(project_engineer_id: int, db: Session = Depen
                 "date": str(ticket_date) if ticket_date else "Invalid Date",
             })
 
-        # ✅ Format timesheets properly
+        # Format timesheets properly
         timesheet_data = [
             {
                 "id": ts.id,
@@ -95,8 +95,6 @@ def get_project_engineer_dashboard(project_engineer_id: int, db: Session = Depen
             for ts in timesheets
         ]
 
-        print(f"✅ Tickets fetched: {len(tickets_data)}")
-
         return {
             "timesheets": timesheet_data,
             "tickets": tickets_data,
@@ -105,7 +103,6 @@ def get_project_engineer_dashboard(project_engineer_id: int, db: Session = Depen
     except Exception as e:
         print(f"🔥 ERROR in /dashboard: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/pe/timesheets")
 def get_timesheet_for_pe_review(
@@ -118,15 +115,18 @@ def get_timesheet_for_pe_review(
         .filter(
             models.Timesheet.foreman_id == foreman_id,
             models.Timesheet.date == date,
+            models.Timesheet.status == "APPROVED_BY_SUPERVISOR",
         )
         .first()
     )
 
     if not timesheet:
-        raise HTTPException(status_code=404, detail="Timesheet not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Timesheet not found or not submitted for review."
+        )
 
     return timesheet
-
 from ..models import User, UserRole
 
 @router.get("/", response_model=List[schemas.User])

@@ -69,7 +69,10 @@ const LoginScreen = () => {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
       });
-          console.log('Login response data:', response.data);
+console.log("🔐 Login Response:", response.data);
+console.log("📌 User From Backend:", response.data.user);
+console.log("📌 User ID From Backend:", response.data.user?.id);
+console.log("📌 Role From Backend:", response.data.role);
 const backendRole = response.data.role.toLowerCase();
 
 if (

@@ -16,6 +16,8 @@ import SupervisorTimesheetListScreen from '../screens/supervisor/SupervisorTimes
 import SupervisorTicketListScreen from '../screens/supervisor/SupervisorTicketListScreen';
 import TimesheetViewScreen from '../screens/supervisor/TimesheetViewScreen';
 import ReviewScreen from '../screens/foreman/ReviewScreen'; // <-- IMPORT NEW UNIFIED SCREEN
+import ForemanTimesheetViewScreen from '../screens/foreman/ForemanTimesheetViewScreen'; // <-- IMPORT NEW UNIFIED SCREEN
+
 // --- NEW: Project Engineer Screen Imports ---
 // import ProjectEngineerDashboard from '../screens/projectEngineer/PEDashboard';
 // // import SubmissionDetailScreen from '../screens/SubmissionDetailScreen';
@@ -33,6 +35,8 @@ export type ForemanStackParamList = {
   TimesheetList: undefined;
   TimesheetEdit: { timesheetId: number };
   Review: undefined; // <-- ADD NEW SCREEN
+TimesheetView: { timesheetId: number };
+
 };
 // Supervisor Stack
 export type SupervisorStackParamList = {
@@ -62,14 +66,39 @@ export type RootStackParamList = {
 // -------------------- Navigators --------------------
 const ForemanStack = createStackNavigator<ForemanStackParamList>();
 const ForemanNavigator = () => (
-<ForemanStack.Navigator initialRouteName="ForemanDashboard">
-  <ForemanStack.Screen name="ForemanDashboard" component={ForemanDashboard} options={{ headerShown: false }} />
-  <ForemanStack.Screen name="TimesheetList" component={TimesheetListScreen} options={{ title: 'All Timesheets' }} />
-  <ForemanStack.Screen name="TimesheetEdit" component={TimesheetEditScreen} options={{ title: 'Enter Hours' }} />
-  <ForemanStack.Screen name="Review" component={ReviewScreen} options={{ title: 'Review & Submit' }} />
-</ForemanStack.Navigator>
+  <ForemanStack.Navigator initialRouteName="ForemanDashboard">
+    <ForemanStack.Screen
+      name="ForemanDashboard"
+      component={ForemanDashboard}
+      options={{ headerShown: false }}
+    />
 
+    <ForemanStack.Screen
+      name="TimesheetList"
+      component={TimesheetListScreen}
+      options={{ title: "All Timesheets" }}
+    />
+
+    <ForemanStack.Screen
+      name="TimesheetEdit"
+      component={TimesheetEditScreen}
+      options={{ title: "Enter Hours" }}
+    />
+
+    <ForemanStack.Screen
+      name="Review"
+      component={ReviewScreen}
+      options={{ title: "Review & Submit" }}
+    />
+
+    <ForemanStack.Screen
+      name="TimesheetView"
+      component={ForemanTimesheetViewScreen}
+      options={{ title: "Timesheet View" }}
+    />
+  </ForemanStack.Navigator>
 );
+
 const SupervisorStack = createStackNavigator<SupervisorStackParamList>();
 const SupervisorNavigator = () => (
   <SupervisorStack.Navigator>

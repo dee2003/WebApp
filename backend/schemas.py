@@ -61,6 +61,13 @@ class User(UserBase):
         from_attributes = True
 
 
+class UserOut(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+
+    class Config:
+        from_attributes = True
 
 # ===============================
 #         EMPLOYEES
@@ -772,6 +779,8 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     role: str
+    user: UserOut   # 🔥 Add this
+
 class AuditLogResponse(BaseModel):
     id: int
     user_id: Optional[int]
@@ -783,3 +792,24 @@ class AuditLogResponse(BaseModel):
 
     class Config:
         orm_mode = True
+# File: C:\TimesheetWebApp\timesheet-app-dev\backend\schemas.py (or similar file)
+
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+
+class TimesheetWorkflowBase(BaseModel):
+    timesheet_id: int
+    foreman_id: Optional[int]
+    supervisor_id: Optional[int]
+    engineer_id: Optional[int]
+    by_role: str
+    action: Optional[str]
+    comments: Optional[str]
+
+class TimesheetWorkflowSchema(TimesheetWorkflowBase):
+    id: int
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True

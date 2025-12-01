@@ -391,77 +391,105 @@ const getSelectedDumpingMaterials = () => {
   return result;
 };
 
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!selectedForemanId || !selectedJobCode) {
-            alert("Please select both Foreman and Job Code before submitting.");
-            return;
-        }
-        const selectedSupervisor = supervisors.find(
+  if (!selectedForemanId || !selectedJobCode) {
+    alert("Please select both Foreman and Job Code before submitting.");
+    return;
+  }
+
+  const selectedSupervisor = supervisors.find(
     (sup) => sup.id === parseInt(selectedSupervisorId, 10)
   );
- const selectionData = {
-  vendor_categories: selectedVendorCategories,
-  selected_vendors: selectedVendors,
-  selected_vendor_materials: getSelectedVendorMaterials(),
 
-  material_categories: selectedMaterialCategories,
-  selected_materials: selectedMaterials,
-  selected_material_items: getSelectedMaterialItems(),
+  const selectionData = {
+    vendor_categories: selectedVendorCategories,
+    selected_vendors: selectedVendors,
+    selected_vendor_materials: getSelectedVendorMaterials(),
 
-  dumping_categories: selectedDumpingCategories,
-  selected_dumping_sites: selectedDumpingSites,
-  selected_dumping_materials: getSelectedDumpingMaterials(),
-};
+    material_categories: selectedMaterialCategories,
+    selected_materials: selectedMaterials,
+    selected_material_items: getSelectedMaterialItems(),
 
+    dumping_categories: selectedDumpingCategories,
+    selected_dumping_sites: selectedDumpingSites,
+    selected_dumping_materials: getSelectedDumpingMaterials(),
+  };
 
-        const timesheetData = {
-            job_name: jobName,
-            job: {
-                job_code: selectedJobCode,
-                phase_codes: selectedPhases,
-            },
-            time_of_day: timeOfDay,
-            weather,
-            temperature: `${temperature}°${unit}`,
-            location,
-            contract_no: contract,
-            project_engineer: projectEngineer,
-            supervisor: selectedSupervisor
+  const timesheetData = {
+    job_name: jobName,
+    job: {
+      job_code: selectedJobCode,
+      phase_codes: selectedPhases,
+    },
+    time_of_day: timeOfDay,
+    weather,
+    temperature: `${temperature}°${unit}`,
+    location,
+    contract_no: contract,
+    project_engineer: projectEngineer,
+    supervisor: selectedSupervisor
       ? {
           id: selectedSupervisor.id,
           name: `${selectedSupervisor.first_name} ${selectedSupervisor.last_name}`,
         }
       : null,
-            ...foremanData,
-            work_description: workDescription,
-           ...selectionData,
+    ...foremanData,
+    work_description: workDescription,
+    ...selectionData,
   };
-        const payload = {
-            foreman_id: parseInt(selectedForemanId, 10),
-            // supervisor_id: selectedSupervisorId ? parseInt(selectedSupervisorId, 10) : null,
-            date,
-            job_phase_id: selectedJobPhaseId,
-            data: timesheetData,
-            status: "Pending" ,
-            
-        };
 
-        console.log("📦 Sending Payload:", payload);
-        setLoading(true);
+  const payload = {
+    foreman_id: parseInt(selectedForemanId, 10),
+    date,
+    job_phase_id: selectedJobPhaseId,
+    data: timesheetData,
+    status: "Pending",
+  };
 
-        try {
-            await axios.post(`${API_URL}/timesheets/`, payload);
-            alert("Timesheet sent successfully!");
-            onClose();
-        } catch (err) {
-            console.error("❌ Error sending timesheet:", err.response?.data);
-            alert(`Error: ${JSON.stringify(err.response?.data?.detail || err.message)}`);
-        } finally {
-            setLoading(false);
-        }
-    };
+  console.log("📦 Sending Timesheet Payload:", payload);
+  setLoading(true);
+
+  try {
+    // 1️⃣ Send timesheet to backend
+    const res = await axios.post(`${API_URL}/timesheets/`, payload);
+    const createdTimesheet = res.data;
+
+    alert("Timesheet sent successfully!");
+const selectedForeman = foremen.find(f => f.id === parseInt(selectedForemanId, 10));
+const recipientEmail = selectedForeman?.email;
+
+console.log("Selected Foreman:", selectedForeman);
+console.log("Recipient email:", recipientEmail);
+    // 2️⃣ Send email notification if valid email exists
+// After timesheet creation (around line with "Send email notification"):
+
+if (recipientEmail) {
+  const notificationPayload = {
+    email: recipientEmail,
+    subject: "Timesheet Created Successfully",
+    message: `Hello, your timesheet ID ${createdTimesheet.id} has been successfully created.`
+  };
+
+  try {
+    await axios.post(`${API_URL}/timesheets/send-notification`, notificationPayload);
+    console.log("Notification sent successfully");
+  } catch (notifErr) {
+    console.error("Failed to send notification", notifErr.response?.data || notifErr.message);
+  }
+} else {
+  console.warn("No foreman email available for notification");
+}
+    onClose();
+  } catch (err) {
+    console.error("❌ Error sending timesheet:", err.response?.data || err.message);
+    alert(`Error: ${JSON.stringify(err.response?.data?.detail || err.message)}`);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
     return (
       <div className="vendor-form-page">

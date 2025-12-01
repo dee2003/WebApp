@@ -1,28 +1,28 @@
-
-
-
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  Alert, 
+  Alert,
   ScrollView,
   Image,
   ActivityIndicator,
-  Dimensions,
   ImageBackground,
   Animated,
+  Platform,
 } from 'react-native';
-import { useAuth } from '../../context/AuthContext';
+// Adjust this import path to match your actual project structure
+import { useAuth } from '../../context/AuthContext'; 
 import DocumentScanner from 'react-native-document-scanner-plugin';
 import RNFS from 'react-native-fs';
 import Icon from 'react-native-vector-icons/Feather';
 
-const API_BASE_URL = 'https://fc29f671c77f.ngrok-free.app';
+// --- CONFIGURATION ---
+const API_BASE_URL = 'https://d0647696540e.ngrok-free.app';
 
+// --- THEME ---
 const theme = {
   colors: {
     primary: '#4A5C4D',
@@ -36,121 +36,166 @@ const theme = {
   borderRadius: { lg: 16, xl: 24, full: 9999 },
 };
 
+// --- MAIN COMPONENT ---
 const ForemanDashboard = ({ navigation }: { navigation: any }) => {
   const { user, logout } = useAuth();
+  
+  // State Management
   const [isLoading, setIsLoading] = useState(false);
-  const [scannedImageUri, setScannedImageUri] = useState<string | null>(null);
+  const [scannedImageUris, setScannedImageUris] = useState<string[]>([]);
   const [screen, setScreen] = useState<'dashboard' | 'processing'>('dashboard');
 
+  // ------------------------------------------------------
+  // 1. Handle Document Scanning (Multi-Page Support)
+  // ------------------------------------------------------
   const handleScanDocument = async () => {
     try {
       setIsLoading(true);
-      setScreen('processing');
-      const { scannedImages } = await DocumentScanner.scanDocument({ maxNumDocuments: 1 });
-      if (scannedImages && scannedImages.length > 0) {
-        const originalUri = scannedImages[0];
-        const newFileName = `ticket_${Date.now()}.jpg`;
-        const oldPath = originalUri.startsWith('file://') ? originalUri.substring(7) : originalUri;
-        const newPath = `${RNFS.DocumentDirectoryPath}/${newFileName}`;
-        await RNFS.moveFile(oldPath, newPath);
-        const renamedUri = `file://${newPath}`;
-        setScannedImageUri(renamedUri);
+      
+      // Trigger Scanner
+      // REMOVED: responseType: 'imageFilePath' (not required/valid for this library)
+      const { scannedImages } = await DocumentScanner.scanDocument({
+        maxNumDocuments: 24, // Allow batch scanning
+        letUserAdjustCrop: true // Optional: allows user to adjust corners manually
+      });
 
-        await uploadScannedImage(renamedUri);
+      if (scannedImages && scannedImages.length > 0) {
+        setScreen('processing'); // Switch UI to processing view
+        
+        const processedUris: string[] = [];
+        
+        // Loop through results and move to persistent storage
+        for (let i = 0; i < scannedImages.length; i++) {
+          const originalUri = scannedImages[i];
+          const newFileName = `ticket_${Date.now()}_p${i + 1}.jpg`;
+          
+          // Handle "file://" prefix for filesystem operations
+          const oldPath = originalUri.startsWith('file://') 
+            ? originalUri.substring(7) 
+            : originalUri;
+            
+          const newPath = `${RNFS.DocumentDirectoryPath}/${newFileName}`;
+          
+          // Move file from temp cache to Document Directory
+          if (await RNFS.exists(oldPath)) {
+             await RNFS.moveFile(oldPath, newPath);
+             processedUris.push(`file://${newPath}`);
+          } else {
+             // Fallback if file access fails (rare)
+             processedUris.push(originalUri); 
+          }
+        }
+
+        // Update state and begin upload
+        setScannedImageUris(processedUris);
+        await uploadScannedImages(processedUris);
+
       } else {
-        Alert.alert('Scan Canceled', 'No document was scanned.');
+        // User cancelled the scan
         setScreen('dashboard');
       }
     } catch (err) {
       console.error('Scan error:', err);
-      Alert.alert('Error', 'Error during scan.');
+      Alert.alert('Error', 'Error during document scan.');
       setScreen('dashboard');
     } finally {
       setIsLoading(false);
     }
   };
+  // ------------------------------------------------------
+  // 2. Upload Logic (Sends List of Files)
+  // ------------------------------------------------------
+  const uploadScannedImages = async (uris: string[]) => {
+    try {
+      // Step A: Fetch Timesheets for Context
+      const timesheetRes = await fetch(`${API_BASE_URL}/api/timesheets/by-foreman/${user?.id}`);
+      const timesheetData = await timesheetRes.json();
 
-const uploadScannedImage = async (uri: string) => {
-  try {
-    // 1) Fetch timesheets for this foreman
-    const timesheetRes = await fetch(`${API_BASE_URL}/api/timesheets/by-foreman/${user?.id}`);
-    const timesheetData = await timesheetRes.json();
+      if (!Array.isArray(timesheetData) || timesheetData.length === 0) {
+        Alert.alert('No Timesheet Found', 'You have no timesheet records assigned.');
+        setScreen('dashboard');
+        return;
+      }
 
-    if (!Array.isArray(timesheetData) || timesheetData.length === 0) {
-      Alert.alert('No Timesheet Found', 'You have no timesheet records assigned.');
+      // Step B: Select appropriate Timesheet based on Date
+      const scanDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      // Try exact match first, then fallback to most recent past timesheet
+      let selected = timesheetData.find((ts: any) => ts.date === scanDate);
+      
+      if (!selected) {
+        const sorted = timesheetData
+          .slice()
+          .sort((a: any, b: any) => (a.date < b.date ? 1 : -1)); // Descending
+        selected = sorted.find((ts: any) => ts.date <= scanDate) || sorted[0];
+      }
+
+      if (!selected) {
+        Alert.alert('No Timesheet Found', `No timesheet could be attached.`);
+        setScreen('dashboard');
+        return;
+      }
+
+      // Step C: Build FormData with Multiple Files
+      const formData = new FormData();
+      
+      formData.append('foreman_id', String(user?.id));
+      formData.append('timesheet_id', String(selected.id));
+      formData.append('job_phase_id', String(selected.job_phase_id || ''));
+      formData.append('job_code', selected.job_code || '');
+
+      // IMPORTANT: Append each file to the SAME key 'files' (plural)
+      uris.forEach((uri, index) => {
+        formData.append('files', {
+          uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
+          type: 'image/jpeg',
+          name: `page_${index + 1}.jpg`,
+        } as any);
+      });
+
+      console.log(`Uploading ${uris.length} pages linked to TS ID: ${selected.id}`);
+
+      // Step D: Send Request
+      const response = await fetch(`${API_BASE_URL}/api/ocr/scan`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        }
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        Alert.alert(
+          '✅Upload Successful', 
+          `Your ticket is now being processed by the AI. It will appear in the 'Review' tab shortly. Uploaded ${uris.length} page(s) to timesheet dated ${selected.date}.`
+        );
+      } else {
+        console.log('OCR Scan Failed:', result);
+        Alert.alert('Scan Failed', result.detail || 'Server could not process the images.');
+      }
+    } catch (err) {
+      console.error('Unexpected scan error:', err);
+      Alert.alert('Error', 'Network request failed.');
+    } finally {
       setScreen('dashboard');
-      return;
+      setScannedImageUris([]);
     }
+  };
 
-    // 2) Determine scan date (use device date when scan happened)
-    const scanDate = new Date().toISOString().split('T')[0]; // e.g. '2025-10-21'
-
-    // 3) Try to find timesheet with exact scan date
-    let selected = timesheetData.find((ts: any) => ts.date === scanDate);
-
-    // 4) If none, find most recent timesheet with date <= scanDate
-    if (!selected) {
-      // sort descending by date
-      const sorted = timesheetData
-        .slice()
-        .sort((a: any, b: any) => (a.date < b.date ? 1 : -1));
-      selected = sorted.find((ts: any) => ts.date <= scanDate) || sorted[0]; // fallback to latest
-    }
-
-    if (!selected) {
-      Alert.alert('No Timesheet Found', `No timesheet could be attached.`);
-      setScreen('dashboard');
-      return;
-    }
-
-    // Let the user know which timesheet will be used
-    Alert.alert(
-      'Using Timesheet',
-      `This ticket will be attached to timesheet dated ${selected.date} (ID: ${selected.id}).`,
-      [{ text: 'OK' }]
-    );
-
-    // 5) Prepare form data for OCR upload
-    const formData = new FormData();
-    formData.append('file', {
-      uri,
-      type: 'image/jpeg',
-      name: `ticket_${Date.now()}.jpg`,
-    } as any);
-    formData.append('foreman_id', String(user?.id));
-    formData.append('timesheet_id', String(selected.id));
-    formData.append('job_phase_id', String(selected.job_phase_id || ''));
-    formData.append('job_code', selected.job_code || '');
-
-    console.log('Uploading scan for timesheet:', selected.id, selected.job_code);
-
-    // 6) Upload image to backend OCR endpoint
-    const response = await fetch(`${API_BASE_URL}/api/ocr/scan`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    const result = await response.json();
-    if (response.ok) {
-      Alert.alert('✅ Scan Successful', `Ticket linked to timesheet ${selected.date}.`);
-    } else {
-      console.log('OCR Scan Failed:', result);
-      Alert.alert('Scan Failed', result.detail || 'The server could not process the image.');
-    }
-  } catch (err) {
-    console.error('Unexpected scan error:', err);
-    Alert.alert('Error', 'Unexpected error while scanning.');
-  } finally {
-    setScreen('dashboard');
-  }
-};
-
+  // ------------------------------------------------------
+  // 3. Sub-Components
+  // ------------------------------------------------------
+  
   const AppHeader = () => (
     <View style={styles.header}>
-      <Image
-        source={require('../../assets/profile-placeholder.png')}
-        style={styles.headerProfileImage}
-      />
+      <View style={styles.headerLeft}>
+         <Image
+           source={require('../../assets/profile-placeholder.png')}
+           style={styles.headerProfileImage}
+         />
+      </View>
       <View style={styles.headerRight}>
         <TouchableOpacity style={styles.headerButton} onPress={logout}>
           <Icon name="log-out" size={24} color={theme.colors.contentLight} />
@@ -167,10 +212,10 @@ const uploadScannedImage = async (uri: string) => {
   }: {
     title: string;
     subtitle: string;
-    imageUrl: number;
+    imageUrl: any;
     onPress: () => void;
   }) => {
-    const scaleAnim = new Animated.Value(1);
+    const scaleAnim = useRef(new Animated.Value(1)).current;
 
     const onPressIn = () => {
       Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true }).start();
@@ -237,23 +282,42 @@ const uploadScannedImage = async (uri: string) => {
     </View>
   );
 
+  // ------------------------------------------------------
+  // 4. Render Logic
+  // ------------------------------------------------------
+
+  // View: Processing / Uploading
   if (screen === 'processing') {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.processingContainer}>
-          <Text style={styles.processingTitle}>Processing...</Text>
-          {scannedImageUri && <Image style={styles.previewImage} source={{ uri: scannedImageUri }} />}
+          <Text style={styles.processingTitle}>
+            Processing {scannedImageUris.length} Page{scannedImageUris.length !== 1 ? 's' : ''}...
+          </Text>
+          
+          {scannedImageUris.length > 0 && (
+            <Image 
+                style={styles.previewImage} 
+                source={{ uri: scannedImageUris[0] }} 
+            />
+          )}
+          
           <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 20 }} />
+          <Text style={styles.processingSubtitle}>
+            Sending to server for AI Analysis...
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  // View: Dashboard
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <AppHeader />
+          
           <View style={styles.mainContent}>
             <View style={styles.welcomeHeader}>
               <Text style={styles.welcomeTitle}>
@@ -265,10 +329,11 @@ const uploadScannedImage = async (uri: string) => {
               </Text>
               <Text style={styles.welcomeSubtitle}>What would you like to do today?</Text>
             </View>
+            
             <View style={styles.actionsContainer}>
               <ActionCard
-                title="Scan a Ticket"
-                subtitle="Scan and upload a new job ticket."
+                title="Scan Tickets"
+                subtitle="Scan single or multi-page tickets."
                 imageUrl={require('../../assets/scan-documents.png')}
                 onPress={handleScanDocument}
               />
@@ -287,43 +352,69 @@ const uploadScannedImage = async (uri: string) => {
             </View>
           </View>
         </ScrollView>
+        
         <BottomNavBar />
-        {isLoading && <ActivityIndicator style={StyleSheet.absoluteFill} size="large" color={theme.colors.primary} />}
+        
+        {isLoading && (
+            <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+            </View>
+        )}
       </View>
     </SafeAreaView>
   );
 };
 
+// --- STYLES ---
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: theme.colors.backgroundLight },
   container: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingBottom: 80 },
+  
+  // Header
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24 },
-  headerProfileImage: { width: 40, height: 40, borderRadius: theme.borderRadius.full },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  headerProfileImage: { width: 40, height: 40, borderRadius: theme.borderRadius.full, backgroundColor: '#ddd' },
   headerRight: { width: 40, alignItems: 'flex-end' },
   headerButton: { padding: 8, borderRadius: theme.borderRadius.full },
+  
+  // Main Content
   mainContent: { paddingHorizontal: 24 },
   welcomeHeader: { marginBottom: 32 },
   welcomeTitle: { fontFamily: theme.fontFamily.display, fontSize: 30, fontWeight: 'bold', color: theme.colors.contentLight, marginBottom: 4 },
-  welcomeSubtitle: { fontFamily: theme.fontFamily.display, color: theme.colors.subtleLight },
+  welcomeSubtitle: { fontFamily: theme.fontFamily.display, color: theme.colors.subtleLight, fontSize: 16 },
   actionsContainer: { gap: 20 },
+  
+  // Card
   card: { backgroundColor: theme.colors.cardLight, borderRadius: theme.borderRadius.xl, overflow: 'hidden', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
   cardContent: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 20 },
-  cardImage: { width: 80, height: 80 },
+  cardImage: { width: 80, height: 80, borderRadius: theme.borderRadius.lg, backgroundColor: '#eee' },
   cardTextContainer: { flex: 1 },
   cardTitle: { fontFamily: theme.fontFamily.display, fontSize: 16, fontWeight: 'bold', color: theme.colors.contentLight },
   cardSubtitle: { fontFamily: theme.fontFamily.display, fontSize: 14, color: theme.colors.subtleLight, marginTop: 4 },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(248, 247, 242, 0.92)', borderTopWidth: 1, borderTopColor: 'rgba(229, 229, 229, 0.4)' },
-  navBar: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 8, paddingVertical: 4 },
-  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: 8, borderRadius: theme.borderRadius.lg },
+  
+  // Footer / Nav
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(248, 247, 242, 0.95)', borderTopWidth: 1, borderTopColor: 'rgba(229, 229, 229, 0.4)' },
+  navBar: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 8, paddingVertical: 8 },
+  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: 4, borderRadius: theme.borderRadius.lg },
   navIconContainer: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   navLabel: { fontFamily: theme.fontFamily.display, fontSize: 12, fontWeight: '500', color: theme.colors.brandStone },
-  navLabelActive: { fontFamily: theme.fontFamily.display, fontSize: 12, fontWeight: '500', color: theme.colors.primary },
+  navLabelActive: { fontFamily: theme.fontFamily.display, fontSize: 12, fontWeight: '700', color: theme.colors.primary },
 
-  // Processing screen styles
+  // Processing Screen
   processingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  processingTitle: { fontFamily: theme.fontFamily.display, fontSize: 24, fontWeight: 'bold', color: theme.colors.contentLight, marginBottom: 20 },
-  previewImage: { width: 250, height: 250, resizeMode: 'contain', borderRadius: theme.borderRadius.lg, marginBottom: 20 },
+  processingTitle: { fontFamily: theme.fontFamily.display, fontSize: 22, fontWeight: 'bold', color: theme.colors.contentLight, marginBottom: 20, textAlign: 'center' },
+  processingSubtitle: { fontFamily: theme.fontFamily.display, fontSize: 14, color: theme.colors.subtleLight, marginTop: 10 },
+  previewImage: { width: 250, height: 300, resizeMode: 'contain', borderRadius: theme.borderRadius.lg, marginBottom: 20, borderWidth: 1, borderColor: '#ddd' },
+  
+  // Loading Overlay (for non-processing screen loading)
+  loadingOverlay: {
+     ...StyleSheet.absoluteFillObject,
+     backgroundColor: 'rgba(255,255,255,0.5)',
+     justifyContent: 'center',
+     alignItems: 'center',
+     zIndex: 100
+  }
 });
 
 export default ForemanDashboard;

@@ -7,6 +7,8 @@ from typing import List
 from pydantic import BaseModel
 from ..database import get_db
 
+from ..models import SubmissionStatus
+
 from .. import models, schemas, database
 
 
@@ -28,34 +30,69 @@ router = APIRouter(
 # ==========================================================
 # 🔹 2️⃣ Supervisor View: Only Submitted Tickets
 # ==========================================================
-from ..models import SubmissionStatus
+from datetime import date
+from sqlalchemy import func
+
+# @router.get("/counts")
+# def get_ticket_counts(
+#     foreman_id: int = Query(...),
+#     db: Session = Depends(database.get_db)
+# ):
+
+#     today = date.today()
+
+#     total = db.query(func.count(models.Ticket.id)).filter(
+#         models.Ticket.foreman_id == foreman_id,
+#         models.Ticket.date == today
+#     ).scalar()
+
+#     submitted = db.query(func.count(models.Ticket.id)).filter(
+#         models.Ticket.foreman_id == foreman_id,
+#         models.Ticket.date == today,
+#         models.Ticket.status == "SUBMITTED"
+#     ).scalar()
+
+#     pending = db.query(func.count(models.Ticket.id)).filter(
+#         models.Ticket.foreman_id == foreman_id,
+#         models.Ticket.date == today,
+#         models.Ticket.status == "PENDING"
+#     ).scalar()
+
+#     return {
+#         "total": total,
+#         "submitted": submitted,
+#         "pending": pending
+#     }
+
+from datetime import datetime, date as date_type
 
 @router.get("/for-supervisor", response_model=List[schemas.TicketSummary])
 def get_tickets_for_supervisor(
+    foreman_id: int = Query(...),
+    date: str = Query(...),
     db: Session = Depends(database.get_db),
-    foreman_id: int = Query(..., description="Foreman user ID"),
-    date: str = Query(..., description="Date to filter tickets (YYYY-MM-DD)")
 ):
-    """
-    Supervisors should ONLY see tickets that are already submitted.
-    """
     try:
         target_date = date_type.fromisoformat(date)
-    except ValueError:
+    except:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    start = datetime.combine(target_date, datetime.min.time())
+    end = datetime.combine(target_date, datetime.max.time())
 
     tickets = (
         db.query(models.Ticket)
         .filter(
             models.Ticket.foreman_id == foreman_id,
-            cast(models.Ticket.created_at, Date) == target_date,
-            models.Ticket.status == SubmissionStatus.SUBMITTED  # ✅ fixed
+            models.Ticket.created_at >= start,
+            models.Ticket.created_at <= end,
+            models.Ticket.status == SubmissionStatus.SUBMITTED
         )
+        .order_by(models.Ticket.created_at.asc())
         .all()
     )
 
-    return [schemas.TicketSummary.from_orm(t) for t in tickets]
-
+    return tickets
 
 
 # ==========================================================
@@ -113,16 +150,15 @@ def get_tickets_for_project_engineer(
 
 # ==========================================================
 # 🔹 4️⃣ Ticket Update Endpoint
-# ==========================================================
-class TicketUpdatePhaseCode(BaseModel):
-    phase_code: str
+from pydantic import BaseModel
+
+class TicketUpdatePhase(BaseModel):
+    phase_code_id: int  # Must match the frontend payload
 
 @router.patch("/{ticket_id}", response_model=schemas.Ticket)
-# @audit(action="updated", entity="Ticket")
-
 def update_ticket_phase_code(
     ticket_id: int,
-    update: schemas.TicketUpdatePhase,
+    update: TicketUpdatePhase,
     db: Session = Depends(get_db),
 ):
     ticket = db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
@@ -133,6 +169,7 @@ def update_ticket_phase_code(
     db.commit()
     db.refresh(ticket)
     return ticket
+
 # ==========================================================
 # 🔹 5️⃣ Submit Tickets
 # ==========================================================

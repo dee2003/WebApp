@@ -1,4 +1,4 @@
-// /App.tsx
+// App.tsx
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { AuthProvider } from './src/context/AuthContext';
@@ -9,7 +9,6 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    // Show splash for 2 seconds, then hide it
     const timer = setTimeout(() => {
       setShowSplash(false);
     }, 2000);
@@ -17,15 +16,10 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (showSplash) {
-    // 👇 Show only the Splash screen during first 2 seconds
-    return <Splash />;
-  }
-
   return (
     <AuthProvider>
       <NavigationContainer>
-        <AppNavigator />
+        {showSplash ? <Splash /> : <AppNavigator />}
       </NavigationContainer>
     </AuthProvider>
   );
