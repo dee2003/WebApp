@@ -40,8 +40,8 @@ class SubmissionStatus(str, enum.Enum):
     SENT = "Sent"
     IN_PROGRESS = "IN_PROGRESS" 
     SUBMITTED_TO_ENGINEER = "SubmittedToEngineer"  # ✅ add this
-
-
+    APPROVED_BY_SUPERVISOR = "APPROVED_BY_SUPERVISOR"  # ✅ add this
+    REVIEWED_BY_SUPERVISOR = "REVIEWED_BY_SUPERVISOR"
 
 # ============================================================================== #
 # 2. ASSOCIATION TABLES (FOR MANY-TO-MANY RELATIONSHIPS)
@@ -418,7 +418,6 @@ class TimesheetWorkflow(Base):
 
 
 
-
 class Ticket(Base):
     __tablename__ = "tickets"
 
@@ -429,7 +428,18 @@ class Ticket(Base):
     phase_code_id = Column(Integer, ForeignKey("phase_codes.id"), nullable=True)  # ✅ NEW COLUMN
 
     image_path = Column(String, nullable=False)
-    extracted_text = Column(Text, nullable=True)
+    raw_text_content = Column(String, nullable=True)
+
+    # --- Structured Data Fields (Unchanged) ---
+    ticket_number = Column(String, index=True, nullable=True)
+    ticket_date = Column(String, nullable=True) # Storing as string for simplicity
+    haul_vendor = Column(String, nullable=True)
+    truck_number = Column(String, nullable=True)
+    material = Column(String, nullable=True)
+    job_number = Column(String, nullable=True)
+    phase_code_ = Column(String, nullable=True)
+    zone = Column(String, nullable=True)
+    hours = Column(Float, nullable=True)
     created_at = Column(DateTime, default=func.now())
     status = Column(SQLAlchemyEnum(SubmissionStatus), default=SubmissionStatus.PENDING, nullable=False)
 
@@ -448,7 +458,6 @@ class Ticket(Base):
             "job_code": self.job_phase.job_code if self.job_phase else None,
             "phase_name": self.job_phase.phase_name if self.job_phase else None
         }
-
 class TimesheetFile(Base):
     __tablename__ = "timesheet_files"
     id = Column(Integer, primary_key=True, index=True)

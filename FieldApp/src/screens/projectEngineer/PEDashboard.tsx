@@ -62,9 +62,13 @@ const PEDashboard = () => {
 
     try {
       setLoading(true);
-      const res = await apiClient.get('/api/project-engineer/dashboard', {
-        params: { project_engineer_id: user.id },
-      });
+const res = await apiClient.get('/api/project-engineer/dashboard', {
+  params: { 
+    project_engineer_id: user.id,
+    status: 'APPROVED_BY_SUPERVISOR', // <- add this
+  },
+});
+
 
       const { timesheets = [], tickets = [] } = res.data;
       const combinedMap: Record<string, ItemType> = {};

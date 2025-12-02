@@ -112,31 +112,6 @@ def delete_job(job_code: str, db: Session = Depends(database.get_db)):
     return {"ok": True, "detail": f"Job '{job_code}' and all its phases deleted"}
 
 
-# # ✅ Update job by ID
-# @router.put("/by-id/{job_id}", response_model=schemas.JobPhase)
-# def update_job_phase_by_id(job_id: int, job_update: schemas.JobPhaseUpdate, db: Session = Depends(database.get_db)):
-#     db_job = db.query(models.JobPhase).options(selectinload(models.JobPhase.phase_codes)).filter(models.JobPhase.id == job_id).first()
-    
-#     if not db_job:
-#         raise HTTPException(status_code=404, detail="Job not found")
-
-#     update_data = job_update.dict(exclude_unset=True)
-
-#     # Handle phase_codes properly
-#     if "phase_codes" in update_data:
-#         new_phase_codes = update_data.pop("phase_codes")
-#         db_job.phase_codes.clear()
-#         for code_str in new_phase_codes:
-#             db_job.phase_codes.append(models.PhaseCode(code=code_str, description=f"Phase {code_str}", unit="unit"))
-
-#     # Update other fields (like location_id, project_engineer_id, etc.)
-#     for key, value in update_data.items():
-#         setattr(db_job, key, value)
-
-#     db.commit()
-#     db.refresh(db_job)
-#     return db_job
-
 
 # ✅ Update job by code
 @router.put("/{job_code}", response_model=schemas.JobPhase)
@@ -209,3 +184,23 @@ def update_job_phase_by_code(
 
     return db_job
 
+@router.get("/{job_code}/phase-codes-list", response_model=List[schemas.PhaseCode])
+def get_phase_codes_by_job_code(job_code: str, db: Session = Depends(get_db)):
+    """
+    Fetches the list of all available PhaseCode objects associated with a specific job_code.
+    This is used by the frontend to provide a list of valid phases for editing.
+    """
+    job_phase = (
+        db.query(models.JobPhase)
+        # Use selectinload to fetch the related phase codes efficiently in one query
+        .options(selectinload(models.JobPhase.phase_codes))
+        .filter(models.JobPhase.job_code == job_code)
+        .first()
+    )
+    
+    if not job_phase:
+        # Return an empty list or raise a 404 if the job doesn't exist
+        return []
+        
+    # models.JobPhase.phase_codes is the list of models.PhaseCode objects
+    return job_phase.phase_codes

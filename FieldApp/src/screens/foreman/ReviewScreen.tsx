@@ -1,3 +1,9 @@
+
+
+
+
+
+
 import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
@@ -6,23 +12,22 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ScrollView,
-  // Image, // <-- No longer needed for thumbnails
   ActivityIndicator,
   Dimensions,
   Alert,
   RefreshControl,
   Modal,
   FlatList,
-  TextInput, // ⭐️ --- IMPORT TEXTINPUT ---
-  KeyboardAvoidingView, // ⭐️ --- IMPORT KAV ---
-  Platform, // ⭐️ --- IMPORT PLATFORM ---
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Feather";
 import axios from "axios";
 import { Timesheet } from "../../types";
-import Pdf from "react-native-pdf"; // ⭐️ --- IMPORT PDF ---
+import Pdf, { PdfRef } from "react-native-pdf"; // Import PdfRef for type safety if needed
 
 const { width } = Dimensions.get("window");
 const THUMBNAIL_HEIGHT = 150;
@@ -31,8 +36,6 @@ const THUMBNAIL_HEIGHT = 150;
 const API_BASE_URL = "https://coated-nonattributive-babara.ngrok-free.dev";
 
 // --- TYPE DEFINITIONS ---
-
-// ⭐️ --- UPDATED: Includes all structured data fields ---
 interface TicketImage {
   id: number;
   image_url: string; // This will be the PDF path
@@ -45,7 +48,7 @@ interface TicketImage {
   truck_number: string | null;
   material: string | null;
   job_number: string | null;
-  phase_code: string | null;
+  phase_code_: string | null;
   zone: string | null;
   hours: number | null;
 }
@@ -60,11 +63,10 @@ interface TicketGroup {
   unsubmittedTicketIds?: number[];
 }
 
-// ⭐️ --- SIMPLIFIED AND CORRECTED URL BUILDER ---
+// --- URL BUILDER ---
 const getImageUri = (imagePath?: string): string | null => {
   if (!imagePath) return null;
   if (imagePath.startsWith("http")) return imagePath;
-  // imagePath is already the relative path, e.g., "/media/tickets/some_file.pdf"
   return `${API_BASE_URL}${imagePath}`;
 };
 
@@ -79,18 +81,17 @@ const InfoRow: React.FC<{ label: string; value: string | number | null | undefin
   </View>
 );
 
-// --- Tickets Review Component (Original Logic) ---
+// --- Tickets Review Component ---
 const ReviewTickets: React.FC = () => {
   const { user } = useAuth();
   const [imagesByDate, setImagesByDate] = useState<TicketGroup[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  
-  // ⭐️ --- MODAL STATE NOW HOLDS THE ENTIRE TICKET OBJECT ---
   const [selectedTicket, setSelectedTicket] = useState<TicketImage | null>(null);
-
-  // ⭐️ --- NEW STATE FOR EDITING ---
   const [editedRawText, setEditedRawText] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditingTextFullScreen, setIsEditingTextFullScreen] = useState(false);
+  const [isPdfFullScreen, setIsPdfFullScreen] = useState(false);
 
   const fetchTickets = async () => {
     if (!user) return;
@@ -99,9 +100,7 @@ const ReviewTickets: React.FC = () => {
       const res = await axios.get(
         `${API_BASE_URL}/api/ocr/images-by-date/${user.id}`
       );
-      // Backend now sends TicketImage[] with structured data
       const groups: TicketGroup[] = res.data.imagesByDate || [];
-
       const processed = groups.map((g) => {
         const unsubmitted = g.images.filter((i) => !i.submitted);
         return {
@@ -110,7 +109,6 @@ const ReviewTickets: React.FC = () => {
           unsubmittedTicketIds: unsubmitted.map((i) => i.id),
         };
       });
-
       setImagesByDate(processed);
     } catch (err) {
       console.error("fetchTickets error:", err);
@@ -126,7 +124,6 @@ const ReviewTickets: React.FC = () => {
     }, [user])
   );
 
-  // ⭐️ --- NEW: Load editor text when modal opens ---
   useEffect(() => {
     if (selectedTicket) {
       setEditedRawText(selectedTicket.raw_text_content || "");
@@ -143,13 +140,11 @@ const ReviewTickets: React.FC = () => {
       );
       return;
     }
-
     try {
       setIsLoading(true);
       const res = await axios.post(`${API_BASE_URL}/api/tickets/submit`, {
         ticket_ids: ticketIds,
       });
-
       if (res.status === 200) {
         Alert.alert("Success", "Tickets submitted successfully!");
         fetchTickets();
@@ -162,16 +157,13 @@ const ReviewTickets: React.FC = () => {
     }
   };
 
-  // ⭐️ --- NEW: Handle closing the modal ---
   const handleCloseModal = () => {
-    if (isSaving) return;
+    if (isSaving || isDeleting) return;
     setSelectedTicket(null);
   };
 
-  // ⭐️ --- NEW: Handle saving the edited text ---
   const handleSaveText = async () => {
-    if (!selectedTicket || !user) return;
-
+    if (!selectedTicket || !user || isDeleting) return;
     setIsSaving(true);
     try {
       const payload = {
@@ -179,16 +171,17 @@ const ReviewTickets: React.FC = () => {
         foreman_id: user.id,
         raw_text: editedRawText,
       };
-
       await axios.post(
         `${API_BASE_URL}/api/ocr/update-ticket-text`,
         payload
       );
-      
       Alert.alert("Success", "Ticket updated successfully.");
-      handleCloseModal(); // Close the modal
-      fetchTickets(); // Re-fetch all data to show updates
       
+      // --- Close both modals and refresh ---
+      setIsEditingTextFullScreen(false); // Close editor
+      handleCloseModal(); // Close main modal
+      fetchTickets(); // Refresh list
+
     } catch (err) {
       console.error("Save error:", err);
       Alert.alert("Error", "Failed to save changes. Please try again.");
@@ -197,6 +190,44 @@ const ReviewTickets: React.FC = () => {
     }
   };
 
+  const handleDeleteTicket = async () => {
+    if (!selectedTicket || !user || isSaving) return;
+    Alert.alert(
+      "Delete Ticket",
+      "Are you sure you want to permanently delete this ticket? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              const payload = {
+                ticket_id: selectedTicket.id,
+                foreman_id: user.id,
+              };
+              await axios.post(
+                `${API_BASE_URL}/api/ocr/delete-ticket`,
+                payload
+              );
+              Alert.alert("Success", "Ticket deleted successfully.");
+              handleCloseModal();
+              fetchTickets();
+            } catch (err) {
+              console.error("Delete error:", err);
+              Alert.alert(
+                "Error",
+                "Failed to delete ticket. Please try again."
+              );
+            } finally {
+              setIsDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (isLoading && imagesByDate.length === 0) {
     return (
@@ -206,7 +237,6 @@ const ReviewTickets: React.FC = () => {
     );
   }
 
-  // ⭐️ --- Get PDF URI for the selected ticket ---
   const modalPdfUri = getImageUri(selectedTicket?.image_url);
   const modalPdfSource = modalPdfUri
     ? { uri: modalPdfUri, cache: true }
@@ -253,7 +283,6 @@ const ReviewTickets: React.FC = () => {
                   </Text>
                 </TouchableOpacity>
               </View>
-
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -264,25 +293,20 @@ const ReviewTickets: React.FC = () => {
                   const source = pdfUri
                     ? { uri: pdfUri, cache: true }
                     : undefined;
-
                   return (
                     <TouchableOpacity
                       key={img.id}
-                      // ⭐️ --- SET THE ENTIRE TICKET OBJECT ---
                       onPress={() => pdfUri && setSelectedTicket(img)}
                     >
-                      {/* ⭐️ --- REPLACED IMAGE WITH PDF --- */}
                       <View style={styles.pdfThumbnailContainer}>
                         {source ? (
                           <Pdf
                             source={source}
                             style={styles.thumbnailImage}
-                            // Fit to width
                             scale={1}
-                            // Only show first page
                             page={1}
                             trustAllCerts={false}
-                            onError={(error) => {
+                            onError={(error: any) => { 
                               console.log("PDF Thumbnail Error:", error);
                             }}
                           />
@@ -290,7 +314,6 @@ const ReviewTickets: React.FC = () => {
                           <View style={styles.thumbnailImage} />
                         )}
                       </View>
-
                       {!img.submitted && (
                         <View style={styles.pendingBadge}>
                           <Text style={styles.pendingBadgeText}>Pending</Text>
@@ -305,7 +328,7 @@ const ReviewTickets: React.FC = () => {
         )}
       </ScrollView>
 
-      {/* ⭐️ --- FULLY UPDATED MODAL --- */}
+      {/* --- Main Details Modal --- */}
       <Modal visible={!!selectedTicket} transparent animationType="fade">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -315,21 +338,24 @@ const ReviewTickets: React.FC = () => {
             <TouchableOpacity
               style={styles.closeButton}
               onPress={handleCloseModal}
+              disabled={isSaving || isDeleting}
             >
               <Icon name="x" size={28} color="#fff" />
             </TouchableOpacity>
 
-            {/* PDF Viewer (Top Section) */}
-            <View style={styles.modalPdfView}>
+            {/* Clickable PDF Viewer */}
+            <TouchableOpacity
+              style={styles.modalPdfView}
+              onPress={() => setIsPdfFullScreen(true)}
+              activeOpacity={0.9}
+            >
               {modalPdfSource ? (
                 <Pdf
                   source={modalPdfSource}
                   style={styles.fullPdf}
                   trustAllCerts={false}
-                  onError={(error) => {
+                  onError={(error: any) => { 
                     console.log("PDF Modal Error:", error);
-                    Alert.alert("Error", "Could not load PDF file.");
-                    setSelectedTicket(null);
                   }}
                 />
               ) : (
@@ -337,54 +363,154 @@ const ReviewTickets: React.FC = () => {
                   <ActivityIndicator size="large" color="#fff" />
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
 
             {/* Structured Data (Middle Section) */}
             <View style={styles.modalStructuredDataView}>
               <Text style={styles.modalSectionHeader}>Structured Data</Text>
               <ScrollView contentContainerStyle={styles.modalSectionScroll}>
-                <InfoRow label="Ticket #" value={selectedTicket?.ticket_number} />
+                <InfoRow
+                  label="Ticket #"
+                  value={selectedTicket?.ticket_number}
+                />
                 <InfoRow label="Date" value={selectedTicket?.ticket_date} />
                 <InfoRow label="Vendor" value={selectedTicket?.haul_vendor} />
-                <InfoRow label="Truck #" value={selectedTicket?.truck_number} />
+                <InfoRow
+                  label="Truck #"
+                  value={selectedTicket?.truck_number}
+                />
                 <InfoRow label="Material" value={selectedTicket?.material} />
                 <InfoRow label="Job #" value={selectedTicket?.job_number} />
-                <InfoRow label="Phase" value={selectedTicket?.phase_code} />
+                <InfoRow label="Phase" value={selectedTicket?.phase_code_} />
                 <InfoRow label="Zone" value={selectedTicket?.zone} />
                 <InfoRow label="Hours" value={selectedTicket?.hours} />
               </ScrollView>
             </View>
 
-            {/* Extracted Text (Bottom Section - Editable) */}
+            {/* Edit Raw Text Button */}
             <View style={styles.modalEditTextView}>
-              <Text style={styles.modalSectionHeader}>Edit Raw Text</Text>
-              <TextInput
-                style={styles.modalTextInput}
-                value={editedRawText}
-                onChangeText={setEditedRawText}
-                multiline
-                textAlignVertical="top" // for Android
-                placeholder="Edit raw text..."
-                placeholderTextColor="#888"
-              />
+              
+              {/* Only show "Edit" button if ticket is NOT submitted */}
+              {selectedTicket && !selectedTicket.submitted ? (
+                <TouchableOpacity
+                  style={styles.modalSectionButton}
+                  onPress={() => setIsEditingTextFullScreen(true)}
+                >
+                  <Text style={styles.modalSectionHeader}>Edit Raw Text</Text>
+                  <Icon name="chevron-right" size={24} color="#AAA" />
+                </TouchableOpacity>
+              ) : (
+                // If submitted, just show a static title
+                <Text style={[styles.modalSectionHeader, { marginBottom: 8 }]}>
+                  Raw Text (Submitted)
+                </Text>
+              )}
+
+              <Text style={styles.modalTextPreview} numberOfLines={3}>
+                {editedRawText || "No raw text found."}
+              </Text>
             </View>
 
-            {/* Save Button */}
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity
-                style={styles.modalButtonSave}
-                onPress={handleSaveText}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.modalButtonText}>Save Changes</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            {/* Delete Button (Conditional) */}
+            {/* Only show the Delete button if the ticket is NOT submitted */}
+            {selectedTicket && !selectedTicket.submitted && (
+              <View style={styles.modalButtonContainer}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonDelete]}
+                  onPress={handleDeleteTicket}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.modalButtonText}>Delete Ticket</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* --- Full-Screen Text Editor Modal --- */}
+      <Modal visible={isEditingTextFullScreen} animationType="slide">
+        <SafeAreaView style={styles.fullScreenModalContainer}>
+          <View style={styles.fullScreenHeader}>
+            {/* --- Cancel Button --- */}
+            <TouchableOpacity
+              onPress={() => setIsEditingTextFullScreen(false)}
+              style={styles.fullScreenHeaderButton}
+              disabled={isSaving}
+            >
+              <Text style={styles.fullScreenCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.fullScreenTitle}>Edit Raw Text</Text>
+
+            {/* --- Save Button --- */}
+            <TouchableOpacity
+              onPress={handleSaveText}
+              style={styles.fullScreenHeaderButton}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator color={THEME.colors.primary} size="small" />
+              ) : (
+                <Text style={styles.fullScreenDoneButtonText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.fullScreenKAV}
+          >
+            <TextInput
+              style={styles.fullScreenTextInput}
+              value={editedRawText}
+              onChangeText={setEditedRawText}
+              multiline
+              textAlignVertical="top"
+              placeholder="Edit raw text..."
+              placeholderTextColor="#888"
+              autoFocus={true}
+              selectionColor={THEME.colors.primary}
+            />
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* --- Full-Screen PDF Viewer Modal --- */}
+      <Modal visible={isPdfFullScreen} transparent={false} animationType="slide">
+        <SafeAreaView style={styles.fullScreenPdfContainer}>
+          <View style={styles.fullScreenHeader}>
+            <Text style={styles.fullScreenTitle}>
+              Ticket: {selectedTicket?.ticket_number || "View PDF"}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setIsPdfFullScreen(false)}
+              style={styles.fullScreenHeaderButton} // Use same button style
+            >
+              <Text style={styles.fullScreenDoneButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          {modalPdfSource ? (
+            <Pdf
+              source={modalPdfSource}
+              style={styles.fullScreenPdf}
+              trustAllCerts={false}
+              onError={(error: any) => { 
+                console.log("Full Screen PDF Error:", error);
+                Alert.alert("Error", "Could not load PDF file.");
+                setIsPdfFullScreen(false);
+              }}
+            />
+          ) : (
+            <View style={styles.centered}>
+              <ActivityIndicator size="large" color="#fff" />
+            </View>
+          )}
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -399,13 +525,14 @@ const ReviewTimesheets = ({ navigation }: { navigation: any }) => {
   const fetchDrafts = async () => {
     if (!user) return;
     setLoading(true);
+
     try {
       const response = await axios.get(
         `${API_BASE_URL}/api/timesheets/drafts/by-foreman/${user.id}`
       );
       setDrafts(response.data);
-    } catch (e) {
-      Alert.alert("Error", "Failed to fetch draft timesheets.");
+    } catch (err) {
+      Alert.alert("Error", "Unable to load timesheets.");
     } finally {
       setLoading(false);
     }
@@ -417,99 +544,43 @@ const ReviewTimesheets = ({ navigation }: { navigation: any }) => {
     }, [user])
   );
 
-  const handleSendTimesheet = async (timesheetId: number) => {
-    Alert.alert(
-      "Confirm Submission",
-      "Are you sure you want to send this timesheet?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Send",
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await axios.post(
-                `${API_BASE_URL}/api/timesheets/${timesheetId}/send`
-              );
-              Alert.alert("Success", "Timesheet has been sent.");
-              setDrafts((prev) => prev.filter((t) => t.id !== timesheetId));
-              navigation.navigate("TimesheetList", { refresh: true });
-            } catch (error: any) {
-              console.error("Send timesheet error:", error);
-              Alert.alert(
-                "Error",
-                error.response?.data?.detail || "Could not send the timesheet."
-              );
-            } finally {
-              setLoading(false);
-            }
-          },
-          style: "destructive",
-        },
-      ]
-    );
-  };
-
   if (loading && drafts.length === 0) {
-    return (
-      <ActivityIndicator
-        size="large"
-        color={THEME.colors.primary}
-        style={styles.centered}
-      />
-    );
+    return <ActivityIndicator size="large" style={{ marginTop: 40 }} />;
   }
 
   return (
-    <FlatList
-      data={drafts}
-      keyExtractor={(item) => item.id.toString()}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={loading}
-          onRefresh={fetchDrafts}
-          tintColor={THEME.colors.primary}
-        />
-      }
-      renderItem={({ item }) => (
-        <View style={styles.tsItemOuterContainer}>
-          <TouchableOpacity
-            style={styles.tsItemContainer}
-            onPress={() =>
-              navigation.navigate("TimesheetEdit", { timesheetId: item.id })
-            }
-          >
-            <View style={styles.tsItemTextContainer}>
-              <Text style={styles.tsItemTitle}>
-                {item.timesheet_name || "Untitled Timesheet"}
-              </Text>
-              <Text style={styles.tsItemSubtitle}>
-                Date: {new Date(item.date).toLocaleDateString()}
-              </Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.tsSendButton}
-            onPress={() => handleSendTimesheet(item.id)}
-          >
-            <Icon name="send" size={20} color={THEME.colors.primary} />
-            <Text style={styles.tsSendButtonText}>Send</Text>
-          </TouchableOpacity>
+    <ScrollView contentContainerStyle={{ padding: 16 }}>
+      {drafts.map((ts) => (
+        <TouchableOpacity
+          key={ts.id}
+          style={{
+            backgroundColor: "#fff",
+            padding: 16,
+            borderRadius: 10,
+            marginBottom: 12,
+            borderWidth: 1,
+            borderColor: "#ddd",
+          }}
+          onPress={() => navigation.navigate("TimesheetView", { timesheetId: ts.id })}
+        >
+          <Text style={{ fontSize: 16, fontWeight: "600" }}>
+            {ts.timesheet_name || "Draft Timesheet"}
+          </Text>
+          <Text style={{ marginTop: 4 }}>
+            {new Date(ts.date).toLocaleDateString()}
+          </Text>
+        </TouchableOpacity>
+      ))}
+
+      {drafts.length === 0 && !loading && (
+        <View style={{ marginTop: 60, alignItems: "center" }}>
+          <Text>No drafts found.</Text>
         </View>
       )}
-      ListEmptyComponent={
-        <View style={styles.emptyContainer}>
-          <Icon name="edit" size={48} color={THEME.colors.brandStone} />
-          <Text style={styles.emptyText}>No timesheet drafts.</Text>
-          <Text style={styles.emptySubText}>
-            Saved timesheets will appear here for submission.
-          </Text>
-        </View>
-      }
-    />
+    </ScrollView>
   );
 };
+
 
 // --- Main Review Screen with Tabs (Unchanged) ---
 const ReviewScreen = ({ navigation }: { navigation: any }) => {
@@ -559,7 +630,7 @@ const ReviewScreen = ({ navigation }: { navigation: any }) => {
   );
 };
 
-// ✅ Styling (Merged & Updated)
+// --- STYLES ---
 const THEME = {
   colors: {
     primary: "#4A5C4D",
@@ -567,10 +638,11 @@ const THEME = {
     contentLight: "#3D3D3D",
     subtleLight: "#797979",
     cardLight: "#FFFFFF",
-    border: "#E5E5E5",
+    border: "#E5E5ES",
     brandStone: "#8E8E8E",
     success: "#16A34A",
     pending: "#FACC15",
+    danger: "#DC2626",
   },
   fontFamily: { display: "System" },
   borderRadius: { sm: 8, md: 12, lg: 16, tiny: 6, full: 9999 },
@@ -651,22 +723,19 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: "#fff", fontWeight: "500" },
   thumbnailScrollContainer: { flexDirection: "row" },
-
-  // ⭐️ --- PDF THUMBNAIL STYLING ---
   pdfThumbnailContainer: {
     width: width / 3,
     height: THUMBNAIL_HEIGHT,
     borderRadius: THEME.borderRadius.sm,
     marginRight: 8,
     backgroundColor: "#ddd",
-    overflow: "hidden", // Clip the PDF content
+    overflow: "hidden",
   },
   thumbnailImage: {
     width: "100%",
     height: "100%",
     backgroundColor: "#ddd",
   },
-
   pendingBadge: {
     position: "absolute",
     bottom: 6,
@@ -678,7 +747,7 @@ const styles = StyleSheet.create({
   },
   pendingBadgeText: { color: "#000", fontSize: 10, fontWeight: "bold" },
 
-  // ⭐️ --- MODAL STYLING (UPDATED) ---
+  // --- Main Modal Styling ---
   modalContainer: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.9)",
@@ -689,17 +758,15 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     position: "absolute",
-    top: 50, // Safer area
+    top: 35,
     right: 20,
     backgroundColor: "rgba(0,0,0,0.5)",
     borderRadius: 20,
     padding: 6,
     zIndex: 10,
   },
-  
-  // --- PDF View (Top) ---
   modalPdfView: {
-    flex: 2, // 40%
+    flex: 2.5, // 50%
     marginTop: 80,
     backgroundColor: "#000",
   },
@@ -708,34 +775,24 @@ const styles = StyleSheet.create({
     width: "100%",
   },
 
-  // --- Structured Data View (Middle) ---
   modalStructuredDataView: {
     flex: 1.5, // 30%
     borderTopWidth: 1,
     borderTopColor: "#333",
     borderBottomWidth: 1,
     borderBottomColor: "#333",
+    paddingHorizontal: 16, 
+    paddingTop: 16,
   },
-
-  // --- Editable Text View (Bottom) ---
-  modalEditTextView: {
-    flex: 1.5, // 30%
-  },
-
   modalSectionHeader: {
     fontSize: 16,
     fontWeight: "600",
     color: "#fff",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: "#2C2C2E",
   },
   modalSectionScroll: {
-    padding: 16,
+    paddingTop: 8, 
+    paddingBottom: 16, 
   },
-
-  // --- Info Row Styling ---
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -755,35 +812,105 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
-  // --- TextInput Styling ---
-  modalTextInput: {
-    flex: 1,
-    fontFamily: "monospace",
+  // Edit Text Section (Button)
+  modalEditTextView: {
+    flex: 1, // 20%
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  modalSectionButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  modalTextPreview: {
+    color: "#888",
     fontSize: 12,
-    color: "#E0E0E0",
-    lineHeight: 18,
-    padding: 16,
+    fontFamily: "monospace",
+    paddingBottom: 8,
   },
 
-  // --- Save Button Styling ---
+  // ⭐ --- UPDATED: Button Container (Delete Only) ---
   modalButtonContainer: {
     padding: 16,
     backgroundColor: "#2C2C2E",
     borderTopWidth: 1,
     borderTopColor: "#333",
+    alignItems: 'center', // Center the button
   },
-  modalButtonSave: {
-    backgroundColor: THEME.colors.primary,
-    padding: 14,
+  modalButton: {
+    // flex: 1, // <-- REMOVED
+    paddingVertical: 12, 
+    paddingHorizontal: 32, // <-- Added horizontal padding
     borderRadius: THEME.borderRadius.sm,
     alignItems: "center",
   },
+  modalButtonDelete: {
+    backgroundColor: THEME.colors.danger,
+  },
   modalButtonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 15, 
     fontWeight: "600",
   },
 
+  // ⭐ --- UPDATED: Full Screen Text Editor Modal ---
+  fullScreenModalContainer: {
+    flex: 1,
+    backgroundColor: "#1C1C1E", // Dark background
+  },
+  fullScreenHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
+  },
+  fullScreenTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  fullScreenHeaderButton: { // Generic style for header buttons
+    padding: 8,
+    minWidth: 60, // Give space for loading indicator
+    alignItems: 'center',
+  },
+  fullScreenDoneButtonText: { // For "Save" and "Done"
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#fff", // "Save" button
+  },
+  fullScreenCancelButtonText: { // For "Cancel"
+    fontSize: 16,
+    fontWeight: "500", // Less emphasis
+    color: "#fff", // White
+  },
+  fullScreenKAV: {
+    flex: 1,
+  },
+  fullScreenTextInput: {
+    flex: 1,
+    fontFamily: "monospace",
+    fontSize: 14,
+    color: "#E0E0E0",
+    lineHeight: 20,
+    padding: 16,
+    textAlignVertical: "top",
+  },
+
+  // --- Full Screen PDF Modal Styles ---
+  fullScreenPdfContainer: {
+    flex: 1,
+    backgroundColor: "#1C1C1E",
+  },
+  fullScreenPdf: {
+    flex: 1,
+    width: "100%",
+  },
 
   // Empty State Styling
   emptyContainer: {

@@ -8,6 +8,7 @@ import { Timesheet } from '../../types';
 import { Pressable, Modal } from "react-native";
 import { Picker } from '@react-native-picker/picker';
 import NetInfo from '@react-native-community/netinfo';
+import WeatherLocationCard from '../WeatherLocationCard';
 
 // ---------------- THEME ----------------
 const THEME = {
@@ -1988,8 +1989,8 @@ const renderTotalQuantities = () => {
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}><Text style={styles.infoLabel}>Date</Text><TouchableOpacity onPress={() => setDatePickerVisible(true)}><Text style={styles.infoValueClickable}>{timesheetDate.toLocaleDateString()}</Text></TouchableOpacity></View>
             <View style={styles.infoItem}><Text style={styles.infoLabel}>Foreman</Text><Text style={styles.infoValue}>{foremanName}</Text></View>
-            <View style={styles.infoItem}><Text style={styles.infoLabel}>Location</Text><Text style={styles.infoValue}>{timesheet.data?.location ?? 'N/A'}</Text></View>
-            <View style={styles.infoItem}><Text style={styles.infoLabel}>Weather</Text><Text style={styles.infoValue}>{timesheet.data?.weather ?? 'N/A'}</Text></View>
+<WeatherLocationCard />
+
           </View>
         </View>
 

@@ -16,6 +16,10 @@ import SupervisorTimesheetListScreen from '../screens/supervisor/SupervisorTimes
 import SupervisorTicketListScreen from '../screens/supervisor/SupervisorTicketListScreen';
 import TimesheetViewScreen from '../screens/supervisor/TimesheetViewScreen';
 import ReviewScreen from '../screens/foreman/ReviewScreen'; // <-- IMPORT NEW UNIFIED SCREEN
+import ForemanTimesheetViewScreen from '../screens/foreman/ForemanTimesheetViewScreen'; // <-- IMPORT NEW UNIFIED SCREEN
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen'
+import OtpVerifyScreen from '../screens/OtpVerifyScreen';
+import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 // --- NEW: Project Engineer Screen Imports ---
 // import ProjectEngineerDashboard from '../screens/projectEngineer/PEDashboard';
 // // import SubmissionDetailScreen from '../screens/SubmissionDetailScreen';
@@ -33,6 +37,8 @@ export type ForemanStackParamList = {
   TimesheetList: undefined;
   TimesheetEdit: { timesheetId: number };
   Review: undefined; // <-- ADD NEW SCREEN
+TimesheetView: { timesheetId: number };
+
 };
 // Supervisor Stack
 export type SupervisorStackParamList = {
@@ -55,21 +61,50 @@ export type ProjectEngineerStackParamList = {
 // --- Root Stack (combines all navigators) ---
 export type RootStackParamList = {
   Login: undefined;
+  ForgotPassword: undefined;
+  VerifyOtp: { email: string };
+  ResetPassword: { email: string; otp: string };
   Foreman: NavigatorScreenParams<ForemanStackParamList>;
   Supervisor: NavigatorScreenParams<SupervisorStackParamList>;
   ProjectEngineer: NavigatorScreenParams<ProjectEngineerStackParamList>;
 };
+
 // -------------------- Navigators --------------------
 const ForemanStack = createStackNavigator<ForemanStackParamList>();
 const ForemanNavigator = () => (
-<ForemanStack.Navigator initialRouteName="ForemanDashboard">
-  <ForemanStack.Screen name="ForemanDashboard" component={ForemanDashboard} options={{ headerShown: false }} />
-  <ForemanStack.Screen name="TimesheetList" component={TimesheetListScreen} options={{ title: 'All Timesheets' }} />
-  <ForemanStack.Screen name="TimesheetEdit" component={TimesheetEditScreen} options={{ title: 'Enter Hours' }} />
-  <ForemanStack.Screen name="Review" component={ReviewScreen} options={{ title: 'Review & Submit' }} />
-</ForemanStack.Navigator>
+  <ForemanStack.Navigator initialRouteName="ForemanDashboard">
+    <ForemanStack.Screen
+      name="ForemanDashboard"
+      component={ForemanDashboard}
+      options={{ headerShown: false }}
+    />
 
+    <ForemanStack.Screen
+      name="TimesheetList"
+      component={TimesheetListScreen}
+      options={{ title: "All Timesheets" }}
+    />
+
+    <ForemanStack.Screen
+      name="TimesheetEdit"
+      component={TimesheetEditScreen}
+      options={{ title: "Enter Hours" }}
+    />
+
+    <ForemanStack.Screen
+      name="Review"
+      component={ReviewScreen}
+      options={{ title: "Review & Submit" }}
+    />
+
+    <ForemanStack.Screen
+      name="TimesheetView"
+      component={ForemanTimesheetViewScreen}
+      options={{ title: "Timesheet View" }}
+    />
+  </ForemanStack.Navigator>
 );
+
 const SupervisorStack = createStackNavigator<SupervisorStackParamList>();
 const SupervisorNavigator = () => (
   <SupervisorStack.Navigator>
@@ -122,25 +157,63 @@ const ProjectEngineerNavigator = () => (
 const RootStack = createStackNavigator<RootStackParamList>();
 const AppNavigator = () => {
   const { user } = useAuth();
+
   return (
     <RootStack.Navigator>
       {!user ? (
-        <RootStack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+        <>
+          <RootStack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{ headerShown: false }}
+          />
+
+          {/* 🔥 Add new OTP Reset Pages */}
+          <RootStack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+            options={{ title: "Forgot Password" }}
+          />
+          <RootStack.Screen
+            name="VerifyOtp"
+            component={OtpVerifyScreen}
+            options={{ title: "Enter OTP" }}
+          />
+          <RootStack.Screen
+            name="ResetPassword"
+            component={ResetPasswordScreen}
+            options={{ title: "Reset Password" }}
+          />
+        </>
       ) : (
         <>
-          {user.role === 'foreman' && (
-            <RootStack.Screen name="Foreman" component={ForemanNavigator} options={{ headerShown: false }} />
+          {user.role === "foreman" && (
+            <RootStack.Screen
+              name="Foreman"
+              component={ForemanNavigator}
+              options={{ headerShown: false }}
+            />
           )}
-          {user.role === 'supervisor' && (
-            <RootStack.Screen name="Supervisor" component={SupervisorNavigator} options={{ headerShown: false }} />
+
+          {user.role === "supervisor" && (
+            <RootStack.Screen
+              name="Supervisor"
+              component={SupervisorNavigator}
+              options={{ headerShown: false }}
+            />
           )}
-          {/* --- NEW: Logic for Project Engineer Role --- */}
-          {user.role === 'project_engineer' && (
-            <RootStack.Screen name="ProjectEngineer" component={ProjectEngineerNavigator} options={{ headerShown: false }} />
+
+          {user.role === "project_engineer" && (
+            <RootStack.Screen
+              name="ProjectEngineer"
+              component={ProjectEngineerNavigator}
+              options={{ headerShown: false }}
+            />
           )}
         </>
       )}
     </RootStack.Navigator>
   );
 };
+
 export default AppNavigator;

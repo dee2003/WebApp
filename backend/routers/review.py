@@ -12,68 +12,102 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List, Any, Dict
 from ..schemas import SubmissionStatus
+from sqlalchemy import func, cast, Date
 
 router = APIRouter(prefix="/api/review", tags=["Supervisor Review"])
 
 # ---------------- Notifications ----------------
+def get_timesheet_submission_date_column():
+    """Returns the column to use for grouping/filtering the submission date."""
+    # Assuming 'sent_date' is updated on submission (status change to SUBMITTED).
+    # If sent_date is only set on creation, use created_at instead: 
+    # return cast(models.Timesheet.created_at, Date)
+    return cast(models.Timesheet.sent_date, Date)
+
+def get_ticket_submission_date_column():
+    """Returns the column to use for grouping/filtering the ticket submission date."""
+    # Since Ticket model lacks a specific 'sent_date', we use 'created_at'.
+    return cast(models.Ticket.created_at, Date)
+# -------------------------------------------------------------------
+
+
 @router.get("/notifications", response_model=List[schemas.Notification])
 def get_notifications_for_supervisor(db: Session = Depends(get_db)):
     """
-    Show all foremen who have submitted Timesheets or Tickets.
+    Show all foremen who have submitted Timesheets or Tickets, 
+    grouped by the actual SUBMISSION DATE.
     """
-    # ✅ Get all foremen with submitted Timesheets (status = "SUBMITTED")
-    submitted_timesheets = (
-        db.query(models.Timesheet.foreman_id, models.Timesheet.date)
-        .filter(models.Timesheet.status == "SUBMITTED")
+    # Define the statuses that should remain visible on the dashboard
+    TIMESHEET_DASHBOARD_STATUSES = ["SUBMITTED", "REVIEWED_BY_SUPERVISOR"]
+    
+    # Define the submission date columns based on the helper functions
+    ts_submission_date_col = get_timesheet_submission_date_column()
+    tk_submission_date_col = get_ticket_submission_date_column()
+
+
+    # 1. FIX: Get all unique foreman_id and TIMESHEET SUBMISSION DATE combinations
+    submitted_timesheet_groups = (
+        db.query(
+            models.Timesheet.foreman_id,
+            ts_submission_date_col.label("submission_date") # Extract the submission date
+        )
+        .filter(models.Timesheet.status.in_(TIMESHEET_DASHBOARD_STATUSES))
         .distinct()
         .all()
     )
 
     notifications = []
-    for foreman_id, ts_date in submitted_timesheets:
+    # Loop over the groups defined by Foreman ID and the Submission Date
+    for foreman_id, submission_date in submitted_timesheet_groups:
         foreman = db.query(models.User).filter(models.User.id == foreman_id).first()
         if not foreman:
             continue
 
-        # ✅ Count submitted Timesheets
+        # 2. Count all timesheets submitted on this specific submission date
         timesheet_count = (
             db.query(func.count(models.Timesheet.id))
             .filter(
                 models.Timesheet.foreman_id == foreman_id,
-                models.Timesheet.date == ts_date,
-                models.Timesheet.status == "SUBMITTED",
+                # Filter by the submission date column
+                ts_submission_date_col == submission_date, 
+                models.Timesheet.status.in_(TIMESHEET_DASHBOARD_STATUSES),
             )
             .scalar()
             or 0
         )
 
-        # ✅ Count submitted Tickets (status = "SUBMITTED")
+        # 3. FIX: Count submitted Tickets on this specific submission date
         ticket_count = (
             db.query(func.count(models.Ticket.id))
             .filter(
                 models.Ticket.foreman_id == foreman_id,
-                cast(models.Ticket.created_at, Date) == ts_date,
-                models.Ticket.status == "SUBMITTED",
+                models.Ticket.status == SubmissionStatus.SUBMITTED.value, # Ensure status matches the enum type
+                # Filter by the ticket's submission date column
+                tk_submission_date_col == submission_date 
             )
             .scalar()
             or 0
         )
-
-        notifications.append(
-            schemas.Notification(
-                id=int(f"{foreman_id}{ts_date.strftime('%Y%m%d')}"),
-                foreman_id=foreman.id,
-                foreman_name=f"{foreman.first_name} {foreman.last_name}".strip(),
-                foreman_email=foreman.email,
-                date=ts_date,
-                timesheet_count=timesheet_count,
-                ticket_count=ticket_count,
-                job_code=None,  # Optional: can derive from related job phase
+        
+        # Only create a notification if there are pending items for review for this date
+        if timesheet_count > 0 or ticket_count > 0:
+            notifications.append(
+                schemas.Notification(
+                    # ID should now include the submission date
+                    # Note: You may want to generate a more robust ID if you have many foremen
+                    id=int(f"{foreman_id}{submission_date.strftime('%Y%m%d')}"),
+                    foreman_id=foreman.id,
+                    foreman_name=f"{foreman.first_name} {foreman.last_name}".strip(),
+                    foreman_email=foreman.email,
+                    # This 'date' field will now hold the submission date, as requested
+                    date=submission_date, 
+                    timesheet_count=timesheet_count,
+                    ticket_count=ticket_count,
+                    job_code=None,
+                )
             )
-        )
 
     return notifications
-
 
 # ---------------- Submit all for date ----------------
 class SubmitDatePayload(BaseModel):
@@ -84,50 +118,72 @@ from datetime import date
 class SupervisorSubmitPayload(BaseModel):
     supervisor_id: int
     date: date
-@router.post("/submit-all-for-date")
+@router.post("/submit-all-for-date", status_code=200)
 def submit_all_for_date(payload: SupervisorSubmitPayload, db: Session = Depends(get_db)):
+    """
+    Finalizes supervisor approval for all timesheets on a specific date 
+    by changing the status from REVIEWED_BY_SUPERVISOR to APPROVED_BY_SUPERVISOR.
+    """
+    # If payload.date is already a date, just use it
+    if isinstance(payload.date, datetime):
+        target_date = payload.date.date()
+    elif isinstance(payload.date, str):
+        try:
+            target_date = datetime.strptime(payload.date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD.")
+    elif isinstance(payload.date, date):
+        target_date = payload.date
+    else:
+        raise HTTPException(status_code=400, detail="payload.date must be a date or string in YYYY-MM-DD format.")
+
+    # Define the final status
+    FINAL_STATUS = models.SubmissionStatus.APPROVED_BY_SUPERVISOR
+
+    # 1. Record the overall submission event
     submission = models.SupervisorSubmission(
         supervisor_id=payload.supervisor_id,
-        date=payload.date,
-        status="SubmittedToEngineer"
+        date=target_date,
+        status="SubmittedToEngineer" 
     )
     db.add(submission)
-    db.commit()
 
-    # ✅ Fetch all timesheets submitted by foremen for this date
-    timesheets = (
+    # 2. Fetch all timesheets READY FOR FINAL APPROVAL
+    timesheets_to_finalize = (
         db.query(models.Timesheet)
-        .join(models.JobPhase)
+        .join(models.JobPhase, models.Timesheet.job_phase_id == models.JobPhase.id) 
         .filter(
-            models.Timesheet.date == payload.date,
-            models.Timesheet.status == models.SubmissionStatus.SUBMITTED,  # only submitted ones
-            models.JobPhase.project_engineer_id.isnot(None)
+            models.Timesheet.date == target_date,
+            models.Timesheet.status == models.SubmissionStatus.REVIEWED_BY_SUPERVISOR,
+            models.JobPhase.project_engineer_id.isnot(None) 
         )
         .all()
     )
 
-    for ts in timesheets:
+    if not timesheets_to_finalize:
+        db.rollback() 
+        raise HTTPException(status_code=400, detail="No timesheets found in 'Reviewed by Supervisor' status for this date.")
+
+    finalized_count = 0
+    for ts in timesheets_to_finalize:
         pe_id = ts.job_phase.project_engineer_id
-        if not pe_id:
-            continue
+        ts.status = FINAL_STATUS
+        finalized_count += 1
 
-        # ✅ Mark timesheet as sent
-        ts.status = models.SubmissionStatus.SUBMITTED  # or simply "Submitted" if not using enum
-
-        # ✅ Create workflow entry
         workflow = models.TimesheetWorkflow(
             timesheet_id=ts.id,
             supervisor_id=payload.supervisor_id,
             engineer_id=pe_id,
             by_role="Supervisor",
-            action="sent",
+            action="Approved",
             timestamp=datetime.utcnow(),
-            comments=f"Timesheet forwarded to Project Engineer (User ID: {pe_id})"
+            comments=f"Timesheet finally approved and forwarded to Project Engineer (User ID: {pe_id})"
         )
         db.add(workflow)
 
     db.commit()
-    return {"message": "Timesheets sent to Project Engineers successfully."}
+
+    return {"message": f"Successfully finalized and approved {finalized_count} timesheet(s) for submission to Project Engineers."}
 
 
 
@@ -167,31 +223,77 @@ def get_submission_by_date(date: str, db: Session = Depends(get_db)):
     return submission
 
 
-@router.get("/status-for-date")
+from typing import Dict, List
+from pydantic import BaseModel
+
+class StatusResponse(BaseModel):
+    can_submit: bool
+    unreviewed_timesheets: List[Dict[str, Any]]
+    incomplete_tickets: List[Dict[str, Any]]
+    status: Optional[str] = None # Include status for completeness
+
+# ---------------- Status Check for Submission (FIXED) ----------------
+@router.get("/status-for-date", response_model=StatusResponse)
 def get_status_for_date(date: str, supervisor_id: int, db: Session = Depends(get_db)):
-    record = (
+    try:
+        query_date = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD")
+
+    # --- 1. Check for UNREVIEWED Timesheets (Timesheets still in SUBMITTED status) ---
+    # We group by foreman to show the count per foreman in the error message
+    unreviewed_timesheets = (
+        db.query(models.User.first_name, models.User.last_name, func.count(models.Timesheet.id).label("count"))
+        .join(models.Timesheet, models.Timesheet.foreman_id == models.User.id)
+        .filter(
+            models.Timesheet.date == query_date,
+            models.Timesheet.status == "SUBMITTED", # Assuming 'SUBMITTED' means waiting for supervisor action
+        )
+        .group_by(models.User.first_name, models.User.last_name)
+        .all()
+    )
+    
+    unreviewed_ts_list = [
+        {"foreman_name": f"{name} {last}".strip(), "count": count} 
+        for name, last, count in unreviewed_timesheets
+    ]
+
+    # --- 2. Check for INCOMPLETE Tickets (Tickets missing a job code) ---
+    # Note: Ticket model is not fully provided, so we assume a 'job_phase_id' check is sufficient
+    incomplete_tickets = (
+        db.query(models.User.first_name, models.User.last_name, func.count(models.Ticket.id).label("count"))
+        .join(models.Ticket, models.Ticket.foreman_id == models.User.id)
+        .filter(
+            cast(models.Ticket.created_at, Date) == query_date,
+            models.Ticket.status == "SUBMITTED", # Only check submitted tickets
+            models.Ticket.job_phase_id.is_(None) # Check if job phase/code is missing
+        )
+        .group_by(models.User.first_name, models.User.last_name)
+        .all()
+    )
+
+    incomplete_ticket_list = [
+        {"foreman_name": f"{name} {last}".strip(), "count": count} 
+        for name, last, count in incomplete_tickets
+    ]
+
+    # --- 3. Determine Final Submission Status ---
+    is_blocked = bool(unreviewed_ts_list or incomplete_ticket_list)
+    
+    # Fetch existing submission record for status labeling (Resubmit vs Submit)
+    submission_record = (
         db.query(models.SupervisorSubmission)
         .filter(models.SupervisorSubmission.supervisor_id == supervisor_id)
-        .filter(models.SupervisorSubmission.date == date)
+        .filter(models.SupervisorSubmission.date == query_date)
         .first()
     )
 
-    if not record:
-        # ✅ Allow submission if not yet submitted
-        return {
-            "can_submit": True,
-            "unreviewed_timesheets": [],
-            "incomplete_tickets": []
-        }
-
-    # ✅ If already submitted, block
     return {
-        "can_submit": False,
-        "unreviewed_timesheets": [],
-        "incomplete_tickets": [],
-        "status": record.status
+        "can_submit": not is_blocked,
+        "unreviewed_timesheets": unreviewed_ts_list,
+        "incomplete_tickets": incomplete_ticket_list,
+        "status": submission_record.status if submission_record else None,
     }
-
 from fastapi import Query
 from sqlalchemy import func, and_
 from datetime import date as date_type
@@ -297,3 +399,72 @@ def get_pe_tickets(foreman_id: int, date: str, db: Session = Depends(get_db)):
         }
         for t in tickets
     ]
+
+
+
+
+# In your schemas.py or at the top of your router file:
+class BulkApprovalPayload(BaseModel):
+    foreman_id: int
+    date: str  # Date string from frontend, e.g., "2025-11-20"
+    supervisor_id: int
+from datetime import datetime
+from ..models import SubmissionStatus # Assuming you have an Enum for statuses
+
+# ---------------- Supervisor Bulk Approval (NEW ENDPOINT) ----------------
+@router.post("/mark-timesheets-reviewed-bulk", status_code=204)
+def mark_timesheets_reviewed_bulk(payload: BulkApprovalPayload, db: Session = Depends(get_db)):
+    """
+    Supervisor marks timesheets for a foreman/date as REVIEWED, 
+    changing the status from SUBMITTED to REVIEWED_BY_SUPERVISOR.
+    """
+    try:
+        target_date = datetime.strptime(payload.date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD.")
+
+    # --- Define the Intermediate Status ---
+    NEW_STATUS = models.SubmissionStatus.REVIEWED_BY_SUPERVISOR
+    
+    # Select timesheets that are SUBMITTED and haven't been reviewed yet
+    timesheets_to_review = (
+        db.query(models.Timesheet)
+        .filter(
+            models.Timesheet.foreman_id == payload.foreman_id,
+            models.Timesheet.date == target_date,
+            models.Timesheet.status == models.SubmissionStatus.SUBMITTED # Target SUBMITTED
+        )
+        .all()
+    )
+
+    if not timesheets_to_review:
+        raise HTTPException(status_code=404, detail="No pending timesheets found to mark as reviewed.")
+
+    reviewed_count = 0
+    
+    for ts in timesheets_to_review:
+        # Update Status
+        ts.status = NEW_STATUS
+        # Record who reviewed it (optional but recommended)
+        ts.supervisor_id = payload.supervisor_id 
+        reviewed_count += 1
+        
+        # Create Workflow Entry for auditing the review action
+        workflow = models.TimesheetWorkflow(
+            timesheet_id=ts.id,
+            supervisor_id=payload.supervisor_id,
+            action="Reviewed", # New action type
+            by_role="Supervisor",
+            timestamp=datetime.utcnow(),
+            comments="Timesheet marked as reviewed in bulk by Supervisor.",
+        )
+        db.add(workflow)
+
+    db.commit()
+
+    if reviewed_count == 0:
+        # This handles a potential race condition
+        raise HTTPException(status_code=400, detail="No timesheets required marking as reviewed.")
+
+    # Return 204 No Content (as used in the provided mock)
+    return

@@ -173,6 +173,15 @@ const [showWarnings, setShowWarnings] = useState(false);
         return numericText;
     };
 
+// Round numeric input to nearest quarter hour (0.25 increments)
+const validateQuarterHour = (input: string) => {
+    if (!input) return "";
+    let num = parseFloat(input);
+    if (isNaN(num)) return "";
+
+    const rounded = Math.round(num * 4) / 4;
+    return rounded.toFixed(2);
+};
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -393,9 +402,7 @@ useEffect(() => {
                 // Case 1: Original phase is still active and has data. Use it.
                 orderedPhases.push(originalPhase);
             } else {
-                // Case 2: Original phase is missing. It was either renamed or deleted.
-                // We assume it was renamed and try to replace it with the next unused 'new' phase.
-                // This assumes a 1:1 rename for a missing phase in the original list.
+                
                 if (newPhaseIndex < newPhases.length) {
                     orderedPhases.push(newPhases[newPhaseIndex]);
                     newPhaseIndex++; // Consume the 'new' phase
@@ -424,6 +431,7 @@ useEffect(() => {
         newValue: string
     ) => {
         const cleanedValue = cleanNumericInput(newValue);
+        
         setState(prev => ({
             ...prev,
             [entityId]: {
@@ -432,25 +440,63 @@ useEffect(() => {
             },
         }));
     };
+const updateEmployeeState = (
+  entityId: string,
+  phase: string,
+  classCode: string,
+  newValue: string
+) => {
+  const cleanedValue = cleanNumericInput(newValue);
 
-    const updateEmployeeState = (
-        entityId: string,
-        phase: string,
-        classCode: string,
-        newValue: string
-    ) => {
-        const cleanedValue = cleanNumericInput(newValue);
-        setEmployeeHours(prev => ({
-            ...prev,
-            [entityId]: {
-                ...prev[entityId],
-                [phase]: {
-                    ...prev[entityId]?.[phase],
-                    [classCode]: cleanedValue,
-                },
-            },
-        }));
+  setEmployeeHours(prev => {
+    // 1️⃣ Build updated state first
+    const updated: EmployeeHourState = {
+      ...prev,
+      [entityId]: {
+        ...(prev[entityId] || {}),
+        [phase]: {
+          ...((prev[entityId] || {})[phase] || {}),
+          [classCode]: cleanedValue,
+        },
+      },
     };
+
+    // 2️⃣ Calculate total hours for this employee across ALL phases
+    let total = 0;
+    const employeePhases = updated[entityId] || {};
+    Object.values(employeePhases).forEach((classHours: Record<string, string>) => {
+      Object.values(classHours).forEach((val: string) => {
+        const num = parseFloat(val || '0');
+        if (!isNaN(num)) total += num;
+      });
+    });
+if (total > 24) {
+  // Get employee name from timesheet
+  const emp = timesheet?.data?.employees?.find(e => String(e.id) === entityId);
+  const employeeName = emp
+    ? `${(emp.first_name ?? '').trim()} ${(emp.last_name ?? '').trim()}`.trim() || `EMP ${entityId}`
+    : `EMP ${entityId}`;
+
+  Alert.alert(
+    '⚠️ TOTAL HOURS EXCEEDED ⚠️', // Uppercase + emojis for urgency
+    `🚫 Employee: ${employeeName}\n⏱ Total: ${total.toFixed(1)} hours\n\nCannot exceed 24 hours!`,
+    [
+      {
+        text: 'Dismiss',
+        onPress: () => console.log('Alert dismissed'),
+        style: 'destructive', // red-style button
+      },
+    ],
+    { cancelable: false }
+  );
+  return prev; // Revert - don't apply the change
+}
+
+    // 4️⃣ Valid - accept the change
+    return updated;
+  });
+};
+
 
     const updateEquipmentState = (
         entityId: string,
@@ -545,6 +591,7 @@ useEffect(() => {
             });
             return newState;
         });
+        
 
         // 2. Equipment Hours (Complex Hour Sub State)
         setEquipmentHours(prev => {
@@ -864,12 +911,17 @@ useEffect(() => {
             const inputValue = isZeroOrNearZero ? '' : value; 
 
             return (
-                <TextInput
-                    style={[styles.editableInput, { flex: 1 }]}
-                    keyboardType={isNumeric ? "numeric" : "default"}
-                    value={inputValue}
-                    onChangeText={updateFunction}
-                />
+<TextInput
+    style={[styles.editableInput, { flex: 1 }]}
+    keyboardType="numeric"
+    value={inputValue}
+    onChangeText={updateFunction}
+    onBlur={() => {
+        const rounded = validateQuarterHour(inputValue);
+        updateFunction(rounded);
+    }}
+/>
+
             );
         }
         return <Text style={{ flex: 1, textAlign: 'center' }}>{displayValue}</Text>;

@@ -22,8 +22,14 @@ from .seed import seed_admin_users  # <-- 1. Import your seeding function
 from jose import JWTError, jwt
 from .token import SECRET_KEY, ALGORITHM # Assuming these are in token.py
 from . import oauth2  # <--- REPLACE IT WITH THIS
+from dotenv import load_dotenv
+import os
+from .routers import password_reset
 
-# -------------------------------
+# load_dotenv(".env")  
+# print("SMTP_USER:", os.getenv("SMTP_USER"))
+# print("SMTP_PASSWORD:", os.getenv("SMTP_PASSWORD"))
+# # -------------------------------
 # Database: Create all tables
 # -------------------------------
 models.Base.metadata.create_all(bind=database.engine)
@@ -60,7 +66,12 @@ app.mount("/media/tickets", StaticFiles(directory=os.path.abspath(TICKETS_DIR)),
 PDF_TICKETS_DIR = r"D:\WebApp\backend\ticket_pdfs"
 os.makedirs(PDF_TICKETS_DIR, exist_ok=True)
 
-app.mount("/media/ticket_pdfs", StaticFiles(directory=PDF_TICKETS_DIR), name="ticket_pdfs")
+app.mount(
+    "/media/ticket_pdfs",
+    StaticFiles(directory=PDF_TICKETS_DIR),
+    name="ticket_pdfs"
+)
+
 
 # -------------------------------
 # Logging setup
@@ -76,7 +87,6 @@ access_logger.setLevel(logging.INFO)
 # Job & Phase Management Router
 # -------------------------------
 # job_phase_router = APIRouter(prefix="/api/job-phases", tags=["Job Phases"])
-
 
 crew_mapping_router = APIRouter(prefix="/api/crew-mapping", tags=["Crew Mapping"])
 
@@ -517,6 +527,7 @@ app.include_router(material_option_router.router)
 app.include_router(dumping_site_router.router)
 app.include_router(section_category_router.router)
 app.include_router(section_list_router.router)
+app.include_router(password_reset.router)
 # -------------------------------
 # Auth Router
 # -------------------------------
@@ -566,7 +577,6 @@ def login(request: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(
 
 app.include_router(auth_router)
 
-app.include_router(auth_router)
 def get_current_user(token: str = Depends(token.oauth2_scheme), db: Session = Depends(database.get_db)):
     """
     This is a dependency that does the following:
@@ -625,11 +635,11 @@ def get_all_data(
         "dumping_sites": db.query(models.DumpingSite).all(),
     }
 
-app.include_router(
-    timesheet.router,
-    prefix="/api/timesheets", # This must match the URL your frontend is calling
-    tags=["Timesheets"],      # This is for organizing the API docs
-)
+# app.include_router(
+#     timesheet.router,
+#     prefix="/api/timesheets", # This must match the URL your frontend is calling
+#     tags=["Timesheets"],      # This is for organizing the API docs
+# )
 
 
 
@@ -646,7 +656,7 @@ from typing import List # Make sure List is imported from typing
 @app.get("/api/audit-logs", response_model=List[schemas.AuditLogResponse], tags=["Auditing"])
 def get_audit_logs(
     db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(oauth2.get_current_user),
+    current_user: models.User = Depends(get_current_user),
     skip: int = 0,
     limit: int = 100
 ):
@@ -656,3 +666,8 @@ def get_audit_logs(
         
     logs = db.query(models.AuditLog).order_by(models.AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
     return logs
+
+
+
+
+

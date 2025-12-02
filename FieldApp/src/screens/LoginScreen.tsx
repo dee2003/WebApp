@@ -17,6 +17,8 @@ import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { User } from '../types';
 import qs from 'qs'; // npm install qs
+import { StackNavigationProp } from "@react-navigation/stack";
+import { RootStackParamList } from "../navigation/AppNavigator";
 
 const COLORS = {
   primary: '#5C6BC0',
@@ -27,6 +29,14 @@ const COLORS = {
   card: '#FFFFFF',
   shadow: '#000000',
 };
+type LoginScreenNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  "Login"
+>;
+
+type Props = {
+  navigation: LoginScreenNavigationProp;
+};
 
 const validRoles = ['foreman', 'supervisor', 'project_engineer'] as const;
 type ValidRole = (typeof validRoles)[number];
@@ -35,7 +45,7 @@ function isValidRole(role: string): role is ValidRole {
   return validRoles.includes(role as ValidRole);
 }
 
-const LoginScreen = () => {
+const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -69,7 +79,10 @@ const LoginScreen = () => {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
       });
-          console.log('Login response data:', response.data);
+console.log("🔐 Login Response:", response.data);
+console.log("📌 User From Backend:", response.data.user);
+console.log("📌 User ID From Backend:", response.data.user?.id);
+console.log("📌 Role From Backend:", response.data.role);
 const backendRole = response.data.role.toLowerCase();
 
 if (
@@ -155,9 +168,14 @@ login(userData, response.data.access_token);
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.linkContainer}>
-              <Text style={styles.linkText}>Trouble logging in? Reset Password</Text>
-            </TouchableOpacity>
+<TouchableOpacity
+  onPress={() => navigation.navigate("ForgotPassword")}
+  style={styles.resetPasswordContainer} // Add this style
+>
+   <Text style={styles.resetPasswordText}>Trouble logging in? Reset Password</Text>
+</TouchableOpacity>
+
+
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -211,6 +229,18 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  resetPasswordContainer: {
+  marginTop: 15,
+  alignItems: 'center', // Centers horizontally
+},
+
+resetPasswordText: {
+  color: COLORS.primary,
+  fontSize: 14,
+  fontWeight: '500',
+  textDecorationLine: 'underline',
+},
+
   input: {
     height: 55,
     backgroundColor: '#F5F5F5',

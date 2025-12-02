@@ -1,0 +1,20 @@
+import aiosmtplib
+from email.mime.text import MIMEText
+
+GMAIL_USER = "deekshitha0825@gmail.com"
+GMAIL_APP_PASSWORD = "wszv hcde olac sahx"
+
+async def send_email(to_email: str, subject: str, body: str):
+    message = MIMEText(body)
+    message["From"] = GMAIL_USER
+    message["To"] = to_email
+    message["Subject"] = subject
+
+    await aiosmtplib.send(
+        message,
+        hostname="smtp.gmail.com",
+        port=465,
+        username=GMAIL_USER,
+        password=GMAIL_APP_PASSWORD,
+        use_tls=True
+    )

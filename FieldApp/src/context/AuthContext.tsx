@@ -57,7 +57,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loadAuthData = async () => {
       try {
         const jsonValue = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
-        
       } catch (e) {
         console.error('Failed to load auth data', e);
       } finally {
@@ -68,6 +67,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (userData: User, token: string) => {
+    console.log("🟢 AuthContext Login Called");
+  console.log("👤 Saving User:", userData);
+  console.log("🆔 Saving User ID:", userData?.id);
+  console.log("🔑 Saving Token:", token);
     setUser(userData);
     setToken(token);
     // Persist to storage
