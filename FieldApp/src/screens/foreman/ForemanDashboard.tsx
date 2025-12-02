@@ -20,7 +20,7 @@ import RNFS from 'react-native-fs';
 import Icon from 'react-native-vector-icons/Feather';
 
 // --- CONFIGURATION ---
-const API_BASE_URL = 'https://d0647696540e.ngrok-free.app';
+const API_BASE_URL = 'https://8f0b7fdcd548.ngrok-free.app';
 
 // --- THEME ---
 const theme = {

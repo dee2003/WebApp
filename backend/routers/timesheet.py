@@ -178,12 +178,123 @@ def get_timesheet_workflows(timesheet_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{timesheet_id}")
 
+# def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
+#     """
+#     Returns a single timesheet, prioritizing saved JSON data and only enriching
+#     non-conflicting fields from static database models.
+#     """
+
+#     timesheet = (
+#         db.query(models.Timesheet)
+#         .options(joinedload(models.Timesheet.files))
+#         .filter(models.Timesheet.id == timesheet_id)
+#         .first()
+#     )
+#     if not timesheet:
+#         raise HTTPException(status_code=404, detail="Timesheet not found")
+
+#     saved_data = timesheet.data or {}
+#     if isinstance(saved_data, str):
+#         try:
+#             saved_data = json.loads(saved_data)
+#         except json.JSONDecodeError:
+#             saved_data = {}
+
+#     # --- ENRICHMENT HELPER FUNCTION ---
+#     def enrich_entities(entity_key: str, model, name_fields: list, add_phase_defaults: bool = False, skip_name_enrichment: bool = False):
+#         source_data = saved_data.get(entity_key, [])
+#         if not source_data:
+#             return
+
+#         # 1. Collect all entity IDs to query the static database table once.
+#         entity_ids = {str(e.get("id")) for e in source_data if isinstance(e, dict) and e.get("id")}
+#         if not entity_ids:
+#             return
+
+#         db_entities = db.query(model).filter(model.id.in_(entity_ids)).all()
+#         db_map = {str(db_e.id): db_e for db_e in db_entities}
+#         phase_codes = saved_data.get("job", {}).get("phase_codes", [])
+#         enriched_list = []
+
+#         for entity in source_data:
+#             # 2. CRITICAL: Create a shallow copy to retain ALL saved keys
+#             # (including hours_per_phase, tickets_per_phase, and the saved 'name').
+#             enriched_entity = entity.copy() 
+#             eid = str(enriched_entity.get("id"))
+#             db_record = db_map.get(eid)
+
+#             # 3. Preserve existing phase fields or add defaults if missing
+#             if add_phase_defaults:
+#                 # Merge saved hours with DB phases
+#                 existing_hours = enriched_entity.get("hours_per_phase", {})
+#                 merged_hours = {p: existing_hours.get(p, 0) for p in phase_codes}
+#                 enriched_entity["hours_per_phase"] = merged_hours
+
+#                 # Merge saved tickets with DB phases
+#                 existing_tickets = enriched_entity.get("tickets_per_phase", {})
+#                 merged_tickets = {p: existing_tickets.get(p, 0) for p in phase_codes}
+#                 enriched_entity["tickets_per_phase"] = merged_tickets
+
+#             # 4. Apply Database Enrichment
+#             if db_record:
+#                 if not skip_name_enrichment:
+#                     # Logic for Employees (FirstName/LastName) or Equipment (Name)
+#                     # Compose and update 'name' field from DB attributes
+#                     name_parts = [getattr(db_record, f, "") for f in name_fields]
+#                     enriched_entity["name"] = " ".join(filter(None, name_parts)).strip()
+                    
+#                     # Update other non-name fields (like 'status' for employee)
+#                     for field in name_fields:
+#                         if field not in ("first_name", "last_name", "name"): 
+#                             enriched_entity[field] = getattr(db_record, field, enriched_entity.get(field))
+
+#             enriched_list.append(enriched_entity)
+
+#         saved_data[entity_key] = enriched_list
+    
+#     # --- EXECUTE ENRICHMENT ---
+#     try:
+#         if hasattr(models, "Employee"):
+#             # Employee names must be rebuilt from DB fields (First Name, Last Name)
+#             enrich_entities("employees", models.Employee, ["first_name", "last_name", "status"])
+            
+#         if hasattr(models, "Equipment"):
+#             # Equipment names are usually enriched/validated
+#             enrich_entities("equipment", models.Equipment, ["name"])
+        
+#         # VENDORS: skip_name_enrichment=True ensures saved name and phase data are kept.
+#         if hasattr(models, "Vendor"):
+#             enrich_entities("vendors", models.Vendor, ["name"], add_phase_defaults=True, skip_name_enrichment=True)
+            
+#         # MATERIALS_TRUCKING: Assuming standard enrichment (no skip).
+#         if hasattr(models, "MaterialTrucking"):
+#             enrich_entities("materials_trucking", models.MaterialTrucking, ["name"], add_phase_defaults=True)
+            
+#         # DUMPING_SITES: skip_name_enrichment=True ensures saved name and phase data are kept.
+#         if hasattr(models, "DumpingSite"):
+#             enrich_entities("dumping_sites", models.DumpingSite, ["name"], add_phase_defaults=True, skip_name_enrichment=True)
+            
+#     except Exception as e:
+#         print(f"⚠️ Critical enrichment error: {e}")
+#         # Depending on severity, you might want to re-raise the exception or log it.
+
+#     # --- FINAL RETURN ---
+
+#     return {
+#         "id": timesheet.id,
+#         "foreman_id": timesheet.foreman_id,
+#         "job_phase_id": timesheet.job_phase_id,
+#         "date": timesheet.date,
+#         "status": timesheet.status,
+#         "timesheet_name": timesheet.timesheet_name,
+#         "data": saved_data,
+#     }
+
 def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
     """
     Returns a single timesheet, prioritizing saved JSON data and only enriching
     non-conflicting fields from static database models.
     """
-
     timesheet = (
         db.query(models.Timesheet)
         .options(joinedload(models.Timesheet.files))
@@ -192,49 +303,40 @@ def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
     )
     if not timesheet:
         raise HTTPException(status_code=404, detail="Timesheet not found")
-
     saved_data = timesheet.data or {}
     if isinstance(saved_data, str):
         try:
             saved_data = json.loads(saved_data)
         except json.JSONDecodeError:
             saved_data = {}
-
     # --- ENRICHMENT HELPER FUNCTION ---
     def enrich_entities(entity_key: str, model, name_fields: list, add_phase_defaults: bool = False, skip_name_enrichment: bool = False):
         source_data = saved_data.get(entity_key, [])
         if not source_data:
             return
-
         # 1. Collect all entity IDs to query the static database table once.
         entity_ids = {str(e.get("id")) for e in source_data if isinstance(e, dict) and e.get("id")}
         if not entity_ids:
             return
-
         db_entities = db.query(model).filter(model.id.in_(entity_ids)).all()
         db_map = {str(db_e.id): db_e for db_e in db_entities}
         phase_codes = saved_data.get("job", {}).get("phase_codes", [])
         enriched_list = []
-
         for entity in source_data:
             # 2. CRITICAL: Create a shallow copy to retain ALL saved keys
             # (including hours_per_phase, tickets_per_phase, and the saved 'name').
-            enriched_entity = entity.copy() 
+            enriched_entity = entity.copy()
             eid = str(enriched_entity.get("id"))
             db_record = db_map.get(eid)
-
             # 3. Preserve existing phase fields or add defaults if missing
             if add_phase_defaults:
                 # Merge saved hours with DB phases
                 existing_hours = enriched_entity.get("hours_per_phase", {})
                 merged_hours = {p: existing_hours.get(p, 0) for p in phase_codes}
                 enriched_entity["hours_per_phase"] = merged_hours
-
-                # Merge saved tickets with DB phases
-                existing_tickets = enriched_entity.get("tickets_per_phase", {})
-                merged_tickets = {p: existing_tickets.get(p, 0) for p in phase_codes}
-                enriched_entity["tickets_per_phase"] = merged_tickets
-
+            # Preserve tickets_loads if present
+            if "tickets_loads" in enriched_entity:
+                enriched_entity["tickets_loads"] = enriched_entity.get("tickets_loads", {})
             # 4. Apply Database Enrichment
             if db_record:
                 if not skip_name_enrichment:
@@ -242,44 +344,36 @@ def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
                     # Compose and update 'name' field from DB attributes
                     name_parts = [getattr(db_record, f, "") for f in name_fields]
                     enriched_entity["name"] = " ".join(filter(None, name_parts)).strip()
-                    
                     # Update other non-name fields (like 'status' for employee)
                     for field in name_fields:
-                        if field not in ("first_name", "last_name", "name"): 
+                        if field not in ("first_name", "last_name", "name"):
                             enriched_entity[field] = getattr(db_record, field, enriched_entity.get(field))
-
+                # If skip_name_enrichment is TRUE (for vendors/dumping sites),
+                # the original saved name and all phase data are automatically preserved
+                # by the initial 'entity.copy()' in step 2.
             enriched_list.append(enriched_entity)
-
         saved_data[entity_key] = enriched_list
-    
     # --- EXECUTE ENRICHMENT ---
     try:
         if hasattr(models, "Employee"):
             # Employee names must be rebuilt from DB fields (First Name, Last Name)
             enrich_entities("employees", models.Employee, ["first_name", "last_name", "status"])
-            
         if hasattr(models, "Equipment"):
             # Equipment names are usually enriched/validated
             enrich_entities("equipment", models.Equipment, ["name"])
-        
         # VENDORS: skip_name_enrichment=True ensures saved name and phase data are kept.
         if hasattr(models, "Vendor"):
-            enrich_entities("vendors", models.Vendor, ["name"], add_phase_defaults=True, skip_name_enrichment=True)
-            
+            enrich_entities("vendors", models.Vendor, ["name"], add_phase_defaults=False)
         # MATERIALS_TRUCKING: Assuming standard enrichment (no skip).
         if hasattr(models, "MaterialTrucking"):
-            enrich_entities("materials_trucking", models.MaterialTrucking, ["name"], add_phase_defaults=True)
-            
+            enrich_entities("materials_trucking", models.MaterialTrucking, ["name"], add_phase_defaults=False)
         # DUMPING_SITES: skip_name_enrichment=True ensures saved name and phase data are kept.
         if hasattr(models, "DumpingSite"):
-            enrich_entities("dumping_sites", models.DumpingSite, ["name"], add_phase_defaults=True, skip_name_enrichment=True)
-            
+            enrich_entities("dumping_sites", models.DumpingSite, ["name"], add_phase_defaults=False)
     except Exception as e:
-        print(f"⚠️ Critical enrichment error: {e}")
+        print(f":warning: Critical enrichment error: {e}")
         # Depending on severity, you might want to re-raise the exception or log it.
-
     # --- FINAL RETURN ---
-
     return {
         "id": timesheet.id,
         "foreman_id": timesheet.foreman_id,
@@ -290,10 +384,120 @@ def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
         "data": saved_data,
     }
 
-
-
 @router.put("/{timesheet_id}", response_model=schemas.Timesheet)
 # @audit(action="UPDATED", entity="Timesheets")
+# def update_timesheet(
+#     timesheet_id: int,
+#     timesheet_update: schemas.TimesheetUpdate,
+#     db: Session = Depends(get_db)
+# ):
+#     # --- Fetch timesheet ---
+#     ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
+#     if not ts:
+#         raise HTTPException(status_code=404, detail="Timesheet not found")
+
+#     payload = timesheet_update.dict(exclude_unset=True)
+
+#     # Flag needed if 'data' is updated via assignment
+#     if "data" in payload:
+#         ts.data = payload["data"]  # Assigning dictionary
+#         flag_modified(ts, "data")  # Critical fix
+
+#     if "status" in payload and payload["status"] == "IN_PROGRESS":
+#         ts.status = SubmissionStatus.IN_PROGRESS
+#     if "status" in payload:
+#         ts.status = payload["status"]
+
+#     # --- Keep job name synced ---
+#     data_to_store = ts.data or {}
+#     job_name = (
+#         data_to_store.get("job_name")
+#         or (data_to_store.get("job") or {}).get("job_description")
+#         or (data_to_store.get("job") or {}).get("job_name")
+#         or (data_to_store.get("job") or {}).get("job_code")
+#         or "Untitled Timesheet"
+#     )
+#     ts.timesheet_name = job_name
+#     ts.data["job_name"] = job_name  # Update internal dictionary value
+
+#     # Flag needed if 'data' changed internally
+#     if "data" not in payload or ts.data.get("job_name") != job_name:
+#         flag_modified(ts, "data")
+
+#     db.commit()
+#     db.refresh(ts)
+
+
+
+#     # --- Excel file generation ---
+#     try:
+#         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#         storage_dir = os.path.join(BASE_DIR, "storage")
+#         os.makedirs(storage_dir, exist_ok=True)
+
+#         ts_date_str = ts.date.strftime("%Y-%m-%d") if hasattr(ts.date, "strftime") else str(ts.date)
+#         date_folder = os.path.join(storage_dir, ts_date_str)
+#         os.makedirs(date_folder, exist_ok=True)
+
+#         version = len([f for f in os.listdir(date_folder) if f.startswith(f"timesheet_{ts.id}_")]) + 1
+#         file_name = f"timesheet_{ts.id}_{ts_date_str}_v{version}.xlsx"
+#         file_path_local = os.path.join(date_folder, file_name)
+
+#         data = ts.data if isinstance(ts.data, dict) else json.loads(ts.data)
+#         job_phases = data.get("job", {}).get("phase_codes", [])
+
+#         def create_df(entities, name_key="name"):
+#             rows = []
+#             for ent in entities:
+#                 name = ent.get(name_key) or ent.get("first_name", "")
+#                 if "last_name" in ent:
+#                     name = f"{name} {ent.get('last_name', '')}".strip()
+#                 row = {"ID": ent.get("id", ""), "Name": name}
+#                 for phase in job_phases:
+#                     row[phase] = ent.get("hours_per_phase", {}).get(phase, 0)
+#                 rows.append(row)
+#             return pd.DataFrame(rows)
+
+#         def create_dumping_site_df(entities):
+#             rows = []
+#             for ent in entities:
+#                 row = {"ID": ent.get("id", ""), "Name": ent.get("name", "")}
+#                 for phase in job_phases:
+#                     row[f"{phase} (# of Loads)"] = ent.get("hours_per_phase", {}).get(phase, 0)
+#                     row[f"{phase} (Qty)"] = ent.get("tickets_per_phase", {}).get(phase, 0)
+#                 rows.append(row)
+#             return pd.DataFrame(rows)
+
+#         with pd.ExcelWriter(file_path_local, engine="openpyxl") as writer:
+#             create_df(data.get("employees", []), name_key="first_name").to_excel(writer, index=False, sheet_name="Employees")
+#             create_df(data.get("equipment", [])).to_excel(writer, index=False, sheet_name="Equipment")
+#             create_df(data.get("materials_trucking", [])).to_excel(writer, index=False, sheet_name="Materials")
+#             create_df(data.get("vendors", [])).to_excel(writer, index=False, sheet_name="Vendors")
+#             create_dumping_site_df(data.get("dumping_sites", [])).to_excel(writer, index=False, sheet_name="DumpingSites")
+
+       
+#         NGROK_BASE_URL = "https://8f0b7fdcd548.ngrok-free.app"
+#         file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
+
+#         # ✅ Save file info in DB
+#         file_record = models.TimesheetFile(
+#             timesheet_id=ts.id,
+#             foreman_id=ts.foreman_id,
+#             file_path=file_url
+#         )
+#         db.add(file_record)
+#         db.commit()
+#         db.refresh(file_record)
+
+#         print(f"✅ Timesheet Excel generated and saved at: {file_url}")
+
+#     except Exception as e:
+#         print(f"❌ Excel generation failed: {e}")
+
+#     return ts
+
+
+
 def update_timesheet(
     timesheet_id: int,
     timesheet_update: schemas.TimesheetUpdate,
@@ -303,19 +507,19 @@ def update_timesheet(
     ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
     if not ts:
         raise HTTPException(status_code=404, detail="Timesheet not found")
-
     payload = timesheet_update.dict(exclude_unset=True)
-
-    # Flag needed if 'data' is updated via assignment
+    def clean_legacy_tickets(data):
+        for entity_key in ["materials_trucking", "vendors", "dumping_sites"]:
+            if entity_key in data:
+                for entity in data[entity_key]:
+                    entity.pop("tickets_per_phase", None)  # Remove if exists
+        return data
     if "data" in payload:
-        ts.data = payload["data"]  # Assigning dictionary
-        flag_modified(ts, "data")  # Critical fix
-
+        ts.data = clean_legacy_tickets(payload["data"])
     if "status" in payload and payload["status"] == "IN_PROGRESS":
         ts.status = SubmissionStatus.IN_PROGRESS
     if "status" in payload:
         ts.status = payload["status"]
-
     # --- Keep job name synced ---
     data_to_store = ts.data or {}
     job_name = (
@@ -326,34 +530,22 @@ def update_timesheet(
         or "Untitled Timesheet"
     )
     ts.timesheet_name = job_name
-    ts.data["job_name"] = job_name  # Update internal dictionary value
-
-    # Flag needed if 'data' changed internally
-    if "data" not in payload or ts.data.get("job_name") != job_name:
-        flag_modified(ts, "data")
-
+    ts.data["job_name"] = job_name
     db.commit()
     db.refresh(ts)
-
-
-
     # --- Excel file generation ---
     try:
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         storage_dir = os.path.join(BASE_DIR, "storage")
         os.makedirs(storage_dir, exist_ok=True)
-
         ts_date_str = ts.date.strftime("%Y-%m-%d") if hasattr(ts.date, "strftime") else str(ts.date)
         date_folder = os.path.join(storage_dir, ts_date_str)
         os.makedirs(date_folder, exist_ok=True)
-
         version = len([f for f in os.listdir(date_folder) if f.startswith(f"timesheet_{ts.id}_")]) + 1
         file_name = f"timesheet_{ts.id}_{ts_date_str}_v{version}.xlsx"
         file_path_local = os.path.join(date_folder, file_name)
-
         data = ts.data if isinstance(ts.data, dict) else json.loads(ts.data)
         job_phases = data.get("job", {}).get("phase_codes", [])
-
         def create_df(entities, name_key="name"):
             rows = []
             for ent in entities:
@@ -365,29 +557,28 @@ def update_timesheet(
                     row[phase] = ent.get("hours_per_phase", {}).get(phase, 0)
                 rows.append(row)
             return pd.DataFrame(rows)
-
         def create_dumping_site_df(entities):
             rows = []
             for ent in entities:
                 row = {"ID": ent.get("id", ""), "Name": ent.get("name", "")}
                 for phase in job_phases:
-                    row[f"{phase} (# of Loads)"] = ent.get("hours_per_phase", {}).get(phase, 0)
-                    row[f"{phase} (Qty)"] = ent.get("tickets_per_phase", {}).get(phase, 0)
+                    row[f"{phase} (Qty)"] = ent.get("hours_per_phase", {}).get(phase, 0)
+                    row[f"{phase} (# of Loads)"] = ent.get("tickets_loads", {}).get(ent["id"], 0)
                 rows.append(row)
             return pd.DataFrame(rows)
-
         with pd.ExcelWriter(file_path_local, engine="openpyxl") as writer:
             create_df(data.get("employees", []), name_key="first_name").to_excel(writer, index=False, sheet_name="Employees")
             create_df(data.get("equipment", [])).to_excel(writer, index=False, sheet_name="Equipment")
             create_df(data.get("materials_trucking", [])).to_excel(writer, index=False, sheet_name="Materials")
             create_df(data.get("vendors", [])).to_excel(writer, index=False, sheet_name="Vendors")
             create_dumping_site_df(data.get("dumping_sites", [])).to_excel(writer, index=False, sheet_name="DumpingSites")
-
-       
-        NGROK_BASE_URL = "https://d0647696540e.ngrok-free.app"
+        # :white_check_mark: Replace ngrok link with your own base URL
+        # NGROK_BASE_URL = "https://coated-nonattributive-babara.ngrok-free.dev"
+        # file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
+        # BASE_URL = os.getenv("BASE_URL")
+        NGROK_BASE_URL = "https://8f0b7fdcd548.ngrok-free.app"
         file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
-
-        # ✅ Save file info in DB
+        # :white_check_mark: Save file info in DB
         file_record = models.TimesheetFile(
             timesheet_id=ts.id,
             foreman_id=ts.foreman_id,
@@ -396,12 +587,9 @@ def update_timesheet(
         db.add(file_record)
         db.commit()
         db.refresh(file_record)
-
-        print(f"✅ Timesheet Excel generated and saved at: {file_url}")
-
+        print(f":white_check_mark: Timesheet Excel generated and saved at: {file_url}")
     except Exception as e:
-        print(f"❌ Excel generation failed: {e}")
-
+        print(f":x: Excel generation failed: {e}")
     return ts
 # -------------------------------
 # SEND a timesheet

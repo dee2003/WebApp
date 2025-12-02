@@ -24,6 +24,7 @@ from .token import SECRET_KEY, ALGORITHM # Assuming these are in token.py
 from . import oauth2  # <--- REPLACE IT WITH THIS
 from dotenv import load_dotenv
 import os
+from .routers import password_reset
 
 # load_dotenv(".env")  
 # print("SMTP_USER:", os.getenv("SMTP_USER"))
@@ -525,6 +526,7 @@ app.include_router(material_option_router.router)
 app.include_router(dumping_site_router.router)
 app.include_router(section_category_router.router)
 app.include_router(section_list_router.router)
+app.include_router(password_reset.router)
 # -------------------------------
 # Auth Router
 # -------------------------------

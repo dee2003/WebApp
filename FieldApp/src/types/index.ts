@@ -27,6 +27,8 @@ export type EmployeeWorkLog = {
 export interface EquipmentWorkLog {
   id: string;
   name: string;
+  start_hours?: number;
+  stop_hours?: number;
   // FIX 2: Changed 'S_B' to the specific string literal ''S.B'' to match the code, and allowed for the simple number fallback.
   hours_per_phase?: Record<string, { REG?: number; 'S.B'?: number } | number>; 
 }
@@ -37,14 +39,14 @@ export interface MaterialWorkLog {
   hours_per_phase?: Record<string, number>;
   unit?: string;
   // FIX 3: Added tickets_per_phase, as this is used by populateSimple for materials
-  tickets_per_phase?: Record<string, number>; 
+    tickets_loads?: Record<string, number>;
 }
 export interface DumpingSite { 
   id: string;
   name: string;
   status: string;
   hours_per_phase?: { [phase: string]: number };
-  tickets_per_phase?: { [phase: string]: number };
+      tickets_loads?: Record<string, number>;
 }
 
 export interface VendorWorkLog {
@@ -53,7 +55,7 @@ export interface VendorWorkLog {
   hours_per_phase?: Record<string, number>;
   unit?: string; 
   // FIX 4: Added tickets_per_phase, as this is used by populateSimple for vendors
-  tickets_per_phase?: Record<string, number>;
+      tickets_loads?: Record<string, number>;
 }
 
 export interface Job {
@@ -92,6 +94,8 @@ export interface TimesheetData {
   date_submitted?: string; 
   approved_by?: string;
 supervisor?: string | { id: number; name: string } | null;
+  updated_at?: string;   // ← Add this
+  created_at?: string;
 
 }
 
@@ -99,10 +103,12 @@ export interface Timesheet {
   id: number;
   foreman_id: number;
   date: string;
-  timesheet_name: string; 
+  timesheet_name: string; // Keep for backend compatibility
   data: TimesheetData;
   sent: boolean;
   status: TimesheetStatus;
   job_phase_id: number | null;
+  updated_at?: string;   // ← Add this
   created_at?: string;
+  total_quantities?: Record<string, string | number>;
 }
