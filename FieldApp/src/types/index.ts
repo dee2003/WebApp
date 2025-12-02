@@ -27,6 +27,8 @@ export type EmployeeWorkLog = {
 export interface EquipmentWorkLog {
   id: string;
   name: string;
+  start_hours?: number;
+  stop_hours?: number;
   hours_per_phase?: Record<string, { REG?: number; S_B?: number }>;
 }
 
@@ -35,6 +37,7 @@ export interface MaterialWorkLog {
   name: string;
   hours_per_phase?: Record<string, number>;
     unit?: string; // <-- ADD THIS
+  tickets_loads?: Record<string, number>;
 
 }
 export interface DumpingSite { // You may need to create this type
@@ -42,7 +45,7 @@ export interface DumpingSite { // You may need to create this type
     name: string;
     status: string;
     hours_per_phase?: { [phase: string]: number };
-    tickets_per_phase?: { [phase: string]: number };
+    tickets_loads?: Record<string, number>;
 }
 
 export interface VendorWorkLog {
@@ -50,7 +53,7 @@ export interface VendorWorkLog {
   name: string;
   hours_per_phase?: Record<string, number>;
     unit?: string; // <-- ADD THIS
-
+  tickets_loads?: Record<string, number>;
 }
 
 export interface Job {
@@ -78,9 +81,12 @@ export interface TimesheetData {
     dumping_sites?: DumpingSite[]; // NEW: Add this line
 
   total_quantities_per_phase?: Record<string, string | number>;
+  total_quantities?: Record<string, string | number>;
   selected_vendor_materials?: Record<string, any>;
   selected_material_items?: Record<string, any>;
   selected_dumping_materials?: Record<string, any>;
+  updated_at?: string;   // ← Add this
+  created_at?: string;
 }
 
 export interface Timesheet {
@@ -92,4 +98,7 @@ export interface Timesheet {
   sent: boolean;
   status: TimesheetStatus;
   job_phase_id: number | null;
+  updated_at?: string;   // ← Add this
+  created_at?: string;
+  total_quantities?: Record<string, string | number>;
 }

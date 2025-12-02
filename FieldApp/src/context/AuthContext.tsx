@@ -57,11 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loadAuthData = async () => {
       try {
         const jsonValue = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
-        if (jsonValue) {
-          const { user, token } = JSON.parse(jsonValue);
-          setUser(user);
-          setToken(token);
-        }
+        
       } catch (e) {
         console.error('Failed to load auth data', e);
       } finally {

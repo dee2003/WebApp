@@ -28,7 +28,7 @@ const { width } = Dimensions.get("window");
 const THUMBNAIL_HEIGHT = 150;
 
 // ✅ Replace with your backend ngrok or production URL
-const API_BASE_URL = "https://fc29f671c77f.ngrok-free.app";
+const API_BASE_URL = "https://coated-nonattributive-babara.ngrok-free.dev";
 
 // --- TYPE DEFINITIONS ---
 

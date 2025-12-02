@@ -4,6 +4,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import Splash from './src/screens/Splash';
+import { startGlobalSync  } from '../FieldApp/src/services/SyncService';
+import Toast from 'react-native-toast-message';
+import { toastConfig } from './src/components/toastConfig';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -16,7 +19,9 @@ export default function App() {
 
     return () => clearTimeout(timer);
   }, []);
-
+useEffect(() => {
+  startGlobalSync();
+}, []);
   if (showSplash) {
     // 👇 Show only the Splash screen during first 2 seconds
     return <Splash />;
@@ -27,6 +32,9 @@ export default function App() {
       <NavigationContainer>
         <AppNavigator />
       </NavigationContainer>
+      <Toast config={toastConfig} />
+      <Toast />
     </AuthProvider>
+    
   );
 }
