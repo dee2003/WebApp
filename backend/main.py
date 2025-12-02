@@ -54,10 +54,10 @@ def on_startup():
 # Static Files
 # -------------------------------
 app.mount("/storage", StaticFiles(directory="storage"), name="storage")
-TICKETS_DIR = r"C:\Mluis_App\mluis_app\backend\tickets"
+TICKETS_DIR = r"D:\WebApp\backend\tickets"
 app.mount("/media/tickets", StaticFiles(directory=os.path.abspath(TICKETS_DIR)), name="tickets")
 
-PDF_TICKETS_DIR = r"C:\timesheet-app-dev\timesheet-app-dev\backend\ticket_pdfs"
+PDF_TICKETS_DIR = r"D:\WebApp\backend\ticket_pdfs"
 os.makedirs(PDF_TICKETS_DIR, exist_ok=True)
 
 app.mount("/media/ticket_pdfs", StaticFiles(directory=PDF_TICKETS_DIR), name="ticket_pdfs")

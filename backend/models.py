@@ -538,7 +538,7 @@ class AuditLog(Base):
     target_resource = Column(String, index=True, nullable=False)
     
     # The ID of the specific resource that was changed
-    target_resource_id = Column(Integer, nullable=True)
+    target_resource_id = Column(String, nullable=True)
     
     # A detailed description of the change (e.g., "Changed role from 'admin' to 'foreman'")
     details = Column(Text, nullable=True)

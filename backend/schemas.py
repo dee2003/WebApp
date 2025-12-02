@@ -767,11 +767,19 @@ class TimesheetCountsResponse(BaseModel):
 # In schemas.py
 from pydantic import BaseModel
 from typing import Optional
-
+class UserOut(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+    class Config:
+        from_attributes = True
+        
 class Token(BaseModel):
     access_token: str
     token_type: str
     role: str
+    user: UserOut 
+
 class AuditLogResponse(BaseModel):
     id: int
     user_id: Optional[int]

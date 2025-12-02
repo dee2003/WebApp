@@ -768,10 +768,10 @@ def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
                 merged_hours = {p: existing_hours.get(p, 0) for p in phase_codes}
                 enriched_entity["hours_per_phase"] = merged_hours
 
-                # Merge saved tickets with DB phases
-                existing_tickets = enriched_entity.get("tickets_per_phase", {})
-                merged_tickets = {p: existing_tickets.get(p, 0) for p in phase_codes}
-                enriched_entity["tickets_per_phase"] = merged_tickets
+            # Preserve tickets_loads if present
+            if "tickets_loads" in enriched_entity:
+                enriched_entity["tickets_loads"] = enriched_entity.get("tickets_loads", {})
+            
 
             # 4. Apply Database Enrichment
             if db_record:
@@ -806,15 +806,15 @@ def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
         
         # VENDORS: skip_name_enrichment=True ensures saved name and phase data are kept.
         if hasattr(models, "Vendor"):
-            enrich_entities("vendors", models.Vendor, ["name"], add_phase_defaults=True, skip_name_enrichment=True)
+            enrich_entities("vendors", models.Vendor, ["name"], add_phase_defaults=False)
             
         # MATERIALS_TRUCKING: Assuming standard enrichment (no skip).
         if hasattr(models, "MaterialTrucking"):
-            enrich_entities("materials_trucking", models.MaterialTrucking, ["name"], add_phase_defaults=True)
+            enrich_entities("materials_trucking", models.MaterialTrucking, ["name"], add_phase_defaults=False)
             
         # DUMPING_SITES: skip_name_enrichment=True ensures saved name and phase data are kept.
         if hasattr(models, "DumpingSite"):
-            enrich_entities("dumping_sites", models.DumpingSite, ["name"], add_phase_defaults=True, skip_name_enrichment=True)
+            enrich_entities("dumping_sites", models.DumpingSite, ["name"], add_phase_defaults=False)
             
     except Exception as e:
         print(f"⚠️ Critical enrichment error: {e}")
@@ -989,9 +989,14 @@ def update_timesheet(
         raise HTTPException(status_code=404, detail="Timesheet not found")
 
     payload = timesheet_update.dict(exclude_unset=True)
-
+    def clean_legacy_tickets(data):
+        for entity_key in ["materials_trucking", "vendors", "dumping_sites"]:
+            if entity_key in data:
+                for entity in data[entity_key]:
+                    entity.pop("tickets_per_phase", None)  # Remove if exists
+        return data
     if "data" in payload:
-        ts.data = payload["data"]
+        ts.data = clean_legacy_tickets(payload["data"])
     if "status" in payload and payload["status"] == "IN_PROGRESS":
         ts.status = SubmissionStatus.IN_PROGRESS
     if "status" in payload:
@@ -1046,8 +1051,9 @@ def update_timesheet(
             for ent in entities:
                 row = {"ID": ent.get("id", ""), "Name": ent.get("name", "")}
                 for phase in job_phases:
-                    row[f"{phase} (# of Loads)"] = ent.get("hours_per_phase", {}).get(phase, 0)
-                    row[f"{phase} (Qty)"] = ent.get("tickets_per_phase", {}).get(phase, 0)
+                    row[f"{phase} (Qty)"] = ent.get("hours_per_phase", {}).get(phase, 0)
+                    row[f"{phase} (# of Loads)"] = ent.get("tickets_loads", {}).get(ent["id"], 0)
+
                 rows.append(row)
             return pd.DataFrame(rows)
 
@@ -1062,7 +1068,7 @@ def update_timesheet(
         # NGROK_BASE_URL = "https://coated-nonattributive-babara.ngrok-free.dev"
         # file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
         # BASE_URL = os.getenv("BASE_URL")
-        NGROK_BASE_URL = "https://fc29f671c77f.ngrok-free.app"
+        NGROK_BASE_URL = "https://coated-nonattributive-babara.ngrok-free.dev"
         file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
 
         # ✅ Save file info in DB
