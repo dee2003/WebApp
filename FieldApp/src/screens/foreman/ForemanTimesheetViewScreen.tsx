@@ -52,7 +52,7 @@ type TableCategory =
 const COL_NAME = 160;
 const COL_ID = 70;              // NEW: Width for EMP# and EQUIP #ER
 const COL_CLASS = 80;
-const COL_EMPLOYEE_HOUR = 90;   // Employee hours column width 
+const COL_EMPLOYEE_HOUR = 110;   // Employee hours column width 
 const COL_SIMPLE_HOUR = 110;    // Used for Material/Vendor/Dumping Qty/Hours
 const COL_EQUIP = 110;          // Used for Equipment REG/S.B (per column)
 const COL_TICKET = 110;         // Used for Tickets/Loads
@@ -63,7 +63,7 @@ const getPhaseGroupWidth = (type: TableCategory): number => {
   if (type === "equipment") return COL_EQUIP * 2; // REG + S.B
   if (type === "employee") return COL_EMPLOYEE_HOUR;       // Use 90px for employee hours only
   // material, vendor, dumping_site → simple (quantity + tickets)
-  return COL_SIMPLE_HOUR + COL_TICKET; // Use 110px + 110px for simple tables
+  return COL_SIMPLE_HOUR; // Use 110px + 110px for simple tables
 };
 
 const ForemanTimesheetViewScreen = ({ navigation, route }: any) => {
@@ -641,7 +641,18 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                     Class Code
                                 </Text>
                             )}
-                            
+                         {!isEmployee && !isEquipment && (
+    <Text style={[
+        styles.headerCell, 
+        styles.colTickets, 
+        styles.borderLeft,
+        styles.headerCellBottomBorder
+    ]}>
+        {type === "dumping_site" ? "# Loads" : "# Tickets"}
+    </Text>
+)}
+
+
                             {/* DYNAMIC PHASE COLUMNS (These scroll) */}
                             {phaseCodes.map((phase, phaseIndex) => {
                                 const isLastPhase = phaseIndex === phaseCodes.length - 1;
@@ -663,42 +674,34 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                         ]}
                                     >
                                         {/* Phase Code Text: positioned absolutely over the sub-columns. This now draws the line. */}
-                                        <Text style={styles.phaseHeaderCellText}>{phase}</Text>
-                                        
-                                        {isEquipment ? (
-                                            // Equipment: REG and S.B. per phase (2 sub-columns)
-                                            <View style={styles.equipmentPhaseSubHeader}>
-                                                <Text style={[styles.headerCell, styles.colHoursEquipment, styles.equipmentSubHeaderCell, styles.borderRight, styles.headerCellBottomBorder]}>REG</Text>
-                                                <Text style={[styles.headerCell, styles.colHoursEquipment, styles.equipmentSubHeaderCell, styles.lastCell, styles.headerCellBottomBorder]}>S.B</Text>
-                                            </View>
-                                        ) : (
-                                            // Employee/Simple (1 or 2 sub-columns)
-                                            <>
-                                                <Text 
-                                                    style={[
-                                                        styles.headerCell, 
-                                                        // If employee, use flex: 1 to fill the 90px container.
-                                                        // If simple, use the fixed COL_SIMPLE_HOUR width.
-                                                        isEmployee ? { flex: 1 } : styles.colHoursSimple, 
-                                                        // Border logic
-                                                        (isSimple && !isEmployee) ? styles.borderRight : styles.lastCell,
-                                                        styles.headerCellBottomBorder
-                                                    ]}
-                                                >
-                                                    {isEmployee ? 'Hours' : (type === 'material' ? 'Hours/Qty' : (type === 'dumping_site' ? 'Loads' : 'Quantity'))}
-                                                </Text>
-                                                
-                                                {/* Simple tables (Material/Vendor/Dumping) need a tickets/loads column per phase */}
-                                                {(isSimple && !isEmployee) && (
-                                                    <Text style={[styles.headerCell, styles.colTickets, styles.lastCell, styles.headerCellBottomBorder]}>
-                                                        {type === 'dumping_site' ? '# Loads' : '# Tickets'}
-                                                    </Text>
-                                                )}
-                                            </>
-                                        )}
-                                    </View>
-                                );
-                            })}
+                                         {/* Phase Code */}
+            <Text style={styles.phaseHeaderCellText}>{phase}</Text>
+            {/* Only ONE cell under the phase code */}
+           {!isEquipment && (
+    <Text
+        style={[
+            styles.headerCell,
+            styles.colHoursSimple,
+            styles.lastCell,
+            styles.headerCellBottomBorder
+        ]}
+    >
+        {type === 'material' ? 'Hours/Qty' :
+            type === 'dumping_site' ? 'Loads' :
+            'Quantity'}
+    </Text>
+)}
+
+            {/* Equipment keeps 2 columns, leave unchanged */}
+            {isEquipment && (
+                <View style={styles.equipmentPhaseSubHeader}>
+                    <Text style={[styles.headerCell, styles.colHoursEquipment, styles.equipmentSubHeaderCell, styles.borderRight, styles.headerCellBottomBorder]}>REG</Text>
+                    <Text style={[styles.headerCell, styles.colHoursEquipment, styles.equipmentSubHeaderCell, styles.lastCell, styles.headerCellBottomBorder]}>S.B</Text>
+                </View>
+            )}
+        </View>
+    );
+})}
                             
                             {/* Fixed column at the end - No bottom border to meet the request */}
                             <Text style={[styles.headerCell, styles.colTotal, styles.lastCell, styles.borderLeft, styles.headerCellBottomBorder]}>Total</Text>
@@ -716,7 +719,7 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                 let entityId;
                                 // FIX APPLIED HERE: Match key derivation logic from populateSimple
                                 if (type === 'material') {
-                                    entityId = entity.name || entity.id || entity.key || entity.vendor_id;
+                                    entityId = entity.id || entity.name || entity.key || entity.vendor_id;
                                 } else {
                                     entityId = entity.id || entity.name || entity.key || entity.vendor_id;
                                 }
@@ -755,7 +758,13 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                                 {entity.stop_hours || ''}
                                             </Text>
                                         )}
-                                        
+                                      {!isEmployee && !isEquipment && (
+    <View style={[styles.dataCell, styles.colTickets, styles.borderLeft]}>
+        <Text style={styles.valueText}>
+            {entity.tickets_loads?.[entityId] ?? 0}
+        </Text>
+    </View>
+)}
                                         {/* Dynamic Phase Columns */}
                                         {phaseCodes.map((phase, phaseIndex) => {
                                             const isLastPhase = phaseIndex === phaseCodes.length - 1;
@@ -779,14 +788,14 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                                     ) : (
                                                         // Simple Logic (Material/Vendor/Dumping)
                                                         <>
-                                                            <Text style={[styles.dataCell, styles.colHoursSimple, styles.borderRight]}>
-                                                                {parseFloat((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toFixed(1)}
-                                                            </Text>
-                                                            <Text style={[styles.dataCell, styles.colTickets, styles.lastCell]}>
-                                                                {ticketsState ? (ticketsState[entityId]?.[phase] ?? '0') : '0'}
-                                                            </Text>
+                                                            <Text style={[styles.dataCell, styles.colHoursSimple, styles.lastCell]}>
+    {parseFloat((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toFixed(1)}
+</Text>
+
+                                                            
                                                         </>
                                                     )}
+                                                
                                                 </View>
                                             )
                                         })}
@@ -802,8 +811,11 @@ const handleSendTimesheet = async (timesheetId: number) => {
 
                         {/* -------------------- PHASE TOTALS ROW (DYNAMIC) -------------------- */}
                         <View style={[styles.tableRow, styles.phaseTotalRow]}>
-                            <Text style={[styles.dataCell, styles.colName, styles.phaseTotalText]}>Phase Total</Text>
-                            
+                            <Text style={[styles.dataCell, styles.colName, styles.phaseTotalText,styles.noBorderRight,styles.phaseTotalLabelAlignment]}>Phase Total</Text>
+                            {isSimple && (
+    <View style={[styles.dataCell, styles.colTickets]} />
+)}
+
                             {/* ID Column Placeholder */}
                             {(isEmployee || isEquipment) && (
                                 <View style={[styles.dataCell, styles.colId]} /> 
@@ -844,12 +856,12 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                         ]}
                                     >
                                         {isEmployee ? (
-                                            <View style={styles.phaseTotalSubRow}>
-                                                {/* Use flex: 1 to fill the 90px container */}
-                                                <Text style={[styles.dataCell, { flex: 1 }, styles.phaseTotalText, styles.lastCell]}>
-                                                    {(employeePhaseTotals[phase] || 0).toFixed(1)}
-                                                </Text>
-                                            </View>
+                                            // FIX: Removed the unnecessary 'phaseTotalSubRow' wrapper. 
+                                            // The Text element now directly fills the 'dynamicPhaseColEmployee' View.
+                                            <Text style={[styles.dataCell, { flex: 1 }, styles.phaseTotalText]}>
+                                                {(employeePhaseTotals[phase] || 0).toFixed(1)}
+                                            </Text>
+                                           
                                         ) : isEquipment ? (
                                             <View style={styles.phaseTotalSubRow}>
                                                 <Text style={[styles.dataCell, styles.colHoursEquipment, styles.phaseTotalText, styles.borderRight]}>
@@ -860,22 +872,28 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                                 </Text>
                                             </View>
                                         ) : isSimple ? (
-                                            <View style={styles.phaseTotalSubRow}>
-                                                <Text style={[styles.dataCell, styles.colHoursSimple, styles.phaseTotalText, styles.borderRight]}>
-                                                    {(simplePhaseTotals[phase] || 0).toFixed(1)}
-                                                </Text>
-                                                {/* Placeholder under Tickets column */}
-                                                <View style={[styles.dataCell, styles.colTickets]} />
-                                            </View>
-                                        ) : null}
+    <View style={styles.phaseTotalSubRow}>
+       <Text style={[
+            styles.dataCell,
+            styles.colHoursSimple,
+            styles.phaseTotalText,
+            // ⭐️ FIX: Explicitly add borderRight. Since isSimple tables don't have sub-columns, 
+            // the dataCell automatically uses styles.borderRight, but we need to ensure the phaseGroupBorderRight 
+            // is not applied to the parent Vew's right border.
+            // Let's rely on the phaseGroupBorderRight being applied to the parent view EXCEPT for the last one.
+            // For the last phase, we will manually add the border right here.
+            isLastPhase ? styles.borderRight : styles.noBorderRight,
+        ]}>
+            {(simplePhaseTotals[phase] || 0).toFixed(1)}
+        </Text>
+    </View>
+) : null}
+
                                     </View>
                                 );
                             })}
                             
-                            {/* GRAND TOTAL: Display the table's total in the final column */}
-                            <Text style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft, styles.phaseTotalText]}>
-                                {grandTotal.toFixed(1)}
-                            </Text>
+                           
                         </View>
                         {/* -------------------- PHASE TOTALS ROW END -------------------- */}
 
@@ -1091,7 +1109,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     // Width is COL_SIMPLE_HOUR (Hours/Qty) + COL_TICKET (Tickets/Loads)
-    width: COL_SIMPLE_HOUR + COL_TICKET, 
+    width: COL_SIMPLE_HOUR, 
   },
 
   dynamicPhaseColEquipment: {
@@ -1107,6 +1125,7 @@ const styles = StyleSheet.create({
       borderRightColor: THEME.border,
   },
 
+
   tableRow: {
     flexDirection: 'row',
     alignItems: 'stretch', // CRITICAL FIX: Ensures all children stretch to the height of the tallest child
@@ -1119,7 +1138,13 @@ const styles = StyleSheet.create({
   borderRight: { borderRightWidth: 1, borderRightColor: THEME.border },
   borderLeft: { borderLeftWidth: 1, borderLeftColor: THEME.border }, 
   lastCell: { borderRightWidth: 0 },
+valueText: {
+    fontSize: 12,
+    color: THEME.text,
+    textAlign: 'center',
 
+  
+},
   dataCell: {
     paddingVertical: 8,
     paddingHorizontal: 4,
@@ -1144,6 +1169,9 @@ const styles = StyleSheet.create({
       borderBottomWidth: 1,
       borderBottomColor: THEME.border,
   },
+noBorderRight: {
+    borderRightWidth: 0
+},
 
   headerCell: {
     paddingVertical: 10,
@@ -1207,8 +1235,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: THEME.text,
     paddingVertical: 10,
+    
   },
-
+phaseTotalLabelAlignment: {
+    textAlign: 'right',
+    paddingRight: 8, // Spacing from the right border of the column
+    paddingLeft: 4,  // Override colName's paddingLeft: 8 to push content right
+  },
   phaseTotalSubRow: {
     flexDirection: 'row',
     alignItems: 'center',
