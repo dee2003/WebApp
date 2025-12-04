@@ -93,6 +93,9 @@ export interface TimesheetData {
   date_submitted?: string;
   approved_by?: string;
 supervisor?: string | { id: number; name: string } | null;
+    supervisorid?: string;
+
+
 }
 
 export interface Timesheet {
@@ -107,4 +110,7 @@ export interface Timesheet {
   updated_at?: string;   // ← Add this
   created_at?: string;
   total_quantities?: Record<string, string | number>;
+    supervisorid?: string;
+  foremanid?: string;
+
 }

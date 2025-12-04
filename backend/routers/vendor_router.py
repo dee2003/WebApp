@@ -76,17 +76,21 @@ def create_vendor(
 
 from sqlalchemy.orm import selectinload
 
+from fastapi.encoders import jsonable_encoder
+
 @router.get("/vendors", response_model=List[schemas.VendorRead])
 def get_vendors(db: Session = Depends(database.get_db)):
     vendors = db.query(models.Vendor).options(
         selectinload(models.Vendor.materials)
     ).all()
 
-    # ✅ Add material_ids dynamically for frontend checkbox prefill
+    # Add material_ids dynamically
     for vendor in vendors:
         vendor.material_ids = [m.id for m in vendor.materials] if vendor.materials else []
 
-    return vendors
+    # Ensure all fields are JSON serializable
+    return jsonable_encoder(vendors)
+
 
 
 from fastapi import Path

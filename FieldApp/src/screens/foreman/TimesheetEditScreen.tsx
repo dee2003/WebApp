@@ -111,7 +111,10 @@ const [isCheckingConnection, setIsCheckingConnection] = useState(false);
 const [restoredFromDraft, setRestoredFromDraft] = useState(false);
 const [startHours, setStartHours] = useState<{ [id: string]: string }>({});
 const [stopHours, setStopHours] = useState<{ [id: string]: string }>({});
-
+const [weatherData, setWeatherData] = useState("");
+const [temperatureData, setTemperatureData] = useState("");
+const [locationData, setLocationData] = useState("");
+    const [supervisorName, setSupervisorName] = useState<string>(''); 
 
 
 useEffect(() => {
@@ -614,6 +617,17 @@ setPhaseEntryQuantities(pq);
         } catch (_) { /* ignore */ }
 
        
+// Existing foreman fetch...
+try {
+  const userRes = await apiClient.get(`/api/users/${ts.foremanid}`);
+  const fn = `${userRes.data?.firstname} ${userRes.data?.middlename} ${userRes.data?.lastname}`.replace(/,/g, '').trim();
+  setForemanName(fn);
+} catch { /* ignore */ }
+
+// ADD SUPERVISOR FETCH HERE 👇
+if (ts.data?.supervisor && typeof ts.data.supervisor === 'object' && 'name' in ts.data.supervisor) {
+  setSupervisorName((ts.data.supervisor as { id: number; name: string }).name);
+}
 
  if (ts.data?.job?.job_code) {
     try {
@@ -974,7 +988,10 @@ const buildUpdatedData = () => {
 
   return {
     ...timesheet.data,
-
+weather: weatherData,          // Sunny
+temperature: temperatureData,  // 86°F
+location: locationData,
+ 
     notes,
 
     job: {
@@ -1985,11 +2002,23 @@ const renderTotalQuantities = () => {
       <ScrollView contentContainerStyle={{ padding: THEME.SPACING, paddingBottom: 140 }}>
         <View style={styles.infoCard}>
           <Text style={styles.jobTitle}>{timesheet.data?.job_name || 'Timesheet'}</Text>
-          <Text style={styles.jobCode}>Job Code: {timesheet.data?.job?.job_code ?? 'N/A'}</Text>
+<Text style={[styles.jobCode, { fontWeight: 'bold' }]}>
+  Job Code: {timesheet.data?.job?.job_code ?? 'N/A'}
+</Text>
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}><Text style={styles.infoLabel}>Date</Text><TouchableOpacity onPress={() => setDatePickerVisible(true)}><Text style={styles.infoValueClickable}>{timesheetDate.toLocaleDateString()}</Text></TouchableOpacity></View>
             <View style={styles.infoItem}><Text style={styles.infoLabel}>Foreman</Text><Text style={styles.infoValue}>{foremanName}</Text></View>
-<WeatherLocationCard />
+            <View style={styles.infoItem}>
+                <Text style={styles.infoLabel}>Supervisor</Text>
+                <Text style={styles.infoValue}>{supervisorName}</Text>
+            </View>
+          <View style={styles.infoItem}><Text style={styles.infoLabel}>Project Engineer</Text><Text style={styles.infoValue}>{timesheet.data?.project_engineer || 'N/A'}</Text>
+</View>
+<WeatherLocationCard
+    onWeatherChange={setWeatherData}
+        onTemperatureChange={setTemperatureData}
+            onLocationChange={setLocationData}
+            />
 
           </View>
         </View>
