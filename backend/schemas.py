@@ -242,7 +242,7 @@ class VendorRead(BaseModel):
     id: int
     name: str
     vendor_type: Optional[str] = None
-    vendor_category: Optional[str] = None
+    vendor_category: Optional[str] 
     status: Optional[str] = None
     
     # 🌟 ADD THIS LINE: Exposes the full list of materials and their details 

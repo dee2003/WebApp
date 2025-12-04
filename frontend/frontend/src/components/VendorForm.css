@@ -22,14 +22,19 @@
   padding: 4px 0;
 }
 
-/* ---- Labels ---- */
+/* Keep this for normal labels if you want block layout */
 .vendor-form-page label {
   font-weight: 600;
   color: #000;
   margin-bottom: 4px !important;
   display: block;
 }
-
+.vendor-form-page .form-check-label {
+  display: inline-flex;      /* or inline-block */
+  align-items: center;
+  white-space: nowrap;
+  margin-bottom: 0;          /* override global margin */
+}
 /* ---- Checkbox List ---- */
 .vendor-form-page .checkbox-list {
   display: flex;
@@ -161,4 +166,7 @@
     grid-template-columns: 1fr;
     width: 100%;
   }
+}
+.form-check-label {
+  white-space: nowrap;
 }

@@ -83,9 +83,7 @@ export interface TimesheetData {
   vendors: VendorWorkLog[];
   notes?: string;
   dumping_sites?: DumpingSite[]; 
- total_quantities?: {
-        [phaseCode: string]: number;
-    };
+ total_quantities?: Record<string, string | number>;
       total_quantities_per_phase?: Record<string, string | number>;
     selected_vendor_materials?: Record<string, any>;
   selected_material_items?: Record<string, any>;
@@ -96,6 +94,8 @@ export interface TimesheetData {
 supervisor?: string | { id: number; name: string } | null;
   updated_at?: string;   // ← Add this
   created_at?: string;
+    supervisorid?: string;
+
 
 }
 
@@ -111,4 +111,7 @@ export interface Timesheet {
   updated_at?: string;   // ← Add this
   created_at?: string;
   total_quantities?: Record<string, string | number>;
+    supervisorid?: string;
+  foremanid?: string;
+
 }

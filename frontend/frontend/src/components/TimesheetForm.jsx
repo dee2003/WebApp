@@ -96,48 +96,42 @@ useEffect(() => {
 }, []);
 
 // 🏗️ Fetch vendors for selected category
+// Fetch all vendors from backend
 useEffect(() => {
-  if (selectedVendorCategories.length > 0) {
-    Promise.all(
-      selectedVendorCategories.map((cat) =>
-        axios.get(`${API_URL}/section-lists/vendors?category=${encodeURIComponent(cat)}`)
-      )
-    )
-      .then((responses) => {
-        // Tag each vendor with its category
-        const allVendors = responses.flatMap((res, idx) =>
-          res.data.map((v) => ({ ...v, category: selectedVendorCategories[idx] }))
-        );
-        setVendorList(allVendors);
-      })
-      .catch((err) => console.error("Error fetching vendors:", err));
-  } else {
-    setVendorList([]);
-  }
-}, [selectedVendorCategories]);
+  const fetchVendors = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/vendors`);
+      console.log("Vendors fetched from API:", res.data);
+      setVendorList(res.data); // store all vendors
+    } catch (err) {
+      console.error("Error fetching vendors:", err);
+    }
+  };
 
+  fetchVendors();
+}, []);
 
 // 🚚 Fetch materials for selected category
+// Fetch Hauler / Trucking materials on mount
 useEffect(() => {
-  if (selectedMaterialCategories.length > 0) {
-    Promise.all(
-      selectedMaterialCategories.map((cat) =>
-        axios.get(`${API_URL}/section-lists/materials?category=${encodeURIComponent(cat)}`)
-      )
-    )
-      .then((responses) => {
-        // Tag each material with its category
-        const allMaterials = responses.flatMap((res, idx) =>
-          res.data.map((m) => ({ ...m, category: selectedMaterialCategories[idx] }))
-        );
-        setMaterialList(allMaterials);
-      })
-      .catch((err) => console.error("Error fetching materials:", err));
-  } else {
-    setMaterialList([]);
-  }
-}, [selectedMaterialCategories]);
+  const fetchHaulerMaterials = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/section-lists/materials?category=Hauler`);
+      console.log("✅ Hauler materials fetched:", res.data);
+      // Tag with category if needed
+      const materials = res.data.map((m) => ({ ...m, category: "Hauler" }));
+      setMaterialList((prev) => {
+        // Merge with existing materials for other categories
+        const others = prev.filter((mat) => mat.category !== "Hauler");
+        return [...others, ...materials];
+      });
+    } catch (err) {
+      console.error("Error fetching Hauler materials:", err);
+    }
+  };
 
+  fetchHaulerMaterials();
+}, []);
 
 // 🗑️ Fetch dumping sites for selected category
 useEffect(() => {
@@ -301,33 +295,36 @@ const handleVendorClick = (vendor) => {
 // Get selected vendors with edited names
 const getSelectedVendorMaterials = () => {
   const result = {};
+
   selectedVendors.forEach((vendorId) => {
-    const vendor = vendorList.find(v => v.id === vendorId);
-    const edited = editedVendors[vendorId] || {};
+    const vendor = vendorList.find((v) => v.id === vendorId);
+    if (!vendor) return; // skip if vendor not found
 
-    // ✅ Only selected materials
-    const selectedIds = edited.selectedMaterials || [];
+    const editedData = editedVendors[vendorId] || {};
 
-    const selectedMaterials = (vendor?.materials || [])
-      .filter(m => selectedIds.includes(m.id))
-      .map(m => ({
+    const selectedIds = editedData.selectedMaterials || [];
+
+    const selectedMaterials = (vendor.materials || [])
+      .filter((m) => selectedIds.includes(m.id))
+      .map((m) => ({
         id: m.id,
-        name:
-          edited.materials?.find(em => em.id === m.id)?.name ||
-          m.name,
-        unit: m.unit
+        unit: m.unit,
+        material: m.material,
+        detail: editedData.editedDetails?.[m.id] || ""
       }));
 
     result[vendorId] = {
       id: vendor.id,
-      name: edited.name || vendor.name,
-      category: vendor.category,
+      name: editedData.name || vendor.name,
       vendor_category: vendor.vendor_category,
       selectedMaterials
     };
   });
+
   return result;
 };
+
+
 
 
 // Get selected materials with edited names
@@ -505,7 +502,7 @@ if (recipientEmail) {
                         <option value="">-- Select Job Code --</option>
                         {jobCodes.map((job) => (<option key={job.job_code} value={job.job_code}>{job.job_code}</option>))}
                     </select>
-                    {jobData?.phase_codes?.length > 0 && (
+                    {/* {jobData?.phase_codes?.length > 0 && (
                         <fieldset className="phase-selection-fieldset">
                             <legend>Select Phases:</legend>
                             <div className="phase-list">
@@ -525,7 +522,7 @@ if (recipientEmail) {
                                 ))}
                             </div>
                         </fieldset>
-                    )}
+                    )} */}
                 </div>
                 {/* Job Name and Date */}
                 <div className="grid-2-cols">
@@ -692,232 +689,634 @@ if (recipientEmail) {
                             className="form-input"
                         />
                         </div>
+                         </div>
+<h3 className="mt-4">Concrete Details</h3>
+{(() => {
+  // Filter only Concrete vendors
+  const concreteVendors = vendorList.filter(
+    (v) => v.vendor_category === "Concrete"
+  );
 
-</div>
+  const concreteVendorIds = concreteVendors.map((v) => v.id);
 
-{/* === Vendor Section === */}
-{/* === Vendor Section === */}
+  const selectedConcreteVendorId = selectedVendors.find((vId) =>
+    concreteVendorIds.includes(vId)
+  );
 
-<h3>Vendor Details</h3>
-<div className="form-group">
-  <label>Category</label>
-  <div className="checkbox-list">
-    {vendorCategories.map((cat) => (
-      <label key={cat} className="checkbox-item d-block">
-        <input
-          type="checkbox"
-          value={cat}
-          checked={selectedVendorCategories.includes(cat)}
-          onChange={(e) => {
-            const value = e.target.value;
-            if (e.target.checked) {
-              setSelectedVendorCategories((prev) => [...prev, value]);
-            } else {
-              setSelectedVendorCategories((prev) =>
-                prev.filter((c) => c !== value)
-              );
-              // Clear vendors for this category when unchecked
-              setVendorList((prev) =>
-                prev.filter((v) => v.category !== value)
-              );
-            }
-          }}
-        />
-        {cat}
-      </label>
-    ))}
-  </div>
-</div>
+  const selectedVendor = concreteVendors.find(
+    (v) => v.id === selectedConcreteVendorId
+  );
 
-{/* For each selected vendor category, show corresponding vendor selection */}
-{selectedVendorCategories.map((cat) => {
-  const categoryVendors = vendorList.filter((v) => v.category === cat);
+  // ---------------- Handlers ---------------- //
+
+  const handleConcreteVendorChange = (e) => {
+    const newVendorId = parseInt(e.target.value, 10);
+
+    setSelectedVendors((prev) => {
+      const filtered = prev.filter((id) => !concreteVendorIds.includes(id));
+      return newVendorId ? [...filtered, newVendorId] : filtered;
+    });
+
+    if (selectedConcreteVendorId) {
+      setEditedVendors((prev) => {
+        const updated = { ...prev };
+        delete updated[selectedConcreteVendorId];
+        return updated;
+      });
+    }
+
+    if (newVendorId && !selectedVendorCategories.includes("Concrete")) {
+      setSelectedVendorCategories((prev) => [...prev, "Concrete"]);
+    } else if (!newVendorId) {
+      setSelectedVendorCategories((prev) =>
+        prev.filter((c) => c !== "Concrete")
+      );
+    }
+  };
+
+  // Checkbox toggle
+  const toggleConcreteMaterial = (materialId, isChecked) => {
+    const vendorId = selectedConcreteVendorId;
+    if (!vendorId) return;
+
+    setEditedVendors((prev) => {
+      const vendorData = prev[vendorId] || {
+        selectedMaterials: [],
+        editedDetails: {}
+      };
+
+      const updatedSelectedMaterials = isChecked
+        ? [...vendorData.selectedMaterials, materialId]
+        : vendorData.selectedMaterials.filter((id) => id !== materialId);
+
+      return {
+        ...prev,
+        [vendorId]: {
+          ...vendorData,
+          selectedMaterials: updatedSelectedMaterials
+        }
+      };
+    });
+  };
+
+  // Handle text input for material quantity/details
+  const handleMaterialDetailChange = (materialId, value) => {
+    const vendorId = selectedConcreteVendorId;
+    if (!vendorId) return;
+
+    setEditedVendors((prev) => {
+      const vendorData = prev[vendorId] || {
+        selectedMaterials: [],
+        editedDetails: {}
+      };
+
+      return {
+        ...prev,
+        [vendorId]: {
+          ...vendorData,
+          editedDetails: {
+            ...vendorData.editedDetails,
+            [materialId]: value
+          }
+        }
+      };
+    });
+  };
+
+  const vendorData = editedVendors[selectedConcreteVendorId] || {
+    selectedMaterials: [],
+    editedDetails: {}
+  };
 
   return (
-    <div key={cat} className="form-group mt-3">
-     <label className="vendor-subheading">{cat} Vendors</label>
+    <div className="concrete-vendor-block mt-3">
+      {/* Concrete Supplier Dropdown */}
+      <div className="mb-3">
+        <label htmlFor="concrete-vendor-select" className="form-label fw-semibold">
+          Concrete Supplier
+        </label>
+        <select
+          id="concrete-vendor-select"
+          className="form-select"
+          value={selectedConcreteVendorId || ""}
+          onChange={handleConcreteVendorChange}
+        >
+          <option value="">-- Select Concrete Supplier --</option>
+          {concreteVendors.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
+      {/* Material Selection */}
+      {selectedVendor && (
+        <div className="mt-2">
+          <label className="form-label fw-semibold">Concrete Ordered Material</label>
 
-      {categoryVendors.length === 0 ? (
-        <p className="text-muted ms-2">No vendors found for {cat}</p>
-      ) : (
-        <div className="vendor-list">
-          {categoryVendors.map((v) => {
-            const isSelected = selectedVendors.includes(v.id);
-            const displayName = editedVendors[v.id]?.name || v.name;
+          <div className="border rounded-3 p-3 bg-light">
+            {selectedVendor.materials?.length > 0 ? (
+              selectedVendor.materials.map((m) => {
+                const isSelected = vendorData.selectedMaterials.includes(m.id);
+                const detailValue = vendorData.editedDetails[m.id] || "";
 
-            return (
-              <div key={v.id} className="vendor-item mb-2 d-flex align-items-center">
-                {/* Checkbox: open modal immediately on select */}
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      // Add vendor to selected
-                      setSelectedVendors(prev => [...prev, v.id]);
+                return (
+                  <div key={m.id} className="d-flex align-items-center mb-3">
 
-                      // Open edit modal immediately
-                      setEditingVendor({
-                        ...v,
-                        name: editedVendors[v.id]?.name || v.name,
-                        selectedMaterials: editedVendors[v.id]?.selectedMaterials || (v.materials?.map(m => m.id) || [])
-                      });
-                      setShowVendorModal(true);
-                    } else {
-                      // Remove vendor if unchecked
-                      setSelectedVendors(prev => prev.filter(id => id !== v.id));
-                      setEditedVendors(prev => {
-                        const updated = { ...prev };
-                        delete updated[v.id];
-                        return updated;
-                      });
-                    }
-                  }}
-                />
+                    {/* Checkbox */}
+                    <input
+                      className="form-check-input me-2"
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) =>
+                        toggleConcreteMaterial(m.id, e.target.checked)
+                      }
+                    />
 
-                {/* Vendor name: click to view/edit modal without toggling checkbox */}
-                <span
-                  className="ms-2 vendor-name"
-                  style={{ cursor: "pointer" }}
-                  onClick={() => {
-                    setEditingVendor({
-                      ...v,
-                      name: editedVendors[v.id]?.name || v.name,
-                      selectedMaterials: editedVendors[v.id]?.selectedMaterials || (v.materials?.map(m => m.id) || [])
-                    });
-                    setShowVendorModal(true);
-                  }}
-                >
-                  {displayName}
-                </span>
-              </div>
-            );
-          })}
+                    {/* Material Name */}
+                    <label className="form-check-label me-3">
+                      {m.material} ({m.unit})
+                    </label>
+
+                    {/* Textbox for qty/details */}
+                    {isSelected && (
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        placeholder={`Enter Quantity (${m.unit})`}
+                        value={detailValue}
+                        onChange={(e) =>
+                          handleMaterialDetailChange(m.id, e.target.value)
+                        }
+                      />
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-muted mb-0">No materials found for this supplier.</p>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
-})}
+})()}
 
 
+<h3 className="mt-4">Asphalt Details</h3>
+{(() => {
+  // 1. Filter Asphalt vendors
+  const asphaltVendors = vendorList.filter(
+    (v) => v.vendor_category === "Asphalt Plant"
+  );
 
-<VendorEditModal
-  show={showVendorModal}
-  onClose={() => setShowVendorModal(false)}
-  vendor={editingVendor}
-  onSave={handleVendorSave}
-/>
+  // 2. Vendor IDs under Asphalt
+  const asphaltVendorIds = asphaltVendors.map((v) => v.id);
 
+  // 3. Selected vendor for Asphalt
+  const selectedAsphaltVendorId = selectedVendors.find((vId) =>
+    asphaltVendorIds.includes(vId)
+  );
 
-{/* === Material & Trucking Section === */}
-<h3>Material & Trucking Details</h3>
+  // 4. Vendor object
+  const selectedAsphaltVendor = asphaltVendors.find(
+    (v) => v.id === selectedAsphaltVendorId
+  );
 
-<div className="form-group">
-  <label>Category</label>
-  <div className="checkbox-list">
-    {materialCategories.map((cat) => (
-      <label key={cat} className="checkbox-item d-block">
-        
-        <input
-          type="checkbox"
-          value={cat}
-          checked={selectedMaterialCategories.includes(cat)}
-          onChange={(e) => {
-            const value = e.target.value;
-            if (e.target.checked) {
-              setSelectedMaterialCategories((prev) => [...prev, value]);
-            } else {
-              setSelectedMaterialCategories((prev) =>
-                prev.filter((c) => c !== value)
-              );
-              setMaterialList((prev) =>
-                prev.filter((m) => m.category !== value)
-              );
-            }
-          }}
-        />
-        {cat}
-      </label>
-    ))}
-  </div>
-</div>
+  // ---------- Handlers ---------- //
 
-{/* For each selected Material category */}
+  // Select asphalt vendor
+  const handleAsphaltVendorChange = (e) => {
+    const newVendorId = parseInt(e.target.value, 10);
 
-{selectedMaterialCategories.map((cat) => {
-  const categoryMaterials = materialList.filter((m) => m.category === cat);
+    // Update selected vendors
+    setSelectedVendors((prev) => {
+      const filtered = prev.filter((vId) => !asphaltVendorIds.includes(vId));
+      return newVendorId ? [...filtered, newVendorId] : filtered;
+    });
+
+    // Reset old vendor data
+    if (selectedAsphaltVendorId) {
+      setEditedVendors((prev) => {
+        const updated = { ...prev };
+        delete updated[selectedAsphaltVendorId];
+        return updated;
+      });
+    }
+
+    // Maintain vendor category list
+    if (newVendorId && !selectedVendorCategories.includes("Asphalt")) {
+      setSelectedVendorCategories((prev) => [...prev, "Asphalt"]);
+    } else if (!newVendorId && selectedVendorCategories.includes("Asphalt")) {
+      setSelectedVendorCategories((prev) =>
+        prev.filter((c) => c !== "Asphalt")
+      );
+    }
+  };
+
+  // Select/deselect asphalt material
+  const toggleAsphaltMaterial = (materialId, isChecked) => {
+    const vendorId = selectedAsphaltVendorId;
+    if (!vendorId) return;
+
+    setEditedVendors((prev) => {
+      const vendorData =
+        prev[vendorId] || { selectedMaterials: [], editedDetails: {} };
+
+      const updatedSelectedMaterials = isChecked
+        ? [...vendorData.selectedMaterials, materialId]
+        : vendorData.selectedMaterials.filter((id) => id !== materialId);
+
+      return {
+        ...prev,
+        [vendorId]: {
+          ...vendorData,
+          selectedMaterials: updatedSelectedMaterials,
+        },
+      };
+    });
+  };
+
+  // Handle detail change
+  const handleAsphaltDetailChange = (materialId, value) => {
+    const vendorId = selectedAsphaltVendorId;
+    if (!vendorId) return;
+
+    setEditedVendors((prev) => {
+      const vendorData =
+        prev[vendorId] || { selectedMaterials: [], editedDetails: {} };
+
+      return {
+        ...prev,
+        [vendorId]: {
+          ...vendorData,
+          editedDetails: {
+            ...vendorData.editedDetails,
+            [materialId]: value,
+          },
+        },
+      };
+    });
+  };
+
+  // Selected materials & details
+  const currentAsphaltSelectedMaterials =
+    editedVendors[selectedAsphaltVendorId]?.selectedMaterials || [];
+
+  const currentAsphaltEditedDetails =
+    editedVendors[selectedAsphaltVendorId]?.editedDetails || {};
 
   return (
-    <div key={cat} className="form-group mt-3">
-      {/* <label><b>{cat} Materials / Trucking</b></label> */}
-<label className="vendor-subheading">{cat} List</label>
+    <div className="asphalt-vendor-block mt-3">
+      {/* Asphalt Supplier Dropdown */}
+      <div className="mb-3">
+        <label className="form-label fw-semibold">Asphalt Supplier</label>
+        <select
+          className="form-select"
+          value={selectedAsphaltVendorId || ""}
+          onChange={handleAsphaltVendorChange}
+        >
+          <option value="">-- Select Asphalt Supplier --</option>
+          {asphaltVendors.map((v) => (
+            <option key={v.id} value={v.id}>
+              {editedVendors[v.id]?.name || v.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      {categoryMaterials.length === 0 ? (
-        <p className="text-muted ms-2">No materials found for {cat}</p>
-      ) : (
-        <div className="vendor-list">
-          {categoryMaterials.map((m) => {
-            const isSelected = selectedMaterials.includes(m.id);
-            const displayName = editedMaterials[m.id]?.name || m.name;
+      {/* Asphalt Materials */}
+      {selectedAsphaltVendor && (
+        <div className="mt-2">
+          <label className="form-label fw-semibold">
+            Asphalt Ordered Material
+          </label>
 
-            return (
-              <div key={m.id} className="vendor-item mb-2 d-flex align-items-center">
-                {/* Checkbox: open modal immediately */}
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedMaterials(prev => [...prev, m.id]);
+          <div className="border rounded-3 p-3 bg-light">
+            {selectedAsphaltVendor.materials?.length > 0 ? (
+              selectedAsphaltVendor.materials.map((m) => {
+                const isSelected =
+                  currentAsphaltSelectedMaterials.includes(m.id);
+                const detailValue = currentAsphaltEditedDetails[m.id] || "";
+return (
+  <div
+    key={m.id}
+    className="d-flex align-items-center mb-3"
+  >
+    <div className="form-check d-flex align-items-center mb-0 me-3">
+      <input
+        className="form-check-input me-2"
+        type="checkbox"
+        id={`asphalt-${m.id}`}
+        checked={isSelected}
+        onChange={(e) =>
+          toggleAsphaltMaterial(m.id, e.target.checked)
+        }
+      />
+      <label
+        className="form-check-label mb-0"
+        htmlFor={`asphalt-${m.id}`}
+      >
+        {m.material} ({m.unit})
+      </label>
+    </div>
 
-                      setEditingMaterial({
-                        ...m,
-                        name: editedMaterials[m.id]?.name || m.name,
-                        selectedTrucking: editedMaterials[m.id]?.selectedTrucking || (m.truckingOptions?.map(t => t.id) || [])
-                      });
-                      setShowMaterialModal(true);
-                    } else {
-                      setSelectedMaterials(prev => prev.filter(id => id !== m.id));
-                      setEditedMaterials(prev => {
-                        const updated = { ...prev };
-                        delete updated[m.id];
-                        return updated;
-                      });
-                    }
-                  }}
-                />
+    {isSelected && (
+      <input
+        type="text"
+        className="form-control form-control-sm"
+        placeholder={`Enter Quantity (${m.unit})`}
+        value={detailValue}
+        onChange={(e) =>
+          handleAsphaltDetailChange(m.id, e.target.value)
+        }
+      />
+    )}
+  </div>
+);
 
-                {/* Material name: click to edit modal */}
-                <span
-                  className="ms-2 vendor-name"
-                  style={{ cursor: "pointer" }}
-                  onClick={() => {
-                    setEditingMaterial({
-                      ...m,
-                      name: editedMaterials[m.id]?.name || m.name,
-                      selectedTrucking: editedMaterials[m.id]?.selectedTrucking || (m.truckingOptions?.map(t => t.id) || [])
-                    });
-                    setShowMaterialModal(true);
-                  }}
-                >
-                  {displayName}
-                </span>
-              </div>
-            );
-          })}
+              })
+            ) : (
+              <p className="text-muted">No asphalt materials available.</p>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
-})}
+})()}
 
-<MaterialEditModal
-  show={showMaterialModal}
-  onClose={() => setShowMaterialModal(false)}
-  material={editingMaterial}
-  onSave={handleMaterialSave}
-/>
+<h3 className="mt-4">Top Soil Details</h3>
+{(() => {
+  // 1. Filter Top Soil vendors
+  const topSoilVendors = vendorList.filter(
+    (v) => v.vendor_category === "Top Soil"
+  );
+
+  // 2. Vendor IDs under Top Soil
+  const topSoilVendorIds = topSoilVendors.map((v) => v.id);
+
+  // 3. Selected vendor for Top Soil
+  const selectedTopSoilVendorId = selectedVendors.find((vId) =>
+    topSoilVendorIds.includes(vId)
+  );
+
+  // 4. Vendor object
+  const selectedTopSoilVendor = topSoilVendors.find(
+    (v) => v.id === selectedTopSoilVendorId
+  );
+
+  // ---------- Handlers ---------- //
+
+  // Select Top Soil vendor
+  const handleTopSoilVendorChange = (e) => {
+    const newVendorId = parseInt(e.target.value, 10);
+
+    // Update selected vendors
+    setSelectedVendors((prev) => {
+      const filtered = prev.filter((vId) => !topSoilVendorIds.includes(vId));
+      return newVendorId ? [...filtered, newVendorId] : filtered;
+    });
+
+    // Reset old vendor data
+    if (selectedTopSoilVendorId) {
+      setEditedVendors((prev) => {
+        const updated = { ...prev };
+        delete updated[selectedTopSoilVendorId];
+        return updated;
+      });
+    }
+
+    // Maintain vendor category list
+    if (newVendorId && !selectedVendorCategories.includes("Top Soil")) {
+      setSelectedVendorCategories((prev) => [...prev, "Top Soil"]);
+    } else if (!newVendorId && selectedVendorCategories.includes("Top Soil")) {
+      setSelectedVendorCategories((prev) =>
+        prev.filter((c) => c !== "Top Soil")
+      );
+    }
+  };
+
+  // Select/deselect Top Soil material
+  const toggleTopSoilMaterial = (materialId, isChecked) => {
+    const vendorId = selectedTopSoilVendorId;
+    if (!vendorId) return;
+
+    setEditedVendors((prev) => {
+      const vendorData =
+        prev[vendorId] || { selectedMaterials: [], editedDetails: {} };
+
+      const updatedSelectedMaterials = isChecked
+        ? [...vendorData.selectedMaterials, materialId]
+        : vendorData.selectedMaterials.filter((id) => id !== materialId);
+
+      return {
+        ...prev,
+        [vendorId]: {
+          ...vendorData,
+          selectedMaterials: updatedSelectedMaterials,
+        },
+      };
+    });
+  };
+
+  // Handle detail change
+  const handleTopSoilDetailChange = (materialId, value) => {
+    const vendorId = selectedTopSoilVendorId;
+    if (!vendorId) return;
+
+    setEditedVendors((prev) => {
+      const vendorData =
+        prev[vendorId] || { selectedMaterials: [], editedDetails: {} };
+
+      return {
+        ...prev,
+        [vendorId]: {
+          ...vendorData,
+          editedDetails: {
+            ...vendorData.editedDetails,
+            [materialId]: value,
+          },
+        },
+      };
+    });
+  };
+
+  // Selected materials & details
+  const currentTopSoilSelectedMaterials =
+    editedVendors[selectedTopSoilVendorId]?.selectedMaterials || [];
+
+  const currentTopSoilEditedDetails =
+    editedVendors[selectedTopSoilVendorId]?.editedDetails || {};
+
+  return (
+    <div className="topsoil-vendor-block mt-3">
+      {/* Top Soil Supplier Dropdown */}
+      <div className="mb-3">
+        <label className="form-label fw-semibold">Top Soil Supplier</label>
+        <select
+          className="form-select"
+          value={selectedTopSoilVendorId || ""}
+          onChange={handleTopSoilVendorChange}
+        >
+          <option value="">-- Select Top Soil Supplier --</option>
+          {topSoilVendors.map((v) => (
+            <option key={v.id} value={v.id}>
+              {editedVendors[v.id]?.name || v.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Top Soil Materials */}
+      {selectedTopSoilVendor && (
+        <div className="mt-2">
+          <label className="form-label fw-semibold">Top Soil Ordered Material</label>
+
+          <div className="border rounded-3 p-3 bg-light">
+            {selectedTopSoilVendor.materials?.length > 0 ? (
+              selectedTopSoilVendor.materials.map((m) => {
+                const isSelected = currentTopSoilSelectedMaterials.includes(m.id);
+                const detailValue = currentTopSoilEditedDetails[m.id] || "";
+
+return (
+  <div key={m.id} className="d-flex align-items-center mb-2">
+    {/* Checkbox + label inline */}
+    <div className="form-check d-flex align-items-center mb-0 me-3">
+      <input
+        className="form-check-input me-2"
+        type="checkbox"
+        id={`topsoil-${m.id}`}
+        checked={isSelected}
+        onChange={(e) =>
+          toggleTopSoilMaterial(m.id, e.target.checked)
+        }
+      />
+
+      <label
+        className="form-check-label mb-0"
+        htmlFor={`topsoil-${m.id}`}
+      >
+        {m.material} ({m.unit})
+      </label>
+    </div>
+
+    {/* Quantity input on same row */}
+    {isSelected && (
+      <input
+        type="text"
+        className="form-control form-control-sm"
+        placeholder={`Enter Quantity (${m.unit})`}
+        value={detailValue}
+        onChange={(e) =>
+          handleTopSoilDetailChange(m.id, e.target.value)
+        }
+      />
+    )}
+  </div>
+);
+
+              })
+            ) : (
+              <p className="text-muted">No top soil materials available.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+})()}
+
+<h3 className="mt-4">Trucking Details</h3>
+{(() => {
+  // 1️⃣ Hauler vendors from materialList
+const haulerVendors = materialList
+  .filter(m => m.material_category === "Hauler" && m.id !== undefined);
+const haulerVendorIds = haulerVendors.map(v => v.id);
+
+
+const selectedHaulerVendorId = selectedVendors?.find(vId =>
+  haulerVendorIds.includes(vId)
+);
+const selectedHaulerVendor = haulerVendors.find(v => v.id === selectedHaulerVendorId);
+
+  const vendorData = editedVendors[selectedHaulerVendorId] || { notes: "" };
+
+  // ---------- Handlers ---------- //
+
+  const handleHaulerVendorChange = e => {
+    const newVendorId = parseInt(e.target.value, 10);
+
+    setSelectedVendors(prev => {
+      const filtered = prev.filter(vId => !haulerVendorIds.includes(vId));
+      return newVendorId ? [...filtered, newVendorId] : filtered;
+    });
+
+    if (selectedHaulerVendorId) {
+      setEditedVendors(prev => {
+        const updated = { ...prev };
+        delete updated[selectedHaulerVendorId];
+        return updated;
+      });
+    }
+
+    if (newVendorId && !selectedVendorCategories.includes("Hauler")) {
+      setSelectedVendorCategories(prev => [...prev, "Hauler"]);
+    } else if (!newVendorId && selectedVendorCategories.includes("Hauler")) {
+      setSelectedVendorCategories(prev => prev.filter(c => c !== "Hauler"));
+    }
+  };
+
+  const handleHaulerNotesChange = e => {
+    if (!selectedHaulerVendorId) return;
+
+    const value = e.target.value;
+    setEditedVendors(prev => ({
+      ...prev,
+      [selectedHaulerVendorId]: {
+        ...prev[selectedHaulerVendorId],
+        notes: value,
+      },
+    }));
+  };
+
+  return (
+    <div className="hauler-vendor-block mt-3">
+      {/* Vendor Dropdown */}
+      <div className="mb-3">
+        <label className="form-label fw-semibold">Trucking Supplier</label>
+        <select
+          className="form-select"
+          value={selectedHaulerVendorId || ""}
+          onChange={handleHaulerVendorChange}
+        >
+          <option value="">-- Select Trucking Supplier --</option>
+          {haulerVendors.map(v => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Notes / Quantity Textbox */}
+      {selectedHaulerVendor && (
+        <div className="mb-3">
+          <label className="form-label fw-semibold">Notes / Quantity</label>
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Enter notes or quantity for this supplier"
+            value={vendorData.notes || ""}
+            onChange={handleHaulerNotesChange}
+          />
+        </div>
+      )}
+    </div>
+  );
+})()}
 
 
 {/* === Dumping Site Section === */}

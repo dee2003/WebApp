@@ -54,13 +54,6 @@ const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
       style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.headerRow}>
-        <Text style={styles.brand}>Untitled UI</Text>
-        <TouchableOpacity>
-          <Text style={styles.linkTop}>Create an account</Text>
-        </TouchableOpacity>
-      </View>
-
       <View style={styles.container}>
         <View style={styles.card}>
           <View style={styles.iconWrapper}>
@@ -117,40 +110,27 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: "#F9FAFB",
-    paddingTop: 24,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    alignItems: "center",
-  },
-  brand: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  linkTop: {
-    fontSize: 14,
-    color: "#2563EB",
-    fontWeight: "500",
   },
   container: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "center", // centers card vertically
     paddingHorizontal: 24,
+      paddingTop: 80, // adjust as needed
+
   },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 3,
-  },
+card: {
+  backgroundColor: "#FFFFFF",
+  borderRadius: 16,
+  paddingVertical: 32,
+  paddingHorizontal: 24,
+  shadowColor: "#000",
+  shadowOpacity: 0.04,
+  shadowRadius: 20,
+  shadowOffset: { width: 0, height: 10 },
+  elevation: 3,
+  marginTop: -170, // 👈 moves the card up
+},
+
   iconWrapper: {
     width: 52,
     height: 52,
@@ -197,14 +177,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   button: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#5C6BC0",
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: "center",
     marginBottom: 16,
   },
   buttonDisabled: {
-    backgroundColor: "#93C5FD",
+    backgroundColor: "#5C6BC0",
   },
   buttonText: {
     color: "#FFFFFF",
