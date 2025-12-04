@@ -2766,7 +2766,7 @@ const getPhaseGroupWidth = (type: TableCategory): number => {
 
 
 const PETimesheetReviewScreen = () => {
-    const route = useRoute<ReviewRouteProp>();
+ const route = useRoute<ReviewRouteProp>();
     const { timesheetId } = route.params;
 
     // USE THE EXTENDED TYPE HERE
@@ -3720,7 +3720,7 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
                 const entityId = entity.id;
                 const entityName = `${entity.first_name} ${entity.last_name}`.trim();
                 const grandTotal = calculateTotalEmployeeHours(hoursState as EmployeeHourState, entityId);
-
+                const showReason = grandTotal === 0 && entity.reason
                 const classCodesUsed: Set<string> = new Set();
 
                 // Collect all class codes that have data for any phase
@@ -3748,9 +3748,42 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
                     return (
                         <View key={`${entityId}-${classCode}`} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
                             {/* Fixed Columns */}
-                            <Text style={[styles.dataCell, styles.colName, styles.borderRight, isFirstClassRow ? null : styles.transparentCell]} numberOfLines={2}>
-                                {isFirstClassRow ? entityName : ''}
-                            </Text>
+<View
+  style={[
+    styles.dataCell,
+    styles.colName,
+    styles.borderRight,                     // always keep border to maintain grid
+  ]}
+>
+  {isFirstClassRow ? (
+    <>
+      <Text style={[styles.dataCell, { fontWeight: '500' }]} numberOfLines={2}>
+        {entityName}
+      </Text>
+
+      {showReason && (
+        <Text
+          style={{
+            fontSize: 12,
+            color: '#8a3434ff',
+            fontStyle: 'italic',
+            marginTop: 2,
+            paddingHorizontal: 2,
+            borderRadius: 4,
+          }}
+        >
+          Reason: {entity.reason}
+        </Text>
+      )}
+    </>
+  ) : (
+    <Text style={{ opacity: 0 }}>placeholder</Text>  
+    // invisible so height stays but name does NOT repeat
+  )}
+</View>
+
+
+
                             <Text style={[styles.dataCell, styles.colId, styles.borderRight, isFirstClassRow ? null : styles.transparentCell]}>
                                 {isFirstClassRow ? entityId : ''}
                             </Text>
@@ -4512,7 +4545,6 @@ const styles = StyleSheet.create({
     color: THEME.text,
     fontSize: 12,
     textAlign: 'center',
-    borderRightWidth: 1,
     borderRightColor: THEME.border,
     minHeight: 40,
     justifyContent: 'center',

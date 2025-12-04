@@ -444,6 +444,7 @@ const handleSendTimesheet = async (timesheetId: number) => {
         const renderEmployeeTableBody = () => {
             return entities.flatMap((entity, index) => {
                 const totalHours = calculateTotalEmployeeHours(hoursState as EmployeeHourState, entity.id);
+                const showReason = totalHours === 0 && entity.reason
                 const entityName = `${entity.first_name} ${entity.last_name}`.trim();
 
                 // Collect all unique class codes that have hours logged OR are assigned
@@ -504,10 +505,40 @@ const handleSendTimesheet = async (timesheetId: number) => {
                     return (
                         <View key={`${entity.id}-${classCode}`} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
                             {/* Show name only in the first row for this employee. */}
-                            <Text style={[styles.dataCell, styles.colName, styles.borderRight, isFirstClassRow ? null : styles.transparentCell]} numberOfLines={2}>
-                                {isFirstClassRow ? entityName : ''}
-                            </Text>
-                            
+                            {/* NAME CELL (first row shows name + optional reason) */}
+{/* NAME CELL */}
+<View
+  style={[
+    styles.dataCell,
+    styles.colName,
+    styles.borderRight,
+    !isFirstClassRow && styles.transparentCell
+  ]}
+>
+  {isFirstClassRow && (
+    <View style={{ paddingVertical: 2 }}>
+      <Text style={{ fontSize: 14, fontWeight: '500' }} numberOfLines={2}>
+        {entityName}
+      </Text>
+
+      {/* Reason stays INSIDE same cell */}
+      {showReason && (
+        <Text
+          style={{
+            fontSize: 13,
+            color: '#ac4545ff',
+            fontWeight: '500',
+            fontStyle: 'italic',
+            marginTop: 3
+          }}
+        >
+          Reason: {entity.reason}
+        </Text>
+      )}
+    </View>
+  )}
+</View>
+
                             {/* NEW EMP# COLUMN (Show only in the first row) */}
                             <Text style={[styles.dataCell, styles.colId, styles.borderRight, isFirstClassRow ? null : styles.transparentCell]}>
                                 {isFirstClassRow ? entity.id : ''}
@@ -519,6 +550,7 @@ const handleSendTimesheet = async (timesheetId: number) => {
                             {phaseCodes.map((phase, phaseIndex) => {
                                 const phaseHours = (hoursState as EmployeeHourState)[entity.id]?.[phase];
                                 const hours = parseFloat(phaseHours?.[classCode] || '0');
+                                const displayHours = entity.reason ? '–' : hours > 0 ? hours.toFixed(1) : '';
                                 const isLastPhase = phaseIndex === phaseCodes.length - 1;
                                 const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
 
@@ -533,7 +565,7 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                     > 
                                         {/* Use flex: 1 to fill the 90px container */}
                                         <Text style={[styles.dataCell, { flex: 1 }, styles.lastCell]}>
-                                            {hours > 0 ? hours.toFixed(1) : ''} {/* Show empty string for 0 */}
+                                            {displayHours} {/* Show empty string for 0 */}
                                         </Text>
                                     </View>
                                 );
