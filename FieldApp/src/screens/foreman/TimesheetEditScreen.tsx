@@ -58,65 +58,58 @@ const TimesheetEditScreen = ({ route, navigation }: Props) => {
   const timesheetId = route?.params?.timesheetId;
   const [loading, setLoading] = useState(true);
   const [timesheet, setTimesheet] = useState<Timesheet | null>(null);
-  // const [selectedPhase, setSelectedPhase] = useState<string | null>(null);
   const [selectedPhases, setSelectedPhases] = useState<string[]>([]);
-const [phaseModalVisible, setPhaseModalVisible] = useState(false);
-
+  const [phaseModalVisible, setPhaseModalVisible] = useState(false);
   const [timesheetDate, setTimesheetDate] = useState(new Date());
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
   const [notes, setNotes] = useState('');
   const [foremanName, setForemanName] = useState('');
-const [isClassModalVisible, setIsClassModalVisible] = useState(false);
-    const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
+  const [isClassModalVisible, setIsClassModalVisible] = useState(false);
+  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   // states for inputs
   const [employeeHours, setEmployeeHours] = useState<EmployeeHourState>({});
   const [equipmentHours, setEquipmentHours] = useState<ComplexHourState>({});
   const [materialHours, setMaterialHours] = useState<SimpleHourState>({});
   const [vendorHours, setVendorHours] = useState<SimpleHourState>({});
   const [dumpingSiteHours, setDumpingSiteHours] = useState<SimpleHourState>({});
-
-  // const [materialTickets, setMaterialTickets] = useState<SimpleHourState>({});
-  // const [vendorTickets, setVendorTickets] = useState<SimpleHourState>({});
-  // const [dumpingSiteTickets, setDumpingSiteTickets] = useState<SimpleHourState>({});
-
   const [materialUnits, setMaterialUnits] = useState<{ [key: string]: string | null }>({});
   const [vendorUnits, setVendorUnits] = useState<{ [key: string]: string | null }>({});
-
   const [totalQuantities, setTotalQuantities] = useState<{ [key: string]: string }>({});
-
   // extracted arrays to render
   const [workPerformed, setWorkPerformed] = useState<any[]>([]);
   const [materialsTrucking, setMaterialsTrucking] = useState<any[]>([]);
   const [dumpingSites, setDumpingSites] = useState<any[]>([]);
-
   const [availableEquipment, setAvailableEquipment] = useState<any[]>([]);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
-const [tempClassValues, setTempClassValues] = useState<Record<string, string>>({});
-const [showEmployeePicker, setShowEmployeePicker] = useState(false);
-const [search, setSearch] = useState("");
+  const [tempClassValues, setTempClassValues] = useState<Record<string, string>>({});
+  const [showEmployeePicker, setShowEmployeePicker] = useState(false);
+  const [search, setSearch] = useState("");
 
-const [employeesList, setEmployeesList] = useState<any[]>([]);
-const [jobPhaseCodes, setJobPhaseCodes] = useState<string[]>([]);
-const [showEquipmentPicker, setShowEquipmentPicker] = useState(false);
-const [equipmentList, setEquipmentList] = useState<any[]>([]);
-const [equipmentSearch, setEquipmentSearch] = useState("");
-const [ticketsLoads, setTicketsLoads] = useState<{ [id: string]: string }>({});
-const [employeeReasons, setEmployeeReasons] = useState<{ [id: string]: string }>({});
+  const [employeesList, setEmployeesList] = useState<any[]>([]);
+  const [jobPhaseCodes, setJobPhaseCodes] = useState<string[]>([]);
+  const [showEquipmentPicker, setShowEquipmentPicker] = useState(false);
+  const [equipmentList, setEquipmentList] = useState<any[]>([]);
+  const [equipmentSearch, setEquipmentSearch] = useState("");
+  const [ticketsLoads, setTicketsLoads] = useState<{ [id: string]: string }>({});
+  const [employeeReasons, setEmployeeReasons] = useState<{ [id: string]: string }>({});
 
-const [phaseEntryQuantities, setPhaseEntryQuantities] = useState<{ [phase: string]: string }>({});
-const [isConnected, setIsConnected] = useState(true);
-const [isCheckingConnection, setIsCheckingConnection] = useState(false);
-// const [pendingSync, setPendingSync] = useState(false);
-const [restoredFromDraft, setRestoredFromDraft] = useState(false);
-const [startHours, setStartHours] = useState<{ [id: string]: string }>({});
-const [stopHours, setStopHours] = useState<{ [id: string]: string }>({});
-const [weatherData, setWeatherData] = useState("");
-const [temperatureData, setTemperatureData] = useState("");
-const [locationData, setLocationData] = useState("");
-    const [supervisorName, setSupervisorName] = useState<string>(''); 
+  const [phaseEntryQuantities, setPhaseEntryQuantities] = useState<{ [phase: string]: string }>({});
+  const [isConnected, setIsConnected] = useState(true);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
 
+  const [restoredFromDraft, setRestoredFromDraft] = useState(false);
+  const [startHours, setStartHours] = useState<{ [id: string]: string }>({});
+  const [stopHours, setStopHours] = useState<{ [id: string]: string }>({});
+  const [weatherData, setWeatherData] = useState("");
+  const [temperatureData, setTemperatureData] = useState("");
+  const [locationData, setLocationData] = useState("");
+  const [supervisorName, setSupervisorName] = useState<string>(''); 
 
+// --- Vendor Picker States ---
+  const [showVendorPicker, setShowVendorPicker] = useState(false);
+  const [vendorSearch, setVendorSearch] = useState('');
+  const [vendorsList, setVendorsList] = useState<any[]>([]);
+  
 useEffect(() => {
   let unsubscribe: () => void;
   
@@ -136,15 +129,6 @@ useEffect(() => {
   return () => unsubscribe?.();
 }, []);
 
-// useEffect(() => {
-//   if (isConnected && pendingSync) {
-//     syncOfflineDraft();
-//     setPendingSync(false);
-//   }
-// }, [isConnected, pendingSync]);
-
-
-
 
 useEffect(() => {
   if (timesheet?.data?.employees) {
@@ -158,25 +142,7 @@ useEffect(() => {
     const n = parseFloat(String(v || '0'));
     return isNaN(n) ? 0 : n;
   };
-const openClassEditModal = (employeeId: string) => {
-        setEditingEmployeeId(employeeId);
-        setIsClassModalVisible(true);
-    };
 
-    const closeClassEditModal = () => {
-        setIsClassModalVisible(false);
-        setEditingEmployeeId(null);
-    };
-    
-  // const calculateTotalEmployeeHours = (state: EmployeeHourState, entityId: string) => {
-  //   const obj = state[entityId];
-  //   if (!obj) return 0;
-  //   return Object.keys(obj).reduce((acc, phase) => {
-  //     const classObj = obj[phase] || {};
-  //     const phaseTotal = Object.values(classObj).reduce((s, val) => s + toNumber(val), 0);
-  //     return acc + phaseTotal;
-  //   }, 0);
-  // };
 const calculateTotalEmployeeHours = (
   state: EmployeeHourState,
   entityId: string
@@ -246,16 +212,7 @@ const restoreProcessedDraft = (draft: any, server: Timesheet | null) => {
   if (!draft?.data) return;
 
   const d = draft.data;
-
-  // 1) restore simple fields
-  if (d.notes) setNotes(d.notes);
-//   if (d.start_hours) {
-//   setStartHours(d.start_hours);
-// }
-
-// if (d.stop_hours) {
-//   setStopHours(d.stop_hours);
-// }
+  if (d.notes) setNotes(d.notes)
   // 2) restore selected phases (server & draft may differ)
   const phaseCodes = d.job?.phase_codes || d.selectedPhases || [];
   setSelectedPhases(Array.isArray(phaseCodes) ? phaseCodes : []);
@@ -307,11 +264,6 @@ const restoreProcessedDraft = (draft: any, server: Timesheet | null) => {
     setEquipmentHours(eqHours);
     setStartHours(start);
   setStopHours(stop);
-console.log("SETTING start/stop:", start, stop);
-console.log("startHours:", startHours);
-console.log("stopHours:", stopHours);
-
-
     // override timesheet arrays if you want to replace them with saved ones
     if (selectedEquipmentArr.length) {
       setTimesheet(prev => {
@@ -353,27 +305,54 @@ console.log("stopHours:", stopHours);
     setMaterialUnits(units);
   }
 
-  if (Array.isArray(d.vendors)) {
-    const vHours: SimpleHourState = {};
-    // const vTickets: SimpleHourState = {};
-    const vUnits: { [k: string]: string | null } = {};
-    d.vendors.forEach((v: any) => {
-      vHours[v.id] = {};
-      // vTickets[v.id] = {};
-      Object.keys(v.hours_per_phase || {}).forEach(phase => vHours[v.id][phase] = String(v.hours_per_phase[phase] ?? ''));
-      // Object.keys(v.tickets_per_phase || {}).forEach(phase => vTickets[v.id][phase] = String(v.tickets_per_phase[phase] ?? ''));
-      vUnits[v.id] = v.unit ?? null;
-      if (v.tickets_loads && typeof v.tickets_loads[v.id] !== 'undefined') {
-      setTicketsLoads(prev => ({
-        ...prev,
-        [v.id]: String(v.tickets_loads[v.id])
-      }));
+if (Array.isArray(d.vendors)) {
+  const vHours: SimpleHourState = {};
+  const vTickets: Record<string, string> = {};
+  const vUnits: Record<string, string | null> = {};
+  const rebuiltWorkPerformed: any[] = [];
+
+  d.vendors.forEach((v: any, index: number) => {
+    const vendorId = Number(v.vendor_id ?? v.id);
+    const materialId = Number(v.material_id ?? v.id);
+    const key = `${vendorId}_${materialId}`;
+
+    // Hours from draft vendors
+    if (v.hours_per_phase) {
+      vHours[key] = {};
+      Object.keys(v.hours_per_phase).forEach(phase => {
+        vHours[key][phase] = String(v.hours_per_phase[phase] ?? '');
+      });
     }
+
+    // ✅ FIX: Tickets from workPerformed (newer data), fallback to draft
+    const ticketsFromWorkPerformed = rebuiltWorkPerformed[index]?.ticketsloads || String(v.tickets_loads ?? '0');
+    vTickets[key] = ticketsFromWorkPerformed;
+
+    vUnits[vendorId] = v.unit ?? null;
+
+    rebuiltWorkPerformed.push({
+      id: key,
+      vendor_id: vendorId,
+      vendorname: v.vendor_name ?? '',
+      vendor_category: v.vendor_category ?? null,
+      material_id: materialId,
+      materialname: v.material_name ?? '',
+      unit: v.unit ?? null,
+      detail: v.detail ?? '',
+      hoursperphase: v.hours_per_phase ?? {},
+      ticketsloads: String(v.tickets_loads ?? '0')  // Preserve string format
     });
-    setVendorHours(vHours);
-    // setVendorTickets(vTickets);
-    setVendorUnits(vUnits);
-  }
+  });
+
+  // ✅ ORDER MATTERS: Set workPerformed FIRST
+  setWorkPerformed(rebuiltWorkPerformed);
+  setVendorHours(vHours);
+  setTicketsLoads(vTickets);  // Now gets correct values from workPerformed
+  setVendorUnits(vUnits);
+
+  console.log('🎫 FINAL TICKETS:', vTickets);
+}
+
 
   if (Array.isArray(d.dumping_sites)) {
     const dsHours: SimpleHourState = {};
@@ -408,7 +387,6 @@ console.log("stopHours:", stopHours);
     setWorkPerformed(d.vendors); // or setWorkPerformed(d.vendors) depending on naming
   }
 
-  // done
 };
 
   // ---------------- LOAD DATA ----------------
@@ -422,10 +400,81 @@ console.log("stopHours:", stopHours);
         setNotes(ts.data?.notes || '');
 
         // normalize arrays
-        const wp: any[] = [];
-        if (ts.data?.selected_vendor_materials) {
-          Object.values(ts.data.selected_vendor_materials).forEach((v: any) => wp.push({ id: v.id, name: v.name, materials: v.selectedMaterials || [] }));
-        }
+      // ---------- NORMALIZE VENDORS: merge grouped + flat rows ----------
+const wp: any[] = [];
+
+// 1) If server has grouped selected_vendor_materials, convert to flat rows
+if (ts.data?.selected_vendor_materials) {
+  Object.values(ts.data.selected_vendor_materials).forEach((vendor: any) => {
+    const vendorId = Number(vendor.id);
+    const vendorName = vendor.name;
+    const vendorCat = vendor.vendor_category ?? null;
+
+    const sm = vendor.selectedMaterials || [];
+    sm.forEach((m: any) => {
+      const materialId = Number(m.id);
+      wp.push({
+        id: `${vendorId}_${materialId}`, // unique UI id
+        vendor_id: vendorId,
+        vendor_name: vendorName,
+        vendor_category: vendorCat,
+        material_id: materialId,
+        material_name: m.material ?? m.material_name ?? '',
+        unit: m.unit ?? null,
+        detail: m.detail ?? '',
+        hours_per_phase: m.hours_per_phase ?? {},   // <--- ADDED
+    tickets_loads: m.tickets_loads ?? {}, 
+      });
+    });
+  });
+}
+
+const seen = new Set(wp.map(r => `${r.vendor_id}_${r.material_id}`));
+// 2) MERGE ts.data.vendors into wp (CRITICAL for hours_per_phase)
+if (Array.isArray(ts.data?.vendors)) {
+  ts.data.vendors.forEach((r: any) => {
+    const vendorId = Number(r.vendor_id ?? r.vendorId ?? r.vendor?.id ?? r.id);
+    const materialId = Number(r.material_id ?? r.materialId ?? r.material?.id ?? r.id);
+    const key = `${vendorId}_${materialId}`;
+
+    if (!seen.has(key)) {
+      wp.push({
+        id: key,
+        vendor_id: vendorId,
+        vendor_name: r.vendor_name ?? r.vendor?.name ?? '',
+        vendor_category: r.vendor_category ?? r.vendor?.vendor_category ?? null,
+        material_id: materialId,
+        material_name: r.material_name ?? r.material ?? '',
+        unit: r.unit ?? r.unit_name ?? null,
+        detail: r.detail ?? '',
+        hours_per_phase: r.hours_per_phase ?? {},  // ✅ SAVED HOURS
+        tickets_loads: r.tickets_loads ?? {},      // ✅ SAVED TICKETS
+      });
+      seen.add(key);
+    } else {
+      // UPDATE existing wp row with vendor data (hours/tickets take priority)
+      const existingIndex = wp.findIndex(row => row.id === key);
+      if (existingIndex !== -1) {
+        wp[existingIndex] = {
+          ...wp[existingIndex],
+          hours_per_phase: { ...wp[existingIndex].hours_per_phase, ...r.hours_per_phase },
+          tickets_loads: r.tickets_loads ?? wp[existingIndex].tickets_loads,
+          unit: r.unit ?? wp[existingIndex].unit,
+          detail: r.detail ?? wp[existingIndex].detail,
+        };
+      }
+    }
+  });
+}
+console.log('🔥 RAW ts.data.vendors:', ts.data?.vendors?.map((v: any) => ({
+  id: v.id,
+  vendor_id: v.vendor_id,
+  material_id: v.material_id,
+  hasHours: !!v.hours_per_phase,
+  hours: v.hours_per_phase,
+  tickets: v.tickets_loads
+})));
+
         const mt: any[] = [];
         if (ts.data?.selected_material_items) {
           Object.values(ts.data.selected_material_items).forEach((m: any) => mt.push({ id: m.id, name: m.name, materials: m.selectedMaterials || [] }));
@@ -515,12 +564,40 @@ const serverUpdatedAt = timestamp
   // If draft is newer than server OR offline (no connection), restore it
   if (!isConnected || (draftSavedAt && draftSavedAt > (serverUpdatedAt || 0))) {
     restoreProcessedDraft(sObj, ts);
-     setRestoredFromDraft(true);
+    setRestoredFromDraft(true);   // <--- SET FIRST
+    
   } else {
     // In other case, server is newer — you can ignore draft or keep it for future sync
     console.log('Server newer — ignoring local draft for UI (but still kept for sync).');
   }
 }
+//   setWorkPerformed(wp);
+//   const vh: SimpleHourState = {};
+// const tl: Record<string, string> = {};
+// const vu: Record<string, string> = {};
+
+// wp.forEach(row => {
+//   const key = row.id; // "2976_6"
+  
+//   // Hours per phase
+//   vh[key] = {};
+//   Object.keys(row.hours_per_phase || {}).forEach(phase => {
+//     vh[key][phase] = String(row.hours_per_phase[phase] ?? '');
+//   });
+  
+//   // Tickets
+//   tl[key] = String(row.tickets_loads?.[key] ?? '');
+  
+//   // Units (vendor-level)
+//   vu[row.vendor_id] = row.unit ?? vu[row.vendor_id] ?? "Hrs";
+// });
+
+// setVendorHours(vh);
+// setTicketsLoads(prev => ({ ...prev, ...tl }));
+// setVendorUnits(vu);
+// After wp build:
+
+
 if (!restoredFromDraft) {
   setSelectedPhases(ts.data?.job?.phase_codes || []);
 
@@ -538,14 +615,37 @@ if (!restoredFromDraft) {
     setStartHours(s);
     setStopHours(e);
   }
+
+  setWorkPerformed(wp);
+  const vh: SimpleHourState = {};
+const tl: Record<string, string> = {};
+const vu: Record<string, string> = {};
+
+wp.forEach(row => {
+  const key = row.id; // "2976_6"
+  
+  // Hours per phase
+  vh[key] = {};
+  Object.keys(row.hours_per_phase || {}).forEach(phase => {
+    vh[key][phase] = String(row.hours_per_phase[phase] ?? '');
+  });
+  
+  // Tickets
+  // tl[key] = String(row.tickets_loads?.[key] ?? '');
+  tl[key] = String(row.tickets_loads ?? '');
+
+  // Units (vendor-level)
+  vu[row.vendor_id] = row.unit ?? vu[row.vendor_id] ?? "Hrs";
+});
+
+setVendorHours(vh);
+setTicketsLoads(tl);
+setVendorUnits(vu);
+
         setMaterialHours(populateSimple(ts.data?.materials_trucking || [], 'hours_per_phase'));
-        setVendorHours(populateSimple(ts.data?.vendors || [], 'hours_per_phase'));
         setDumpingSiteHours(populateSimple(ts.data?.dumping_sites || [], 'hours_per_phase'));
-        // setMaterialTickets(populateSimple(ts.data?.materials_trucking || [], 'tickets_per_phase'));
-        // setVendorTickets(populateSimple(ts.data?.vendors || [], 'tickets_per_phase'));
-        // setDumpingSiteTickets(populateSimple(ts.data?.dumping_sites || [], 'tickets_per_phase'));
         setMaterialUnits(populateUnits(ts.data?.materials_trucking || []));
-        setVendorUnits(populateUnits(ts.data?.vendors || []));
+        // setVendorUnits(populateUnits(ts.data?.vendors || []));
         if (Array.isArray(ts.data?.materials_trucking)) {
   ts.data.materials_trucking.forEach(m => {
     const value = m.tickets_loads?.[m.id];
@@ -553,18 +653,6 @@ if (!restoredFromDraft) {
       setTicketsLoads(prev => ({
         ...prev,
         [m.id]: String(value)
-      }));
-    }
-  });
-}
-
-if (Array.isArray(ts.data?.vendors)) {
-  ts.data.vendors.forEach(v => {
-    const value = v.tickets_loads?.[v.id];
-    if (value != null) {
-      setTicketsLoads(prev => ({
-        ...prev,
-        [v.id]: String(value)
       }));
     }
   });
@@ -581,18 +669,8 @@ if (Array.isArray(ts.data?.dumping_sites)) {
     }
   });
 }
-
-        setWorkPerformed(wp);
   setMaterialsTrucking(mt);
   setDumpingSites(ds);
-
-  // if (ts.data?.total_quantities_per_phase) {
-  //   const tq: { [k: string]: string } = {};
-  //   for (const p in ts.data.total_quantities_per_phase) {
-  //     tq[p] = String(ts.data.total_quantities_per_phase[p]);
-  //   }
-  //   setTotalQuantities(tq);
-  // }
 // after setVendorUnits(...)
 if (ts.data?.total_quantities) {
   const pq: { [k: string]: string } = {};
@@ -603,10 +681,9 @@ if (ts.data?.total_quantities) {
 setPhaseEntryQuantities(pq);
  // ✅ this is what the UI reads
 }
-
-
+}else {
+  console.log("✅ Draft restored — skipping server overwrite");
 }
-
         const eqRes = await apiClient.get('/api/equipment');
         setAvailableEquipment(eqRes.data || []);
 
@@ -631,28 +708,15 @@ if (ts.data?.supervisor && typeof ts.data.supervisor === 'object' && 'name' in t
 
  if (ts.data?.job?.job_code) {
     try {
-      
-
       const jobRes = await apiClient.get(
         `/api/job-phases/${ts.data.job.job_code}`
       );
-
-      
-
-      const codes = (jobRes.data?.phase_codes || []).map((p: any) => p.code);
-
-
-      
-
+    const codes = (jobRes.data?.phase_codes || []).map((p: any) => p.code);
       setJobPhaseCodes(codes);
-       // keep autosave overrides
-      // setSelectedPhases(prev => (prev.length ? prev : codes));
-
     } catch (e) {
       console.warn("Failed to load job phase codes", e);
     }
   }
- 
       } catch (err) {
         console.error(err);
         Alert.alert('Error', 'Failed to load timesheet.');
@@ -683,16 +747,17 @@ if (ts.data?.supervisor && typeof ts.data.supervisor === 'object' && 'name' in t
         `@autoSave_timesheet_${timesheetId}`,
         JSON.stringify(draft)
       );
+console.log('🚀 AUTOSAVE vendorHours:', vendorHours)
+console.log('🚀 AUTOSAVE ticketsLoads:', ticketsLoads)
+// await AsyncStorage.setItem(`autoSavetimesheettimesheetId`, JSON.stringify(draft))
 
       console.log("Auto-saved PROCESSED data");
       } catch (e) { console.warn('Auto-save fail', e); }
     }, 1500);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [employeeHours, equipmentHours, materialHours, vendorHours, dumpingSiteHours,ticketsLoads, notes, materialUnits, vendorUnits, timesheetDate, selectedPhases, employeeReasons,phaseEntryQuantities]);
+  }, [employeeHours, equipmentHours, materialHours, vendorHours, dumpingSiteHours,ticketsLoads, notes, materialUnits, vendorUnits, timesheetDate, selectedPhases, employeeReasons,phaseEntryQuantities,workPerformed]);
 
   // ---------------- HANDLERS ----------------
-
-
 const handleEmployeeHourChange = (
   employeeId: string,
   phaseCode: string,
@@ -701,10 +766,8 @@ const handleEmployeeHourChange = (
 ) => {
   // If empty, treat as 0 (IMPORTANT fix)
   if (value.trim() === "") value = "0";
-
   // 1️⃣ Sanitize input (keep numbers + dot)
   const sanitized = value.replace(/[^0-9.]/g, '');
-
   setEmployeeHours(prev => {
     // 2️⃣ Build updated object
     const updated = {
@@ -747,15 +810,6 @@ const handleEmployeeHourChange = (
     setter((prev: ComplexHourState) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), [phaseCode]: { ...(prev[entityId]?.[phaseCode] || {}), [hourType]: sanitized } } }));
   };
 
-  // const handleSimpleValueChange = (entityType: 'material' | 'vendor' | 'dumping_site', field: 'hours' | 'tickets', entityId: string, phaseCode: string, value: string) => {
-  //   const sanitized = value.replace(/[^0-9.]/g, '');
-  //   const setters: any = { material: { hours: setMaterialHours, tickets: setMaterialTickets }, vendor: { hours: setVendorHours, tickets: setVendorTickets }, dumping_site: { hours: setDumpingSiteHours, tickets: setDumpingSiteTickets } };
-  //   const setter = setters[entityType][field];
-
-  //   // Keep behaviour: tickets (for material/vendor) synced across phases when editing non-first phase -> we avoid forcing here to keep simple UX
-  //   setter((prev: SimpleHourState) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), [phaseCode]: sanitized } }));
-  // };
-
   const handleUnitChange = (type: 'material' | 'vendor', entityId: string, unit: string) => {
     const setter = type === 'material' ? setMaterialUnits : setVendorUnits;
     setter(prev => ({ ...prev, [entityId]: unit }));
@@ -785,9 +839,6 @@ const handleSelectEquipment = (eq: any) => {
   setEquipmentHours(prev => ({ ...prev, [eq.id]: {} }));
   setShowEquipmentPicker(false); // close picker after selection
 };
-
-
-
 
 const handleRemoveEmployee = (id: number) => {
   if (!timesheet) return;
@@ -861,10 +912,6 @@ const handleRemoveEquipment = (id: string) => {
   );
 };
 
-
-
-  // ---------------- SAVE ----------------
-// ---------------- SAVE ----------------
 const handleSave = async () => {
   if (!timesheet) return;
 
@@ -918,7 +965,6 @@ if (violatingPhases.length > 0) {
     setIsSubmitting(false); // ✅ Fix loading stuck
     return;
   }
-
   // ✅ Online: Normal save
   try {
     const updatedData = buildUpdatedData();
@@ -985,7 +1031,32 @@ const processEquipment = (
 // ---------------- BUILD FINAL PAYLOAD ----------------
 const buildUpdatedData = () => {
   if (!timesheet) return {};
+const base = timesheet?.data ? { ...timesheet.data } : {};
 
+  // Rebuild grouped selected_vendor_materials from current workPerformed rows
+  const groupedVendorMaterials: { [k: string]: any } = {};
+
+  (workPerformed || []).forEach((row: any) => {
+    const vendorId = String(row.vendor_id ?? row.vendorId ?? '');
+    if (!vendorId) return;
+
+    if (!groupedVendorMaterials[vendorId]) {
+      groupedVendorMaterials[vendorId] = {
+        id: Number(row.vendor_id),
+        name: row.vendor_name ?? '',
+        vendor_category: row.vendor_category ?? '',
+        selectedMaterials: []
+      };
+    }
+
+    // Add material entry
+    groupedVendorMaterials[vendorId].selectedMaterials.push({
+      id: Number(row.material_id),
+      material: row.material_name ?? row.material ?? '',
+      unit: row.unit ?? null,
+      detail: row.detail ?? ''
+    });
+  });
   return {
     ...timesheet.data,
 weather: weatherData,          // Sunny
@@ -1036,14 +1107,26 @@ location: locationData,
       hours_per_phase: toNumbersSimple(materialHours[m.id] || {}),
       tickets_loads: { [m.id]: Number(ticketsLoads[m.id] || 0) },
     })),
-
+     vendorHours,        // Save UI state
+    ticketsLoads,       // Save UI state  
+    vendorUnits,        // Save UI state
+    workPerformed,
+ selected_vendor_materials: groupedVendorMaterials,
     // VENDORS
-    vendors: workPerformed.map((v) => ({
-      id: v.id,
-      name: v.name,
-      unit: vendorUnits[v.id],
-      hours_per_phase: toNumbersSimple(vendorHours[v.id] || {}),
-      tickets_loads: { [v.id]: Number(ticketsLoads[v.id] || 0) },
+    vendors: (workPerformed || []).map((r: any) => ({
+      // build server-friendly vendor row — adapt fields to match server shape
+      vendor_id: Number(r.vendor_id),
+      vendor_name: r.vendor_name ?? '',
+      vendor_category: r.vendor_category ?? '',
+      material_id: Number(r.material_id),
+      material_name: r.material_name ?? r.material ?? '',
+      unit: r.unit ?? null,
+      detail: r.detail ?? '',
+  // tickets_loads: { [r.id]: Number(ticketsLoads?.[r.id] ?? r.tickets_loads?.[r.id] ?? 0) },
+  //     hours_per_phase: r.hours_per_phase ?? {}
+ tickets_loads: Number(ticketsLoads?.[r.id] ?? 0), 
+  hours_per_phase: vendorHours?.[r.id] || r.hours_per_phase || {}
+  
     })),
 
     // DUMPING SITES
@@ -1056,30 +1139,6 @@ location: locationData,
   };
 };
 
-// ---------------- OFFLINE SYNC ----------------
-// const syncOfflineDraft = async () => {
-//   if (!timesheet) return;
-//   try {
-//     setIsSubmitting(true);
-
-//     const updatedData = buildUpdatedData();
-
-//     await apiClient.put(`/api/timesheets/${timesheet.id}`, {
-//       data: updatedData,
-//       status: "Pending",
-//     });
-
-//     Alert.alert("Synced!", "Offline draft synced to server.");
-
-//     await AsyncStorage.removeItem(`autoSave-timesheet-${timesheetId}`);
-
-//   } catch (err) {
-//     console.error("Sync failed:", err);
-//     Alert.alert("Sync Failed", "Will retry when online again.");
-//   } finally {
-//     setIsSubmitting(false);
-//   }
-// };
 
   // ---------------- RENDER: TABLE-LIKE SECTIONS ----------------
 const handlePhaseEntryChange = (phaseCode: string, value: string) => {
@@ -1125,6 +1184,139 @@ const handleSelectEmployee = (emp: any) => {
   // Close picker
   setShowEmployeePicker(false);
 };
+
+const handleAddVendor = () => {
+  loadAvailableVendors();
+  setShowVendorPicker(true);
+};
+const handleSelectVendor = (vendor: any) => {
+
+  if (!vendor?.id) {
+    Alert.alert("Invalid vendor");
+    return;
+  }
+  // Normalize materials
+  const materials = vendor.selectedMaterials || [];
+  // If vendor has no materials, allow adding but with 0 rows
+  if (materials.length === 0) {
+    Alert.alert("This vendor has no materials assigned.");
+    return;
+  }
+  // Duplicate check: if ANY vendor row exists with this vendor_id
+  if (workPerformed.some(v => v.vendor_id === vendor.id)) {
+    Alert.alert("Vendor Already Added");
+    return;
+  }
+  // Build material-rows
+  const newRows: any[] = materials.map((m: any) => ({
+    id: `${vendor.id}_${m.id}`,   
+    vendor_id: vendor.id,
+    vendor_name: vendor.name,
+
+    material_id: m.id,
+    material_name: m.material,
+    unit: m.unit,
+    detail: m.detail,
+    hours_per_phase: {},
+    tickets_loads: {}
+  }));
+
+  // Add all rows
+  setWorkPerformed(prev => [...prev, ...newRows]);
+
+  // Initialize states for each row
+  newRows.forEach(row => {
+   setVendorHours(prev => ({
+    ...prev,
+    [row.id]: {}  // Empty object - will be populated by user edits
+  }));
+
+    setVendorUnits(prev => ({ ...prev, [row.id]: row.unit || "Hrs" }));
+    setTicketsLoads(prev => ({
+    ...prev,
+    [row.id]: ""  // Empty string for new rows
+  }));
+
+  });
+
+  setShowVendorPicker(false);
+};
+
+
+
+const handleRemoveVendor = (vendorId: number) => {
+  Alert.alert("Remove Vendor", "Are you sure?", [
+    { text: "Cancel", style: "cancel" },
+    {
+      text: "Remove",
+      onPress: () => {
+        setWorkPerformed(prev => prev.filter(v => v.id !== vendorId));
+
+        setVendorHours(prev => {
+          const copy = { ...prev };
+          delete copy[vendorId];
+          return copy;
+        });
+
+        setVendorUnits(prev => {
+          const copy = { ...prev };
+          delete copy[vendorId];
+          return copy;
+        });
+
+        setTicketsLoads(prev => {
+          const copy = { ...prev };
+          delete copy[vendorId];
+          return copy;
+        });
+      }
+    }
+  ]);
+};
+
+
+interface Material {
+  id: number;
+  material: string;
+  unit: string;
+}
+
+interface Vendor {
+  id: number;
+  name: string;
+  vendor_category: string | null;
+  selectedMaterials: Material[];
+}
+
+const loadAvailableVendors = async () => {
+  try {
+    const res = await apiClient.get("/api/vendors");
+    const rawList = res.data; 
+
+    // Assigned vendors from timesheet (could be VendorWorkLog[])
+    const assignedIds: number[] = (timesheet?.data?.vendors || []).map(v => Number(v.id));
+
+
+    // Map raw API response → Vendor format
+   const allVendors: Vendor[] = rawList.map((row: any) => ({
+  id: Number(row.id),
+  name: row.name,
+  vendor_category: row.vendor_category,
+  selectedMaterials: (row.materials as any[]).map((m: any) => ({
+    id: Number(m.id),
+    material: m.material,
+    unit: m.unit
+  })) || []
+}));
+
+const filtered: Vendor[] = allVendors.filter(v => !assignedIds.includes(v.id));
+
+    setVendorsList(filtered);
+  } catch (err) {
+    console.log("Failed to load vendors", err);
+  }
+};
+
 
 
 const InlineEditableNumber = ({
@@ -1189,8 +1381,6 @@ const InlineEditableNumber = ({
   );
 };
 
-
-
 // For bottom sheet search input
 const loadAvailableEmployees = async () => {
   try {
@@ -1202,8 +1392,6 @@ const loadAvailableEmployees = async () => {
     const filtered = allEmployees.filter(
   (e: any) => !assigned.some((a: any) => a.id === e.id)
 );
-
-
     setEmployeesList(filtered);
   } catch (err) {
     console.log("Failed to load employees", err);
@@ -1274,7 +1462,6 @@ return [emp.class_1, emp.class_2].filter(Boolean);
       </View>
 
       {/* Employee List */}
-      {/* Employee List */}
 <ScrollView
         style={{ maxHeight: 300 }}
         nestedScrollEnabled={true}   // <-- Important
@@ -1303,8 +1490,6 @@ return [emp.class_1, emp.class_2].filter(Boolean);
       </Pressable>
     ))}
 </ScrollView>
-
-
       {/* Close Button */}
       <Pressable style={styles.closeButton} onPress={() => setShowEmployeePicker(false)}>
         <Text style={styles.closeButtonText}>Cancel</Text>
@@ -1420,9 +1605,6 @@ return [emp.class_1, emp.class_2].filter(Boolean);
   )}
 </View>
 
-
-
-      {/* NAME */}
       {/* NAME + Reason dropdown */}
 <View
   style={[
@@ -1438,6 +1620,8 @@ return [emp.class_1, emp.class_2].filter(Boolean);
   {classIndex === 0 ? (
     <View style={{ width: "100%" }}>
       <Text style={tableStyles.cellText}>{name}</Text>
+
+
 
       {/* Reason dropdown under name */}
       {calculateTotalEmployeeHours(employeeHours, emp.id) === 0 && (
@@ -1523,10 +1707,7 @@ return [emp.class_1, emp.class_2].filter(Boolean);
                     </View>
                   );
                 })}
-
-              
-            
-              </View>
+     </View>
             );
           })}
 
@@ -1549,12 +1730,6 @@ return [emp.class_1, emp.class_2].filter(Boolean);
                 ))}
               </View>
             </ScrollView>
-
-            {/* <View style={[tableStyles.cellFixed, { width: 88 }]}>
-              <Text style={tableStyles.footerTotal}>
-                {Object.values(phaseTotals || {}).reduce((s: number, n: any) => s + (Number(n) || 0), 0).toFixed(1)}
-              </Text>
-            </View> */}
           </View>
         </ScrollView>
         
@@ -1578,12 +1753,25 @@ const updateSimpleHours = (
     }));
   }
 
-  if (type === 'vendor') {
-    setVendorHours(prev => ({
-      ...prev,
-      [entityId]: { ...prev[entityId], [phaseCode]: value }
-    }));
-  }
+ if (type === 'vendor') {
+  // entityId = row.id = `${vendorId}_${materialId}`
+setVendorHours(prev => ({
+    ...prev,
+    [entityId]: { ...(prev[entityId] || {}), [phaseCode]: value }
+  }));
+  setWorkPerformed(prev => prev.map(row => 
+    row.id === entityId 
+      ? { 
+          ...row, 
+          hours_per_phase: { 
+            ...row.hours_per_phase, 
+            [phaseCode]: value 
+          } 
+        }
+      : row
+  ));
+}
+
 
   if (type === 'dumping_site') {
     setDumpingSiteHours(prev => ({
@@ -1618,6 +1806,40 @@ const renderTotalQuantities = () => {
     </View>
   );
 };
+const handleVendorHourChange = (rowId: string, phaseCode: string, value: string) => {
+  const sanitized = value.replace(/[^0-9.]/g, '');
+
+  // Update vendorHours state
+  setVendorHours(prev => ({
+    ...prev,
+    [rowId]: { ...prev[rowId], [phaseCode]: sanitized }
+  }));
+
+  // FIX: update correct key: hours_per_phase
+  setWorkPerformed(prev =>
+    prev.map(row =>
+      row.id === rowId
+        ? {
+            ...row,
+            hours_per_phase: {
+              ...(row.hours_per_phase || {}),
+              [phaseCode]: sanitized
+            }
+          }
+        : row
+    )
+  );
+};
+
+
+const handleVendorTicketsChange = (rowId: string, value: string) => {
+  const sanitized = value.replace(/[^0-9.]/g, '');
+  setTicketsLoads(prev => ({ ...prev, [rowId]: sanitized }));
+  setWorkPerformed(prev => prev.map(row =>
+    row.id === rowId ? { ...row, tickets_loads: sanitized } : row
+  ));
+};
+
 
 
  const renderEntityTable = (
@@ -1639,7 +1861,9 @@ const renderTotalQuantities = () => {
     : calculateSimplePhaseTotals(hoursState, phaseCodes);
 
   return (
-    <View style={styles.tableCard}>
+    
+     
+<View style={styles.tableCard}>
       <View style={styles.headerRow}>
         <Text style={styles.sectionTitle}>{title}</Text>
 
@@ -1648,53 +1872,12 @@ const renderTotalQuantities = () => {
             <Text style={styles.addButton}>+ Add Equipment</Text>
           </TouchableOpacity>
         )}
-      </View>
-{isEquipment && showEquipmentPicker && (
-  <View style={styles.bottomSheetOverlay}>
-    <Pressable style={{ flex: 1 }} onPress={() => setShowEquipmentPicker(false)} />
-
-   <View style={[styles.bottomSheetSmall, { maxHeight: "80%" }]}>
-
-      <View style={styles.dragHandle} />
-
-      <TextInput
-        placeholder="Search equipment..."
-        value={equipmentSearch}
-        onChangeText={setEquipmentSearch}
-        style={styles.searchBox}
-        placeholderTextColor="#999"
-      />
-
-      <ScrollView
-        style={{ maxHeight: 400 }}
-        nestedScrollEnabled={true}
-        showsVerticalScrollIndicator={true}
-      >
-        {equipmentList
-          .filter(eq =>
-            eq.name.toLowerCase().includes(equipmentSearch.toLowerCase())
-          )
-          .map(eq => (
-            <Pressable
-              key={eq.id}
-              style={styles.employeeRowSmall}
-              onPress={() => handleSelectEquipment(eq)}
-            >
-              <View>
-                <Text style={styles.empNameSmall}>{eq.name}</Text>
-                <Text style={styles.empIdSmall}>ID: {eq.id}</Text>
-              </View>
-            </Pressable>
-          ))}
-      </ScrollView>
-
-      <Pressable style={styles.closeButton} onPress={() => setShowEquipmentPicker(false)}>
-        <Text style={styles.closeButtonText}>Cancel</Text>
-      </Pressable>
-    </View>
-  </View>
+        {type === "vendor" && (
+  <TouchableOpacity onPress={handleAddVendor}>
+    <Text style={styles.addButton}>+ Add Vendor</Text>
+  </TouchableOpacity>
 )}
-
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={[tableStyles.tableWrap, { minWidth: '100%' }]}>
           {/* Header: left fixed + scrollable phases + right total */}
@@ -1704,10 +1887,62 @@ const renderTotalQuantities = () => {
                 <Text style={tableStyles.headerText}>{isEquipment ? 'EQUIP #' : '# ID'}</Text>
               </View>
 
-              <View style={[tableStyles.headerCellFixed, { width: 200 }]}>
+              {/* <View style={[tableStyles.headerCellFixed, { width: 200 }]}>
                 <Text style={tableStyles.headerText}>{isEquipment ? 'EQUIPMENT NAME' : title.toUpperCase()}</Text>
-              </View>
+              </View> */}
               {/* Start Hours (equipment only) */}
+{/* {type === 'equipment' && (
+  <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
+    <Text style={tableStyles.headerText}>START HOURS</Text>
+  </View>
+)} */}
+
+{/* Stop Hours (equipment only) */}
+{/* {type === 'equipment' && (
+  <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
+    <Text style={tableStyles.headerText}>STOP HOURS</Text>
+  </View>
+)} */}
+
+{/* CLASS / TICKETS / LOADS Column */}
+{/* {type === 'equipment' ? null : (
+  <View style={[tableStyles.headerCellFixed, { width: 140 }]}>
+    <Text style={tableStyles.headerText}>
+      {type === 'dumping_site' ? '# OF LOADS' : '# OF TICKETS'}
+    </Text>
+  </View>
+)} */}
+
+{/* VENDOR TABLE CUSTOM HEADER */}
+{type === "vendor" ? (
+  <>
+    {/* Vendor Name */}
+    <View style={[tableStyles.headerCellFixed, { width: 180 }]}>
+      <Text style={tableStyles.headerText}>VENDOR</Text>
+    </View>
+
+    {/* Material Name */}
+    <View style={[tableStyles.headerCellFixed, { width: 180 }]}>
+      <Text style={tableStyles.headerText}>MATERIAL</Text>
+    </View>
+
+    {/* Unit */}
+    <View style={[tableStyles.headerCellFixed, { width: 80 }]}>
+      <Text style={tableStyles.headerText}>UNIT</Text>
+    </View>
+
+    {/* Tickets */}
+    <View style={[tableStyles.headerCellFixed, { width: 120 }]}>
+      <Text style={tableStyles.headerText}># TICKETS</Text>
+    </View>
+  </>
+) : (
+  <>
+    {/* Original header for other tables */}
+    <View style={[tableStyles.headerCellFixed, { width: 200 }]}>
+      <Text style={tableStyles.headerText}>{isEquipment ? 'EQUIPMENT NAME' : title.toUpperCase()}</Text>
+    </View>
+   {/* Start Hours (equipment only) */}
 {type === 'equipment' && (
   <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
     <Text style={tableStyles.headerText}>START HOURS</Text>
@@ -1720,14 +1955,14 @@ const renderTotalQuantities = () => {
     <Text style={tableStyles.headerText}>STOP HOURS</Text>
   </View>
 )}
-
-{/* CLASS / TICKETS / LOADS Column */}
-{type === 'equipment' ? null : (
-  <View style={[tableStyles.headerCellFixed, { width: 140 }]}>
-    <Text style={tableStyles.headerText}>
-      {type === 'dumping_site' ? '# OF LOADS' : '# OF TICKETS'}
-    </Text>
-  </View>
+    {type !== 'equipment' && (
+      <View style={[tableStyles.headerCellFixed, { width: 140 }]}>
+        <Text style={tableStyles.headerText}>
+          {type === 'dumping_site' ? '# OF LOADS' : '# OF TICKETS'}
+        </Text>
+      </View>
+    )}
+  </>
 )}
 
             </View>
@@ -1785,27 +2020,129 @@ const renderTotalQuantities = () => {
                    <View style={[tableStyles.cellFixed, { width: 72, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
   <Text style={tableStyles.cellTextBold}>{ent.id}</Text>
 
-  {isEquipment && (
-    <TouchableOpacity
-      onPress={() => handleRemoveEquipment(ent.id)}
-      style={{
-        backgroundColor: '#ffe5e5', // light red
-        borderRadius: 10,
-        paddingHorizontal: 4,
-        paddingVertical: 2,
-      }}
-    >
-      <Text style={{ color: '#cc2e2e', fontSize: 14, fontWeight: 'bold' }}>×</Text>
-    </TouchableOpacity>
-  )}
+
+  {/* Remove icon for vendor & equipment */}
+{(isEquipment || type === "vendor") && (
+  <TouchableOpacity
+    onPress={() =>
+      type === "equipment"
+        ? handleRemoveEquipment(ent.id)
+        : handleRemoveVendor(ent.id)
+    }
+    style={{
+      backgroundColor: "#ffe5e5",
+      borderRadius: 10,
+      paddingHorizontal: 4,
+      paddingVertical: 2
+    }}
+  >
+    <Text style={{ color: "#cc2e2e", fontSize: 14, fontWeight: "bold" }}>×</Text>
+  </TouchableOpacity>
+)}
+
 </View>
 
 
-                    <View style={[tableStyles.cellFixed, { width: 200 }]}>
+                    {/* <View style={[tableStyles.cellFixed, { width: 200 }]}>
                       <Text style={tableStyles.cellText}>{name}</Text>
-                    </View>
+                    </View> */}
 {/* Start Hours cell */}
+{/* {type === 'equipment' && (
+  <View style={[tableStyles.cellFixed, { width: 100 }]}>
+    <InlineEditableNumber
+      value={startHours[ent.id] ?? ""}
+      onChange={(v) =>
+   setStartHours(prev => ({
+      ...prev,
+      [ent.id]: v
+    }))
+}
+ validateHours={true} 
+      placeholder="0.0"
+    />
+  </View>
+)} */}
+
+{/* Stop Hours cell */}
+{/* {type === 'equipment' && (
+  <View style={[tableStyles.cellFixed, { width: 100 }]}>
+    <InlineEditableNumber
+      value={stopHours[ent.id] ?? ""}
+      onChange={(v) =>
+  setStopHours(prev => ({
+    ...prev,
+    [ent.id]: v
+  }))
+}
+ validateHours={true} 
+      placeholder="0.0"
+    />
+  </View>
+)} */}
+
+                   {/* CLASS / TICKETS / LOADS cell */}
+{/* {type !== 'equipment' && (
+<View style={[tableStyles.cellFixed, { width: 140 }]}>
+    <InlineEditableNumber
+      value={ticketsLoads[String(ent.id)] ?? ""}
+      onChange={(v) => {
+        // sanitize: keep only digits
+        const clean = v.replace(/[^0-9]/g, "");
+        setTicketsLoads(prev => ({
+          ...prev,
+          [String(ent.id)]: clean
+        }));
+      }}
+      placeholder={type === 'dumping_site' ? "0 loads" : "0 tickets"}
+      style={tableStyles.hourInput}
+    />
+  </View>
+)} */}
+
+{type === "vendor" ? (
+  <>
+    {/* Vendor Name */}
+    <View style={[tableStyles.cellFixed, { width: 180 }]}>
+      <Text style={tableStyles.cellText}>{ent.vendor_name}</Text>
+    </View>
+
+    {/* Material */}
+    <View style={[tableStyles.cellFixed, { width: 180 }]}>
+      <Text style={tableStyles.cellText}>{ent.material_name}</Text>
+    </View>
+
+    {/* Unit */}
+    <View style={[tableStyles.cellFixed, { width: 80 }]}>
+      <Text style={tableStyles.cellText}>{ent.unit}</Text>
+    </View>
+{console.log('🎫 TABLE TICKETS:', { 
+   id: ent.id, 
+   ticketsLoads: ticketsLoads[ent.id],
+   workPerformedTickets: ent.tickets_loads
+})}
+    {/* Tickets */}
+    <View style={[tableStyles.cellFixed, { width: 120 }]}>
+       <InlineEditableNumber
+    value={ticketsLoads[ent.id] ?? ''}  // ✅ Direct ticketsLoads state
+    onChange={(v) => handleVendorTicketsChange(ent.id, v)}  // ✅ Correct handler
+    placeholder="0"
+    style={tableStyles.hourInput}
+    validateHours={false}
+  />
+    </View>
+    
+  </>
+  
+) : (
+  <>
+   <View style={[tableStyles.cellFixed, { width: 200 }]}>
+      <Text style={tableStyles.cellText}>{name}</Text>
+    </View>
+    {/* ORIGINAL LAYOUT FOR OTHER TYPES */}
+    {/* Start Hours cell */}
+    
 {type === 'equipment' && (
+  
   <View style={[tableStyles.cellFixed, { width: 100 }]}>
     <InlineEditableNumber
       value={startHours[ent.id] ?? ""}
@@ -1838,25 +2175,22 @@ const renderTotalQuantities = () => {
   </View>
 )}
 
-                   {/* CLASS / TICKETS / LOADS cell */}
-{type !== 'equipment' && (
-<View style={[tableStyles.cellFixed, { width: 140 }]}>
-    <InlineEditableNumber
-      value={ticketsLoads[String(ent.id)] ?? ""}
-      onChange={(v) => {
-        // sanitize: keep only digits
-        const clean = v.replace(/[^0-9]/g, "");
-        setTicketsLoads(prev => ({
-          ...prev,
-          [String(ent.id)]: clean
-        }));
-      }}
-      placeholder={type === 'dumping_site' ? "0 loads" : "0 tickets"}
-      style={tableStyles.hourInput}
-    />
-  </View>
-)}
+   
 
+    {type !== "equipment" && (
+      <View style={[tableStyles.cellFixed, { width: 140 }]}>
+        <InlineEditableNumber
+          value={ticketsLoads[String(ent.id)] ?? ""}
+          onChange={(v) => {
+            const clean = v.replace(/[^0-9]/g, "");
+            setTicketsLoads(prev => ({ ...prev, [String(ent.id)]: clean }));
+          }}
+          placeholder={type === "dumping_site" ? "0 loads" : "0 tickets"}
+        />
+      </View>
+    )}
+  </>
+)}
 
                   </View>
 
@@ -1915,16 +2249,19 @@ const renderTotalQuantities = () => {
 
                         // Non-equipment: single input per phase
                         const val = hoursState[ent.id]?.[p] ?? '';
+console.log(`📊 TABLE RENDER ent.id=${ent.id}, phase=${p}, vendorHours[ent.id]?.[p]=`, vendorHours[ent.id]?.[p]);
 
                         return (
+                          
                           <View key={`${ent.id}-${p}`} style={[tableStyles.cell, { width: 96 }]}>
                             <InlineEditableNumber
-                              value={val}
-                              onChange={(v) => updateSimpleHours(type, ent.id, p, v)}
-                               validateHours={true} 
-                              placeholder="0.0"
-                              style={tableStyles.hourInput}
-                            />
+        value={vendorHours[ent.id]?.[p] ?? ''}
+        onChange={v => handleVendorHourChange(ent.id, p, v)}
+        placeholder="0.0"
+        validateHours={true}
+        style={tableStyles.hourInput}
+      />
+      
                           </View>
                         );
                       })}
@@ -2114,7 +2451,90 @@ const renderTotalQuantities = () => {
       </ScrollView>
 
       <DatePicker modal open={isDatePickerVisible} date={timesheetDate} mode="date" onConfirm={(d) => { setDatePickerVisible(false); setTimesheetDate(d); }} onCancel={() => setDatePickerVisible(false)} />
+        {showEquipmentPicker && (
+  <View style={styles.bottomSheetOverlay}>
+    <Pressable style={{ flex: 1 }} onPress={() => setShowEquipmentPicker(false)} />
 
+   <View style={[styles.bottomSheetSmall, { flexGrow: 0.5 }]}>
+
+      <View style={styles.dragHandle} />
+
+      <TextInput
+        placeholder="Search equipment..."
+        value={equipmentSearch}
+        onChangeText={setEquipmentSearch}
+        style={styles.searchBox}
+        placeholderTextColor="#999"
+      />
+
+      <ScrollView
+        style={{ flex: 1, maxHeight: 400 }}
+        nestedScrollEnabled={true}
+        showsVerticalScrollIndicator={true}
+      >
+        {equipmentList
+          .filter(eq =>
+            eq.name.toLowerCase().includes(equipmentSearch.toLowerCase())
+          )
+          .map(eq => (
+            <Pressable
+              key={eq.id}
+              style={styles.employeeRowSmall}
+              onPress={() => handleSelectEquipment(eq)}
+            >
+              <View>
+                <Text style={styles.empNameSmall}>{eq.name}</Text>
+                <Text style={styles.empIdSmall}>ID: {eq.id}</Text>
+              </View>
+            </Pressable>
+          ))}
+      </ScrollView>
+
+      <Pressable style={styles.closeButton} onPress={() => setShowEquipmentPicker(false)}>
+        <Text style={styles.closeButtonText}>Cancel</Text>
+      </Pressable>
+    </View>
+  </View>
+)}
+{/* Vendor Picker Modal */}
+ {showVendorPicker && (
+        <View style={styles.bottomSheetOverlay}>
+          <Pressable style={{ flex: 1 }} onPress={() => setShowVendorPicker(false)} />
+           <View style={[styles.bottomSheetSmall, { flexGrow: 0.5 }]}>
+            <View style={styles.dragHandle} />
+            <TextInput
+              placeholder="Search vendor…"
+              value={vendorSearch}
+              onChangeText={setVendorSearch}
+              style={styles.searchBox}
+              placeholderTextColor="#999"
+            />
+            <ScrollView
+              style={{ flex: 1, maxHeight: 400 }}
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={true}
+            >
+              {vendorsList
+                .filter(v => `${v.name} ${v.id}`.toLowerCase().includes(vendorSearch.toLowerCase()))
+                .map(v => (
+                  <Pressable
+                    key={v.id}
+                    style={styles.employeeRowSmall}
+                    onPress={() => handleSelectVendor(v)}
+                  >
+                    <View>
+                      <Text style={styles.empNameSmall}>{v.name}</Text>
+                      <Text style={styles.empIdSmall}>ID: {v.id}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+            </ScrollView>
+            <Pressable style={styles.closeButton} onPress={() => setShowVendorPicker(false)}>
+              <Text style={styles.closeButtonText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
       <View style={styles.footer}>
         <TouchableOpacity style={[styles.saveBtn, { backgroundColor: isSubmitting ? '#999' : THEME.primary }]} onPress={handleSave} disabled={isSubmitting}>
           {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Draft</Text>}
@@ -2160,6 +2580,7 @@ bottomSheetOverlay: {
   bottom: 0,
   backgroundColor: "rgba(0,0,0,0.4)",
   justifyContent: "flex-end",
+  paddingBottom: 80,
   zIndex: 999,   // VERY IMPORTANT
   elevation: 999 // For Android
 },
@@ -2245,19 +2666,21 @@ empIdSmall: {
   marginTop: 1,
 },
 bottomSheetSmall: {
-  width: "70%",                 // << SMALL WIDTH
-  alignSelf: "center",          // center horizontally
+  width: "70%",
+  alignSelf: "center",
   backgroundColor: "white",
   borderRadius: 16,
   padding: 16,
   marginBottom: 40,
-  maxHeight: "70%",             // prevents too big
+  maxHeight: "80%",
   shadowColor: "#000",
   shadowOpacity: 0.15,
   shadowRadius: 10,
   elevation: 6,
-
+  flexDirection: 'column',  // ✅ ADDED
 },
+
+
 
 closeButton: {
   marginTop: 12,
