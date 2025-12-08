@@ -1,0 +1,307 @@
+/* Tickets.css */
+
+/* --- GENERAL CONTAINER --- */
+.tickets-container {
+    padding: 20px;
+    background-color: #f8f9fa;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+/* --- HEADER & ACTIONS --- */
+.tickets-header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center; /* Critical for vertical alignment */
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 15px;
+    min-height: 50px; /* Ensure header has enough height */
+}
+
+.tickets-header h2 {
+    margin: 0;
+    color: #343a40;
+    font-size: 1.5rem;
+    line-height: 1.2; /* Reset line height */
+}
+
+.header-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    align-items: center; /* Critical: Centers buttons vertically */
+}
+
+/* ✅ PIXEL-PERFECT BUTTON STYLES */
+.header-btn {
+    display: inline-flex; /* Use flexbox inside button for centering */
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 20px; 
+    height: 42px;    /* Strict Fixed height */
+    min-height: 42px; /* Force minimum */
+    max-height: 42px; /* Force maximum */
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent; /* Ensure all buttons have a border width */
+    box-sizing: border-box; /* Include border in the 42px height calculation */
+    white-space: nowrap; 
+    line-height: 1; /* Prevent text descenders from changing height */
+    margin: 0; /* Reset browser default margins */
+}
+
+/* Button Variants */
+.btn-outline {
+    background-color: white;
+    border-color: #ced4da;
+    color: #495057;
+}
+.btn-outline:hover {
+    background-color: #e2e6ea;
+    border-color: #adb5bd;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+/* --- SEARCH MODAL FOOTER --- */
+.modal-footer {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center; /* Vertically center items */
+    gap: 12px;
+    margin-top: 25px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    width: 100%;
+}
+
+/* --- LEVEL 1 & 2: GRID VIEW --- */
+.date-group-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+    padding-bottom: 20px;
+}
+
+.date-card {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 25px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.date-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    border-color: #007bff;
+}
+
+.date-card svg { margin-bottom: 12px; }
+.date-card h3 { margin: 0 0 8px 0; font-size: 1.1rem; color: #495057; font-weight: 600; }
+
+.ticket-count {
+    background-color: #e9ecef;
+    color: #495057;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* --- LEVEL 3: TICKET LIST --- */
+.ticket-list-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+    height: 42px; /* Match button height for alignment */
+}
+
+/* Back Button (Matches .header-btn style) */
+.back-btn {
+    background: white;
+    border: 1px solid #ced4da;
+    padding: 0 16px;
+    height: 42px; /* Same as header-btn */
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #495057;
+    transition: background 0.2s;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+.back-btn:hover { background-color: #e2e6ea; }
+
+.tickets-table-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    overflow: hidden;
+    border: 1px solid #dee2e6;
+}
+
+.tickets-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.tickets-table th {
+    background-color: #f8f9fa;
+    color: #495057;
+    font-weight: 700;
+    padding: 15px;
+    text-align: left;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.tickets-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #e9ecef;
+    color: #333;
+}
+
+.tickets-table tbody tr:hover {
+    background-color: #f1f3f5;
+    cursor: pointer;
+}
+
+/* --- LEVEL 4: FULL PAGE DETAIL --- */
+.ticket-detail-full-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.detail-content-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 25px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.panel-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+.panel-section:last-child { border-bottom: none; }
+
+.panel-section h4 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #495057;
+    font-size: 1.2rem;
+    border-left: 5px solid #007bff;
+    padding-left: 12px;
+}
+
+/* Detail Table (Key-Value) */
+.detail-table { width: 100%; border-collapse: collapse; font-size: 1rem; }
+.detail-table th { width: 30%; text-align: left; padding: 12px 15px; color: #6c757d; font-weight: 600; border-bottom: 1px solid #f0f0f0; background-color: #fcfcfc; }
+.detail-table td { padding: 12px 15px; color: #212529; font-weight: 500; text-align: right; border-bottom: 1px solid #f0f0f0; }
+
+.table-responsive {
+    overflow-x: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+/* --- SEARCH MODAL STYLES --- */
+.modal {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    overflow: hidden;
+    max-width: 90%;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+}
+.modal-header h3 { margin: 0; font-size: 1.2rem; color: #333; }
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.form-group { margin-bottom: 15px; }
+.form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #495057; font-size: 0.9rem; }
+.form-control { 
+    width: 100%; 
+    padding: 10px; 
+    border: 1px solid #ced4da; 
+    border-radius: 4px; 
+    font-size: 1rem; 
+    box-sizing: border-box; 
+}
+.form-control:focus { 
+    border-color: #80bdff; 
+    outline: 0; 
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); 
+}
