@@ -5,6 +5,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import MobileDashboard from "./components/MobileDashboard";
 import ApplicationAdminPage from "./components/ApplicationAdminPage";
 import TimesheetDetails from "./components/TimesheetDetails.jsx";
+import ResetPasswordPage from "./components/ResetPasswordPage";
 
 // This is the main App component that controls all routing.
 function App() {
@@ -58,6 +59,7 @@ function App() {
                         currentUser ? <Navigate to="/" /> : <LoginScreen onLogin={handleLogin} />
                     }
                 />
+    <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                 {/* --- Protected Routes: The rest of the app --- */}
                 <Route

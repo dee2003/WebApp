@@ -598,8 +598,10 @@ class AppData(BaseModel):
     # vendors: List[Vendor]
 
 class LoginRequest(BaseModel):
-    username: str
+    username: str | None = None
+    email: str | None = None
     password: str
+
 # class DailySubmissionBase(BaseModel):
 #     date: date
 #     foreman_id: int

@@ -26,17 +26,17 @@ body, #root {
     width: 100%;
     
     background-color: white;
-    /* Spacious padding */
     padding: 30px 40px 40px 40px; 
     border-radius: 6px; 
-    /* Subtle shadow for a lift-off-the-page look */
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); 
-    border: 1px solid #e1e8ed; /* Extra light border for refinement */
+    border: 1px solid #e1e8ed; 
     
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
+    /* FIX: Align children (forms) to the left edge of the card */
+    align-items: flex-start; 
+    /* FIX: Remove blanket text centering from the card container */
+    /* text-align: center; <-- REMOVE THIS LINE */
 }
 
 /* ---------------------------------- */
@@ -164,3 +164,19 @@ p[style] {
   height: 38px;
   font-size: 14px;
 }
+/* Replace this:
+.switch-mode {
+    cursor: pointer;
+} 
+*/
+
+.mode-switch-link {
+    cursor: pointer; 
+    text-decoration: underline; /* Makes it look like a hyperlink */
+    color: #007bff; /* Standard link color */
+    margin-top: 10px;
+    text-align: center;
+}
+/* ---------------------------------- */
+/* 2. Form Card Styling (Crisp White Card) */
+/* ---------------------------------- */

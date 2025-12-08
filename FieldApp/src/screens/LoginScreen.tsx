@@ -46,10 +46,10 @@ function isValidRole(role: string): role is ValidRole {
 }
 
 const LoginScreen: React.FC<Props> = ({ navigation }) => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isUsernameFocused, setIsUsernameFocused] = useState(false);
+  const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const { login } = useAuth();
@@ -57,16 +57,23 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const handleLogin = async () => {
     if (isLoading) return;
 
-    if (!username.trim() || !password) {
-      Alert.alert('Hold On', 'Please enter both username and password to log in.');
+    // Simple email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !password) {
+      Alert.alert('Hold On', 'Please enter both email and password to log in.');
+      return;
+    }
+
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return;
     }
 
     setIsLoading(true);
     try {
-      // Prepare form-urlencoded body
+      // Prepare form-urlencoded body - changed username to email
       const data = qs.stringify({
-        username,
+        email, // Changed from username to email
         password,
       });
 
@@ -79,25 +86,26 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
       });
-console.log("🔐 Login Response:", response.data);
-console.log("📌 User From Backend:", response.data.user);
-console.log("📌 User ID From Backend:", response.data.user?.id);
-console.log("📌 Role From Backend:", response.data.role);
-const backendRole = response.data.role.toLowerCase();
+      
+      console.log("🔐 Login Response:", response.data);
+      console.log("📌 User From Backend:", response.data.user);
+      console.log("📌 User ID From Backend:", response.data.user?.id);
+      console.log("📌 Role From Backend:", response.data.role);
+      
+      const backendRole = response.data.role.toLowerCase();
 
-if (
-  response.data?.access_token &&
-  isValidRole(backendRole)
-) {
-const userData: User = {
-  ...response.data.user,
-  role: backendRole as "foreman" | "supervisor" | "project_engineer",
-};
-login(userData, response.data.access_token);
-
-} else {
-  Alert.alert('Login Failed', 'Invalid role or response from server.');
-}
+      if (
+        response.data?.access_token &&
+        isValidRole(backendRole)
+      ) {
+        const userData: User = {
+          ...response.data.user,
+          role: backendRole as "foreman" | "supervisor" | "project_engineer",
+        };
+        login(userData, response.data.access_token);
+      } else {
+        Alert.alert('Login Failed', 'Invalid role or response from server.');
+      }
 
     } catch (error: any) {
       const errorMessage =
@@ -123,20 +131,20 @@ login(userData, response.data.access_token);
 
           <View style={styles.card}>
             <TextInput
-              style={[styles.input, isUsernameFocused && styles.inputFocused]}
-              placeholder="Username"
+              style={[styles.input, isEmailFocused && styles.inputFocused]}
+              placeholder="Email Address"
               placeholderTextColor={COLORS.bodyText}
-              value={username}
-              onChangeText={setUsername}
+              value={email}
+              onChangeText={setEmail}
               autoCapitalize="none"
               keyboardType="email-address"
               autoCorrect={false}
               returnKeyType="next"
               editable={!isLoading}
-              onFocus={() => setIsUsernameFocused(true)}
-              onBlur={() => setIsUsernameFocused(false)}
+              onFocus={() => setIsEmailFocused(true)}
+              onBlur={() => setIsEmailFocused(false)}
               importantForAutofill="yes"
-              textContentType="username"
+              textContentType="emailAddress"
             />
             <TextInput
               style={[styles.input, isPasswordFocused && styles.inputFocused]}
@@ -168,14 +176,12 @@ login(userData, response.data.access_token);
               )}
             </TouchableOpacity>
 
-<TouchableOpacity
-  onPress={() => navigation.navigate("ForgotPassword")}
-  style={styles.resetPasswordContainer} // Add this style
->
-   <Text style={styles.resetPasswordText}>Trouble logging in? Reset Password</Text>
-</TouchableOpacity>
-
-
+            <TouchableOpacity
+              onPress={() => navigation.navigate("ForgotPassword")}
+              style={styles.resetPasswordContainer}
+            >
+              <Text style={styles.resetPasswordText}>Trouble logging in? Reset Password</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -230,17 +236,15 @@ const styles = StyleSheet.create({
     }),
   },
   resetPasswordContainer: {
-  marginTop: 15,
-  alignItems: 'center', // Centers horizontally
-},
-
-resetPasswordText: {
-  color: COLORS.primary,
-  fontSize: 14,
-  fontWeight: '500',
-  textDecorationLine: 'underline',
-},
-
+    marginTop: 15,
+    alignItems: 'center',
+  },
+  resetPasswordText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
   input: {
     height: 55,
     backgroundColor: '#F5F5F5',

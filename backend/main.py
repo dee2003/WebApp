@@ -25,6 +25,12 @@ from . import oauth2  # <--- REPLACE IT WITH THIS
 from dotenv import load_dotenv
 import os
 from .routers import password_reset
+from routers import auth
+from routers import web_password_reset
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI, Request, status
+from backend.schemas import LoginRequest   
 
 # load_dotenv(".env")  
 # print("SMTP_USER:", os.getenv("SMTP_USER"))
@@ -39,7 +45,22 @@ models.Base.metadata.create_all(bind=database.engine)
 # -------------------------------
 app = FastAPI()
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    body = await request.body()
+    print("🔴 422 VALIDATION ERROR:")
+    print("BODY:", body.decode('utf-8') if body else "NO BODY")
+    print("ERRORS:", exc.errors())
+    print("HEADERS:", dict(request.headers))
+    print("============================")
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": exc.errors(),
+            "received_body": body.decode('utf-8') if body else None
+        }
+    )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -526,7 +547,13 @@ app.include_router(material_option_router.router)
 app.include_router(dumping_site_router.router)
 app.include_router(section_category_router.router)
 app.include_router(section_list_router.router)
-app.include_router(password_reset.router)
+# ✅ CORRECT ORDER - No conflicts
+app.include_router(auth.router)           # Login + OTP (if it has them)
+app.include_router(password_reset.router) # Token reset ← MOUNT LAST
+app.include_router(web_password_reset.router)
+
+
+
 # -------------------------------
 # Auth Router
 # -------------------------------
@@ -536,33 +563,41 @@ from .auditing import log_action
 
 auth_router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
+from fastapi import Form, Depends
+from typing import Optional
+
 @auth_router.post("/login", response_model=schemas.Token)
-def login(request: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
-    user = db.query(models.User).filter(models.User.username == request.username).first()
-
-    if not user or not utils_comman.verify_password(request.password, user.password):
+def login(
+    username: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    password: str = Form(...),
+    db: Session = Depends(database.get_db)
+):
+    # Must provide either username or email
+    if not username and not email:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password"
+            status_code=400,
+            detail="You must provide either username or email"
         )
-    
-    # --- START: ADD THIS BLOCK FOR AUDIT LOGGING ---
-    log_action(
-        db=db,
-        user_id=user.id,
-        action='LOGIN_SUCCESS',
-        target_resource='SYSTEM',
-        details=f"User '{user.username}' logged in successfully."
-    )
-    db.commit() # Commit the log entry to the database
-    # --- END: ADD THIS BLOCK ---
 
-    # Create the JWT token (this part is unchanged)
+    # Look up user by username OR email
+    query = models.User
+
+    if username:
+        user = db.query(query).filter(query.username == username).first()
+    else:
+        user = db.query(query).filter(query.email == email).first()
+
+    if not user or not utils_comman.verify_password(password, user.password):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid login credentials"
+        )
+
     access_token = token.create_access_token(
         data={"sub": user.username, "role": str(user.role.value)}
     )
-    
-    # Return the token and role (this part is unchanged)
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -570,9 +605,10 @@ def login(request: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(
         "user": {
             "id": user.id,
             "username": user.username,
-            "email": user.email           # optional
+            "email": user.email
         }
     }
+
 
 app.include_router(auth_router)
 

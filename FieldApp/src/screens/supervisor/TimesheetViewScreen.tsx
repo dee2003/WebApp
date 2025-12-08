@@ -1,3 +1,8 @@
+
+
+
+
+
 // import React, { useEffect, useState, useCallback } from 'react';
 // import {
 //     View,
@@ -149,7 +154,8 @@
 
 //     // Total list of phase codes for validation (original list from job)
 //     const allJobPhaseCodes = timesheet?.data.job.phase_codes?.map((p: any) => (p?.code ?? p)) || [];
-
+// const [overEmployees, setOverEmployees] = useState<string[]>([]);
+// const [showWarnings, setShowWarnings] = useState(false);
 
 //     // --- Helper function to clean numeric input and strip leading zeros (New) ---
 //     const cleanNumericInput = (value: string): string => {
@@ -172,6 +178,15 @@
 //         return numericText;
 //     };
 
+// // Round numeric input to nearest quarter hour (0.25 increments)
+// const validateQuarterHour = (input: string) => {
+//     if (!input) return "";
+//     let num = parseFloat(input);
+//     if (isNaN(num)) return "";
+
+//     const rounded = Math.round(num * 4) / 4;
+//     return rounded.toFixed(2);
+// };
 
 //     const fetchData = useCallback(async () => {
 //         setLoading(true);
@@ -326,6 +341,31 @@
 //         fetchData();
 //     }, [fetchData]);
 
+// useEffect(() => {
+//   const over: string[] = [];
+
+//   Object.keys(employeeHours).forEach(empKey => {
+//     const total = calculateTotalEmployeeHours(employeeHours, empKey);
+//     if (total > 9) {
+//       const emp = timesheet?.data?.employees?.find(
+//         e => String(e.id) === empKey
+//       );
+
+//       if (emp) {
+//         const first = (emp.first_name ?? '').trim();
+//         const last = (emp.last_name ?? '').trim();
+//         const name = `${first} ${last}`.trim();
+//         over.push(name || `EMP ${empKey}`);
+//       } else {
+//         over.push(`EMP ${empKey}`);
+//       }
+//     }
+//   });
+
+//   setOverEmployees(over);
+// }, [employeeHours, timesheet]);
+
+
 
 //     // --- DERIVE ALL ACTIVE PHASE CODES FOR DYNAMIC COLUMN RENDERING ---
 //     const getAllActivePhaseCodes = useCallback((): string[] => {
@@ -367,9 +407,7 @@
 //                 // Case 1: Original phase is still active and has data. Use it.
 //                 orderedPhases.push(originalPhase);
 //             } else {
-//                 // Case 2: Original phase is missing. It was either renamed or deleted.
-//                 // We assume it was renamed and try to replace it with the next unused 'new' phase.
-//                 // This assumes a 1:1 rename for a missing phase in the original list.
+                
 //                 if (newPhaseIndex < newPhases.length) {
 //                     orderedPhases.push(newPhases[newPhaseIndex]);
 //                     newPhaseIndex++; // Consume the 'new' phase
@@ -398,6 +436,7 @@
 //         newValue: string
 //     ) => {
 //         const cleanedValue = cleanNumericInput(newValue);
+        
 //         setState(prev => ({
 //             ...prev,
 //             [entityId]: {
@@ -406,25 +445,63 @@
 //             },
 //         }));
 //     };
+// const updateEmployeeState = (
+//   entityId: string,
+//   phase: string,
+//   classCode: string,
+//   newValue: string
+// ) => {
+//   const cleanedValue = cleanNumericInput(newValue);
 
-//     const updateEmployeeState = (
-//         entityId: string,
-//         phase: string,
-//         classCode: string,
-//         newValue: string
-//     ) => {
-//         const cleanedValue = cleanNumericInput(newValue);
-//         setEmployeeHours(prev => ({
-//             ...prev,
-//             [entityId]: {
-//                 ...prev[entityId],
-//                 [phase]: {
-//                     ...prev[entityId]?.[phase],
-//                     [classCode]: cleanedValue,
-//                 },
-//             },
-//         }));
+//   setEmployeeHours(prev => {
+//     // 1️⃣ Build updated state first
+//     const updated: EmployeeHourState = {
+//       ...prev,
+//       [entityId]: {
+//         ...(prev[entityId] || {}),
+//         [phase]: {
+//           ...((prev[entityId] || {})[phase] || {}),
+//           [classCode]: cleanedValue,
+//         },
+//       },
 //     };
+
+//     // 2️⃣ Calculate total hours for this employee across ALL phases
+//     let total = 0;
+//     const employeePhases = updated[entityId] || {};
+//     Object.values(employeePhases).forEach((classHours: Record<string, string>) => {
+//       Object.values(classHours).forEach((val: string) => {
+//         const num = parseFloat(val || '0');
+//         if (!isNaN(num)) total += num;
+//       });
+//     });
+// if (total > 24) {
+//   // Get employee name from timesheet
+//   const emp = timesheet?.data?.employees?.find(e => String(e.id) === entityId);
+//   const employeeName = emp
+//     ? `${(emp.first_name ?? '').trim()} ${(emp.last_name ?? '').trim()}`.trim() || `EMP ${entityId}`
+//     : `EMP ${entityId}`;
+
+//   Alert.alert(
+//     '⚠️ TOTAL HOURS EXCEEDED ⚠️', // Uppercase + emojis for urgency
+//     `🚫 Employee: ${employeeName}\n⏱ Total: ${total.toFixed(1)} hours\n\nCannot exceed 24 hours!`,
+//     [
+//       {
+//         text: 'Dismiss',
+//         onPress: () => console.log('Alert dismissed'),
+//         style: 'destructive', // red-style button
+//       },
+//     ],
+//     { cancelable: false }
+//   );
+//   return prev; // Revert - don't apply the change
+// }
+
+//     // 4️⃣ Valid - accept the change
+//     return updated;
+//   });
+// };
+
 
 //     const updateEquipmentState = (
 //         entityId: string,
@@ -519,6 +596,7 @@
 //             });
 //             return newState;
 //         });
+        
 
 //         // 2. Equipment Hours (Complex Hour Sub State)
 //         setEquipmentHours(prev => {
@@ -838,12 +916,17 @@
 //             const inputValue = isZeroOrNearZero ? '' : value; 
 
 //             return (
-//                 <TextInput
-//                     style={[styles.editableInput, { flex: 1 }]}
-//                     keyboardType={isNumeric ? "numeric" : "default"}
-//                     value={inputValue}
-//                     onChangeText={updateFunction}
-//                 />
+// <TextInput
+//     style={[styles.editableInput, { flex: 1 }]}
+//     keyboardType="numeric"
+//     value={inputValue}
+//     onChangeText={updateFunction}
+//     onBlur={() => {
+//         const rounded = validateQuarterHour(inputValue);
+//         updateFunction(rounded);
+//     }}
+// />
+
 //             );
 //         }
 //         return <Text style={{ flex: 1, textAlign: 'center' }}>{displayValue}</Text>;
@@ -872,6 +955,7 @@
 //     };
 
 
+
 //     // --- Table Renderer Component (Unchanged structure, relies on updated helpers) ---
 //     const renderTableBlock = (
 //         title: string,
@@ -890,7 +974,10 @@
 //         const isSimple = isMaterial || type === 'vendor' || type === 'dumping_site';
 
 //         // USE THE NEW DERIVED LIST OF PHASE CODES
-//         const phaseCodes = allActivePhaseCodes; 
+//         const phaseCodes = allActivePhaseCodes.filter(
+//   p => p !== 'start_hours' && p !== 'stop_hours'
+// );
+
 //         if (phaseCodes.length === 0) return null; 
 
 //         // --- Totals Calculation ---
@@ -1350,6 +1437,8 @@
 //     const formattedDumpingSites = data.dumping_sites || [];
 //     // --- END: FIX for TS2345 ---
 
+// const count = overEmployees.length;
+// const label = count === 1 ? "employee" : "employees";
 
 //     return (
 //         <SafeAreaView style={styles.safeArea}>
@@ -1407,6 +1496,58 @@
 //                         )}
 //                     </View>
 //                 </View>
+
+// {overEmployees.length > 0 && (
+//   <TouchableOpacity
+//     activeOpacity={0.9}
+//     onPress={() => setShowWarnings(!showWarnings)}
+//     style={{
+//       backgroundColor: "#FFF7EB",
+//       paddingVertical: 14,
+//       paddingHorizontal: 16,
+//       borderRadius: 10,
+//       marginVertical: 16,
+//       borderWidth: 1,
+//       borderColor: "#F7C77D",
+//       shadowColor: "#000",
+//       shadowOpacity: 0.05,
+//       shadowRadius: 4,
+//       shadowOffset: { width: 0, height: 2 },
+//     }}
+//   >
+//     {/* Header Row */}
+//     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+//       <Text style={{ fontSize: 17, fontWeight: "700", color: "#B45309" }}>
+//          ⚠ {count} {label} have more than 9 hours
+//       </Text>
+
+//       <Text style={{ fontSize: 16, color: "#B45309", fontWeight: "600" }}>
+//         {showWarnings ? "▴ Hide" : "▾ Expand"}
+//       </Text>
+//     </View>
+
+//     {/* Expanded List */}
+//     {showWarnings && (
+//       <View
+//         style={{
+//           marginTop: 12,
+//           paddingLeft: 6,
+//           borderTopWidth: 1,
+//           borderTopColor: "#F5D7A4",
+//           paddingTop: 10,
+//         }}
+//       >
+//         {overEmployees.map((name, idx) => (
+//           <View key={idx} style={{ flexDirection: "row", alignItems: "center", marginVertical: 4 }}>
+//             <Text style={{ color: "#B45309", fontSize: 15 }}>• {name}</Text>
+//           </View>
+//         ))}
+//       </View>
+//     )}
+//   </TouchableOpacity>
+// )}
+
+
 
 //                 {/* Data Tables - Using formatted variables */}
 //                 <View>
@@ -1964,8 +2105,6 @@
 // export default TimesheetReviewScreen;
 
 
-
-
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
@@ -2033,7 +2172,7 @@ interface ExtendedTimesheetData {
     materials_trucking?: any[];
     vendors?: any[];
     dumping_sites?: any[];
-    total_quantities_per_phase?: Record<string, string | number>;
+    total_quantities?: Record<string, string | number>;
     selected_material_items?: Record<string, any>;
     selected_vendor_materials?: Record<string, any>;
     selected_dumping_materials?: Record<string, any>;
@@ -2075,7 +2214,7 @@ const COL_START_STOP = 70;
 const getPhaseGroupWidth = (type: TableCategory): number => {
   if (type === "equipment") return COL_EQUIP * 2;
   if (type === "employee") return COL_EMPLOYEE_HOUR;
-  return COL_SIMPLE_HOUR + COL_TICKET;
+  return COL_SIMPLE_HOUR;
 };
 
 
@@ -2119,6 +2258,11 @@ const TimesheetReviewScreen = () => {
     const allJobPhaseCodes = timesheet?.data.job.phase_codes?.map((p: any) => (p?.code ?? p)) || [];
 const [overEmployees, setOverEmployees] = useState<string[]>([]);
 const [showWarnings, setShowWarnings] = useState(false);
+const [hoursState, setHoursState] = useState<SimpleHourState>({});
+const [ticketsState, setTicketsState] = useState<SimpleHourState>({});
+// NEW: holds simple one-value tickets per entity (no phase key)
+const [ticketsLoadsState, setTicketsLoadsState] =
+    useState<Record<string, string>>({});
 
     // --- Helper function to clean numeric input and strip leading zeros (New) ---
     const cleanNumericInput = (value: string): string => {
@@ -2269,10 +2413,10 @@ const validateQuarterHour = (input: string) => {
             setDumpingSiteHours(populateSimple(formattedDumpingSites, 'hours_per_phase', 'dumping_site'));
             setDumpingSiteTickets(populateSimple(formattedDumpingSites, 'tickets_per_phase', 'dumping_site'));
 
-            if (tsData.data.total_quantities_per_phase) {
+            if (tsData.data.total_quantities) {
                 const q: QuantityState = {};
-                for (const phase in tsData.data.total_quantities_per_phase) {
-                    q[phase] = tsData.data.total_quantities_per_phase[phase].toString();
+                for (const phase in tsData.data.total_quantities) {
+                    q[phase] = tsData.data.total_quantities[phase].toString();
                 }
                 setTotalQuantities(q);
             }
@@ -2657,7 +2801,7 @@ if (total > 24) {
                 dumping_sites: dumpingSitesPayload,
 
                 // Filter and convert total quantities to number/string as appropriate
-                total_quantities_per_phase: Object.entries(totalQuantities)
+                total_quantities: Object.entries(totalQuantities)
                     .reduce((acc, [phase, quantity]) => {
                         const q = parseFloat(quantity);
                         if (!isNaN(q) && q > 0) {
@@ -2763,7 +2907,7 @@ if (total > 24) {
             }
 
             const hData = hoursState[entityId];
-            const tData = ticketsState[entityId];
+            // const tData = ticketsState[entityId];
 
             if (hData) {
                 const hoursPerPhase: Record<string, number> = {};
@@ -2776,17 +2920,22 @@ if (total > 24) {
                  updatedEntity.hours_per_phase = {};
             }
 
-            if (tData) {
-                const ticketsPerPhase: Record<string, number> = {};
-                Object.entries(tData).forEach(([phase, value]) => {
-                    const num = parseFloat(value) || 0;
-                    if (num > 0) ticketsPerPhase[phase] = num;
-                });
-                updatedEntity.tickets_per_phase = ticketsPerPhase;
-            } else {
-                updatedEntity.tickets_per_phase = {};
-            }
-
+            // if (tData) {
+            //     const ticketsPerPhase: Record<string, number> = {};
+            //     Object.entries(tData).forEach(([phase, value]) => {
+            //         const num = parseFloat(value) || 0;
+            //         if (num > 0) ticketsPerPhase[phase] = num;
+            //     });
+            //     updatedEntity.tickets_per_phase = ticketsPerPhase;
+            // } else {
+            //     updatedEntity.tickets_per_phase = {};
+            // }
+            if (ticketsLoadsState[entityId] !== undefined) {
+      const num = parseFloat(ticketsLoadsState[entityId] || '0') || 0;
+      updatedEntity.tickets_loads = { [entity.id]: num };
+      // optionally clear tickets_per_phase if you do not want it at all:
+      delete updatedEntity.tickets_per_phase;
+    }
             return updatedEntity;
         });
     };
@@ -2917,6 +3066,14 @@ if (total > 24) {
         return <Text style={{ flex: 1, textAlign: 'center' }}>{displayValue}</Text>;
     };
 
+const getTicketsFromEntity = (entity: any) => {
+    if (!entity?.tickets_loads) return "0";
+
+    const keys = Object.keys(entity.tickets_loads);
+    if (keys.length === 0) return "0";
+
+    return entity.tickets_loads[keys[0]]?.toString() ?? "0";
+};
 
 
     // --- Table Renderer Component (Unchanged structure, relies on updated helpers) ---
@@ -2937,9 +3094,11 @@ if (total > 24) {
         const isSimple = isMaterial || type === 'vendor' || type === 'dumping_site';
 
         // USE THE NEW DERIVED LIST OF PHASE CODES
-        const phaseCodes = allActivePhaseCodes.filter(
-  p => p !== 'start_hours' && p !== 'stop_hours'
+       // USE THE NEW DERIVED LIST OF PHASE CODES
+const phaseCodes = allActivePhaseCodes.filter(
+  (p) => p !== 'start_hours' && p !== 'stop_hours' && p !== 'total'
 );
+
 
         if (phaseCodes.length === 0) return null; 
 
@@ -2971,16 +3130,25 @@ if (total > 24) {
         }
         // -------------------------------------------------------------------------
 
-        const phaseGroupWidth = getPhaseGroupWidth(type);
+       const phaseGroupWidth = getPhaseGroupWidth(type);
 
-        let fixedWidth = COL_NAME + COL_TOTAL;
-        if (isEmployee) {
-            fixedWidth += COL_ID + COL_CLASS;
-        } else if (isEquipment) {
-            fixedWidth += COL_ID + (COL_START_STOP * 2);
-        }
+let fixedWidth = COL_NAME + COL_TOTAL;
 
-        const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
+// EMPLOYEE: Name + EMP# + Class + Total
+if (isEmployee) {
+  fixedWidth += COL_ID + COL_CLASS;
+} 
+// EQUIPMENT: Name + EQUIP + Start + Stop + Total
+else if (isEquipment) {
+  fixedWidth += COL_ID + (COL_START_STOP * 2);
+} 
+// SIMPLE TABLES: Name + Tickets + Total
+else if (isSimple) {
+  fixedWidth += COL_TICKET;  // only tickets added here
+}
+
+// Final content width
+const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
 
         // Helper to determine the correct state setter for Simple types
         const getSimpleStateSetter = (targetType: 'hours' | 'tickets'): React.Dispatch<React.SetStateAction<SimpleHourState>> => {
@@ -3005,7 +3173,7 @@ if (total > 24) {
                 const entityId = entity.id;
                 const entityName = `${entity.first_name} ${entity.last_name}`.trim();
                 const grandTotal = calculateTotalEmployeeHours(hoursState as EmployeeHourState, entityId);
-
+                const showReason = grandTotal === 0 && entity.reason
                 const classCodesUsed: Set<string> = new Set();
 
                 // Collect all class codes that have data for any phase
@@ -3033,9 +3201,42 @@ if (total > 24) {
                     return (
                         <View key={`${entityId}-${classCode}`} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
                             {/* Fixed Columns */}
-                            <Text style={[styles.dataCell, styles.colName, styles.borderRight, isFirstClassRow ? null : styles.transparentCell]} numberOfLines={2}>
-                                {isFirstClassRow ? entityName : ''}
-                            </Text>
+<View
+  style={[
+    styles.dataCell,
+    styles.colName,
+    styles.borderRight,                     // always keep border to maintain grid
+  ]}
+>
+  {isFirstClassRow ? (
+    <>
+      <Text style={[styles.dataCell, { fontWeight: '500' }]} numberOfLines={2}>
+        {entityName}
+      </Text>
+
+      {showReason && (
+        <Text
+          style={{
+            fontSize: 12,
+            color: '#8a3434ff',
+            fontStyle: 'italic',
+            marginTop: 2,
+            paddingHorizontal: 2,
+            borderRadius: 4,
+          }}
+        >
+          Reason: {entity.reason}
+        </Text>
+      )}
+    </>
+  ) : (
+    <Text style={{ opacity: 0 }}>placeholder</Text>  
+    // invisible so height stays but name does NOT repeat
+  )}
+</View>
+
+
+
                             <Text style={[styles.dataCell, styles.colId, styles.borderRight, isFirstClassRow ? null : styles.transparentCell]}>
                                 {isFirstClassRow ? entityId : ''}
                             </Text>
@@ -3109,6 +3310,19 @@ if (total > 24) {
                                     Class Code
                                 </Text>
                             )}
+                    {/* SINGLE TICKETS COLUMN (before phases) */}
+{isSimple && (
+    <Text 
+        style={[
+            styles.headerCell,
+            styles.colTickets,
+            styles.borderRight,
+            styles.headerCellBottomBorder
+        ]}
+    >
+        {type === 'dumping_site' ? '# Loads' : '# Tickets'}
+    </Text>
+)}
 
                             {/* DYNAMIC PHASE COLUMNS - NOW EDITABLE */}
                             {phaseCodes.map((phase, phaseIndex) => {
@@ -3184,21 +3398,19 @@ if (total > 24) {
                                         ) : (
                                             <>
                                                 <Text 
-                                                    style={[
-                                                        styles.headerCell, 
-                                                        isEmployee ? { flex: 1 } : styles.colHoursSimple, 
-                                                        (isSimple && !isEmployee) ? styles.borderRight : styles.lastCell,
-                                                        styles.headerCellBottomBorder
-                                                    ]}
-                                                >
-                                                    {isEmployee ? 'Hours' : (type === 'material' ? 'Hours/Qty' : 'Quantity')}
-                                                </Text>
+                    style={[
+                        styles.headerCell,
+                        isEmployee ? { flex: 1 } : styles.colHoursSimple,
+                        styles.lastCell,  // ← Single cell spans full phase width
+                        styles.headerCellBottomBorder
+                    ]}
+                >
+                    {isEmployee ? 'Hours' : 
+                     type === 'material' ? 'Hours/Qty' : 
+                     type === 'dumping_site' ? 'Quantity' : 'Hours'}
+                </Text>
 
-                                                {(isSimple && !isEmployee) && (
-                                                    <Text style={[styles.headerCell, styles.colTickets, styles.lastCell, styles.headerCellBottomBorder]}>
-                                                        {type === 'dumping_site' ? '# Loads' : '# Tickets'}
-                                                    </Text>
-                                                )}
+                                               
                                             </>
                                         )}
                                     </View>
@@ -3230,6 +3442,15 @@ if (total > 24) {
                                 const totalHours = isEquipment 
                                     ? calculateTotalComplexHours(hoursState as ComplexHourState, entityId)
                                     : calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
+// const apiTickets = getTicketsFromEntity(entity);
+// const currentTickets =
+//     ticketsState?.[entityId]?.total?.toString() ?? apiTickets;
+const apiTickets = getTicketsFromEntity(entity);
+
+const currentTickets =
+    ticketsLoadsState?.[entityId] ??
+    apiTickets?.toString() ??
+    "0";
 
                                 return (
                                     <View key={entityId} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
@@ -3254,6 +3475,34 @@ if (total > 24) {
                                                 </Text>
                                             </>
                                         )}
+{/* SINGLE TICKETS COLUMN */}
+
+{/* {isSimple && (
+    <View style={[styles.dataCell, styles.colTickets, styles.borderRight]}>
+    {renderTicketCellContent(
+        currentTickets,
+        (text) => {
+            const setter = getSimpleStateSetter('tickets');
+            updateSimpleState(setter, entityId, 'total', text);
+        }
+    )}
+</View>
+)} */}
+
+{isSimple && (
+  <View style={[styles.dataCell, styles.colTickets, styles.borderRight]}>
+    {renderTicketCellContent(
+      currentTickets, // string
+      (text) => {
+        setTicketsLoadsState(prev => ({
+          ...prev,
+          [entityId]: text,   // store per-entity tickets, no phase key
+        }));
+      }
+    )}
+  </View>
+)}
+
 
                                         {/* Dynamic Phase Columns */}
                                         {phaseCodes.map((phase, phaseIndex) => {
@@ -3283,20 +3532,12 @@ if (total > 24) {
                                                         </>
                                                     ) : (
                                                         // Simple Logic (Material/Vendor/Dumping)
-                                                        <>
-                                                            <View style={[styles.dataCell, styles.colHoursSimple, styles.borderRight]}>
-                                                                {renderCellContent(
-                                                                    ((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toString(),
-                                                                    (text) => updateSimpleState(simpleHoursSetter, entityId, phase, text)
-                                                                )}
-                                                            </View>
-                                                            <View style={[styles.dataCell, styles.colTickets, styles.lastCell]}>
-                                                                {renderTicketCellContent(
-                                                                    (ticketsState ? (ticketsState[entityId]?.[phase] ?? '0') : '0'),
-                                                                    (text) => updateSimpleState(simpleTicketsSetter, entityId, phase, text)
-                                                                )}
-                                                            </View>
-                                                        </>
+                                                        <View style={[styles.dataCell, styles.colHoursSimple, styles.lastCell]}>
+                    {renderCellContent(
+                        ((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toString(),
+                        (text) => updateSimpleState(simpleHoursSetter, entityId, phase, text)
+                    )}
+                </View>
                                                     )}
                                                 </View>
                                             )
@@ -3328,11 +3569,19 @@ if (total > 24) {
                             {isEmployee && (
                                 <View style={[styles.dataCell, styles.colClassCode]} /> 
                             )}
-
+                              {isSimple && (
+                                <View style={[styles.dataCell, styles.colTickets]} />
+                            )}
                             {phaseCodes.map((phase, phaseIndex) => {
                                 const isLastPhase = phaseIndex === phaseCodes.length - 1;
-                                const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
-
+                                // const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
+                                 const isEmployeeSecondPhase = isEmployee && phaseIndex === 1; 
+                                const phaseBorder =
+        isEmployeeSecondPhase
+            ? styles.phaseGroupBorderRight      // border after 2nd phase
+            : isLastPhase
+                ? {}                             // no extra border on last
+                : styles.phaseGroupBorderRight;
                                 const dynamicPhaseStyle = isEquipment 
                                     ? styles.dynamicPhaseColEquipment 
                                     : isEmployee 
@@ -3355,7 +3604,7 @@ if (total > 24) {
                                                 <Text style={[styles.dataCell, styles.colHoursEquipment, styles.phaseTotalText, styles.borderRight]}>
                                                     {(equipmentPhaseTotals[phase]?.REG || 0).toFixed(1)}
                                                 </Text>
-                                                <Text style={[styles.dataCell, styles.colHoursEquipment, styles.phaseTotalText, styles.lastCell]}>
+                                                <Text style={[styles.dataCell, styles.colHoursEquipment, styles.phaseTotalText,styles.lastCell]}>
                                                     {(equipmentPhaseTotals[phase]?.['S.B'] || 0).toFixed(1)}
                                                 </Text>
                                             </View>
@@ -3364,16 +3613,14 @@ if (total > 24) {
                                                 <Text style={[styles.dataCell, styles.colHoursSimple, styles.phaseTotalText, styles.borderRight]}>
                                                     {(simplePhaseTotals[phase] || 0).toFixed(1)}
                                                 </Text>
-                                                <View style={[styles.dataCell, styles.colTickets]} />
+                                               
                                             </View>
                                         ) : null}
                                     </View>
                                 );
                             })}
 
-                            <Text style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft, styles.phaseTotalText]}>
-                                {grandTotal.toFixed(1)}
-                            </Text>
+                            
                         </View>
                         {/* -------------------- PHASE TOTALS ROW END -------------------- */}
 
@@ -3718,7 +3965,7 @@ const styles = StyleSheet.create({
   dynamicPhaseColSimple: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    width: COL_SIMPLE_HOUR + COL_TICKET, 
+    width: COL_SIMPLE_HOUR, 
   },
 
   dynamicPhaseColEquipment: {
@@ -3751,7 +3998,6 @@ const styles = StyleSheet.create({
     color: THEME.text,
     fontSize: 12,
     textAlign: 'center',
-    borderRightWidth: 1,
     borderRightColor: THEME.border,
     minHeight: 40,
     justifyContent: 'center',

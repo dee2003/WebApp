@@ -6,24 +6,27 @@ import {
   FaClipboardList,
   FaTrash,
   FaSearch, // Added
+    FaPaperPlane, // ⭐️ ADD THIS
   FaCamera, // Added
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import TimesheetForm from "./TimesheetForm.jsx";
+import TimesheetForm from "./TimesheetForm";
 import axios from "axios";
 import "./ApplicationAdmin.css";
 import { useLocation } from 'react-router-dom'; // Import useLocation
 
 const TIMESHEETS_PER_PAGE = 2;
+const API_URL = "http://127.0.0.1:8000/api";
 
-export default function ApplicationAdmin({ apiClient, onLogout }) {
+export default function ApplicationAdmin({ user, onLogout }) {  // ✅ Add props
+  // Remove the local handleLogout function entirely
   
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const location = useLocation();
         const navigate = useNavigate();
 
         console.log("LOGIN DEBUG: Full location object on mount is:", location);
-
+const timesheetToEdit = location.state?.timesheetData; // <-- ADD THIS LINE
 // This code is already correct and looks for 'activeSection' from the location state.
 const [activeSection, setActiveSection] = useState(
     location.state?.activeSection || 'createTimesheet'
@@ -70,9 +73,11 @@ const [activeSection, setActiveSection] = useState(
   const [mappings, setMappings] = useState({});
   const [loadingMappings, setLoadingMappings] = useState({});
 
-const handleLogout = () => {
-    onLogout(); // Use the logout function passed from the parent App
-};
+// const handleLogout = () => {
+//   localStorage.removeItem('token');        // Match your App.jsx
+//   localStorage.removeItem('user_role');
+//   setCurrentUser(null);  // This triggers PrivateRoute redirect ✅
+// };
 
   const sections = ["createTimesheet", "viewTimesheets"];
   const getIconForSection = (section) => {
@@ -94,7 +99,7 @@ const handleLogout = () => {
   const fetchTimesheets = async () => {
     setError("");
     try {
-const res = await apiClient.get(`/timesheets/`);
+      const res = await axios.get(`${API_URL}/timesheets/`);
       const sorted = res.data.sort(
         (a, b) => new Date(b.date) - new Date(a.date)
       );
@@ -124,8 +129,8 @@ const res = await apiClient.get(`/timesheets/`);
     if (!foremanId || mappings[foremanId] || loadingMappings[foremanId]) return;
     try {
       setLoadingMappings((prev) => ({ ...prev, [foremanId]: true }));
-      const res = await apiClient.get(
-    `/crew-mapping/by-foreman/${foremanId}`
+      const res = await axios.get(
+        `${API_URL}/crew-mapping/by-foreman/${foremanId}`
       );
       setMappings((prev) => ({ ...prev, [foremanId]: res.data }));
     } catch (err) {
@@ -147,10 +152,27 @@ const res = await apiClient.get(`/timesheets/`);
     setSelectedId(id);
     setShowConfirm(true); // show custom popup
   };
+const [showResendForm, setShowResendForm] = useState(false);
+const [resendTimesheetData, setResendTimesheetData] = useState(null);
+
+const handleResendClick = async (timesheet) => {
+  console.log('🚀 Resend clicked:', timesheet);
+  try {
+    await axios.post(`${API_URL}/timesheets/${timesheet.id}/resend`);
+    
+    // ✅ SET THE STATES that pass data to TimesheetForm
+    setResendTimesheetData(timesheet);
+    setShowResendForm(true);
+    setActiveSection("createTimesheet");
+  } catch (error) {
+    console.error('Resend error:', error);
+  }
+};
+
 
   const confirmDelete = async () => {
     try {
-      await apiClient.delete(`/timesheets/${selectedId}/`);
+      await axios.delete(`${API_URL}/timesheets/${selectedId}/`);
       // Update state efficiently without refetch
       const updatedTimesheets = timesheets.filter((t) => t.id !== selectedId);
       setTimesheets(updatedTimesheets);
@@ -258,12 +280,13 @@ const res = await apiClient.get(`/timesheets/`);
           {!sidebarCollapsed && (
             <>
               <div className="current-date">{currentDate}</div>
-              <button
-                onClick={handleLogout}
-                className="btn btn-outline btn-sm logout-btn"
-              >
-                Logout
-              </button>
+<button
+  onClick={onLogout}  // ✅ Use the prop from App.jsx
+  className="btn btn-outline btn-sm logout-btn"
+>
+  Logout
+</button>
+
             </>
           )}
         </div>
@@ -293,11 +316,30 @@ const res = await apiClient.get(`/timesheets/`);
         className="admin-content"
         style={{ marginLeft: sidebarCollapsed ? 60 : 250 }}
       >
-        {activeSection === "createTimesheet" && (
-          <div className="timesheet-page-content">
-            <TimesheetForm onClose={() => setActiveSection("projects")} />
-          </div>
-        )}
+{activeSection === "createTimesheet" && showResendForm && resendTimesheetData && (
+  <div className="timesheet-page-content">
+    <TimesheetForm 
+      onClose={() => {
+        setActiveSection("viewTimesheets");
+        setShowResendForm(false);
+        setResendTimesheetData(null);
+      }}
+      existingTimesheet={resendTimesheetData}
+      isResend={true}
+    />
+  </div>
+)}
+  {/* ⭐️ REGULAR CREATE MODE - Shows when not in resend */}
+  {activeSection === "createTimesheet" && !showResendForm && (
+    <div className="timesheet-page-content">
+      <TimesheetForm 
+        onClose={() => setActiveSection("viewTimesheets")}
+        existingTimesheet={timesheetToEdit || null}
+        isResend={false}
+      />
+    </div>
+  )}
+
         {activeSection === "viewTimesheets" && (
           <div className="timesheet-page-content">
             {/* <h2 className="view-title">
@@ -395,17 +437,27 @@ const res = await apiClient.get(`/timesheets/`);
                       <span className="col engineer-col">
                         {ts.data?.project_engineer || "N/A"}
                       </span>
-                      <span className="col actions-col">
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteClick(ts.id);
-                          }}
-                        >
-                          <FaTrash /> Delete
-                        </button>
-                      </span>
+<span className="col actions-col">
+  <button
+    className="btn btn-warning btn-sm resend-btn"
+    onClick={(e) => {
+      e.stopPropagation();
+      handleResendClick(ts);  // ✅ Pass full timesheet object (ts)
+    }}
+    title="Edit & Resend timesheet"
+  >
+    <FaPaperPlane /> Resend
+  </button>
+  <button
+    className="btn btn-danger btn-sm"
+    onClick={(e) => {
+      e.stopPropagation();
+      handleDeleteClick(ts.id);
+    }}
+  >
+    <FaTrash /> Delete
+  </button>
+</span>
                     </div>
                   ))}
                 </div>
