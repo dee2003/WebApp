@@ -349,11 +349,8 @@ def update_timesheet(
             create_df(data.get("materials_trucking", [])).to_excel(writer, index=False, sheet_name="Materials")
             create_df(data.get("vendors", [])).to_excel(writer, index=False, sheet_name="Vendors")
             create_dumping_site_df(data.get("dumping_sites", [])).to_excel(writer, index=False, sheet_name="DumpingSites")
-        # :white_check_mark: Replace ngrok link with your own base URL
-        # NGROK_BASE_URL = "https://coated-nonattributive-babara.ngrok-free.dev"
-        # file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
-        # BASE_URL = os.getenv("BASE_URL")
-        NGROK_BASE_URL = "https://1dd6e8a66da8.ngrok-free.app"
+        
+        NGROK_BASE_URL = "https://2310d72da1ae.ngrok-free.app"
         file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
         # :white_check_mark: Save file info in DB
         file_record = models.TimesheetFile(

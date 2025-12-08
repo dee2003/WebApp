@@ -282,7 +282,7 @@ useEffect(() => {
         setLocation(formData.location || "");
         setProjectEngineer(formData.project_engineer || "");
         setContract(formData.contract_no || ""); // Correct: contract_no
-        setWorkDescription(formData.work_description || ""); 
+        setWorkDescription(formData.workPerformed || ""); 
 
 
 
@@ -309,7 +309,7 @@ useEffect(() => {
         // c) Reverse Engineer Edited Details (Vendors/Trucking/Dumping)
         
         const reverseEngineeredEditedVendors = {};
-        const vendorMaterialsData = formData.selectedvendormaterials || {};
+        const vendorMaterialsData = formData.selected_vendor_materials || {};
         const materialItemsData = formData.selected_material_items || {}; // Trucking/Hauler
 
         // Reverse-engineer normal vendors (for materials and details)
@@ -526,9 +526,9 @@ const handleSubmit = async (e) => {
   //   selected_dumping_materials: getSelectedDumpingMaterials(),
   // };
 const selectionData = {
-  vendorcategories: selectedVendorCategories,
+  vendor_categories: selectedVendorCategories,
   selectedvendors: selectedVendors,
-  selectedvendormaterials: getSelectedVendorMaterials(),
+  selected_vendor_materials: getSelectedVendorMaterials(),
   materialcategories: selectedMaterialCategories,
   selectedmaterials: selectedMaterials,
   selected_material_items: getSelectedMaterialItems(), // ✅ WITH UNDERSCORE
@@ -555,7 +555,7 @@ const selectionData = {
         }
       : null,
     ...foremanData,
-    work_description: workDescription,
+    workPerformed: workDescription,
     ...selectionData,
   };
 
