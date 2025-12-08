@@ -203,37 +203,38 @@ const TimesheetDetails = () => {
 
   const data = ts.data || {};
 
-  // Destructure all the keys used in the form payload for robust access
-  const {
-    job = {},
-    supervisor = null, 
-    contract_no,
-    project_engineer,
-    time_of_day,
-    weather,
-    temperature,
-    location,
-    work_description,
+// In the destructuring section (around line 140), update these keys:
+const {
+  job = {},
+  supervisor = null, 
+  contract_no,
+  project_engineer,
+  time_of_day,
+  weather,
+  temperature,
+  location,
+  work_description,
 
-    // Crew Data
-    employees = [],
-    equipment = [],
+  // Crew Data
+  employees = [],
+  equipment = [],
 
-    // Logistics Data
-    vendors = [],
-    materials = [],
-    dumping_sites = [],
+  // Logistics Data
+  vendors = [],
+  materials = [],
+  dumping_sites = [],
 
-    // Category lists (raw strings/IDs)
-    vendor_categories = [],
-    material_categories = [],
-    dumping_categories = [],
+  // Category lists (raw strings/IDs)
+  vendor_categories = [],
+  material_categories = [],
+  dumping_categories = [],
 
-    // Nested Item IDs (raw objects from form)
-    selected_vendor_materials = {},
-    selected_material_items = {},
-    selected_dumping_materials = {},
-  } = data;
+  // FIXED: Use exact API key names from your data
+  selectedvendormaterials = {},  // <- CHANGED: no underscore
+  selected_material_items = {},
+  selecteddumpingmaterials = {}, // <- CHANGED: no underscore
+} = data;
+
 
   const jobCode = job.job_code || "N/A";
   const jobPhaseCodes = job.phase_codes?.join(", ") || "N/A";
@@ -388,109 +389,123 @@ const TimesheetDetails = () => {
               <tr>
                 <th>Work Description</th>
                 <th>Time of Day</th>
-                <th>Weather</th>
-                <th>Temperature</th>
+                {/* <th>Weather</th>
+                <th>Temperature</th> */}
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>{work_description || "N/A"}</td>
                 <td>{time_of_day || "N/A"}</td>
-                <td>{weather || "N/A"}</td>
-                <td>{temperature || "N/A"}</td>
+                {/* <td>{weather || "N/A"}</td>
+                <td>{temperature || "N/A"}</td> */}
               </tr>
             </tbody>
           </table>
         </div>
         <hr />
+{/* 4. 🚚 Logistics: Vendors by Category (Concrete, Asphalt, Top Soil) */}
+<div className="section">
+  <h3 className="section-title">Vendor Details by Category</h3>
+  <div>
+    {/* CATEGORY TABLES: one table per category */}
+    {["Concrete", "Asphalt", "Top Soil"].map((category, catIndex) => {
+      const categoryVendors = Object.values(selectedvendormaterials || {}).filter(vendor => {
+        const vendorCat = (vendor.vendor_category || "").toLowerCase().trim();
+        const targetCat = category.toLowerCase().trim();
+        return (
+          vendorCat === targetCat ||
+          vendorCat.includes(targetCat) ||
+          targetCat.includes(vendorCat)
+        );
+      });
 
-        {/* 4. 🚚 Logistics: Vendors, Materials & Dumping Sites */}
-        <div className="section">
-          {/* <h3 className="section-title">Logistics Details</h3> */}
-          <div> 
-            {renderLogisticsBox(
-              "Vendors",
-              vendors,
-              vendor_categories,
-              selected_vendor_materials,
-              "Vendor"
-            )}
-            {renderLogisticsBox(
-  "Materials/Trucking",
-  Object.values(selected_material_items),   // ✅ use objects that actually exist
-  material_categories,
-  selected_material_items,
-  "Material/Trucking"
-)}
+      if (categoryVendors.length === 0) return null;
 
-            {/* The last logistics box, rendered separately to control the final HR */}
-            <div className="structured-box mt-4"> 
-              <h3 className="section-title">Dumping Sites ({dumping_sites.length})</h3> 
-              <table className="details-table compact-table">
-                  <tbody>
-                      <tr>
-                          <th className="w-40">Categories</th>
-                          <td>
-                              {renderCategoryDisplay(dumping_categories, "Dumping Site")}
-                          </td>
-                      </tr>
-                      <tr>
-                          <th>Selected Dumping Sites</th>
-                          <td>
-                              <ul className="list-unstyled list-compact">
-                                  {renderComplexListItems(dumping_sites, "dumpingsite")}
-                              </ul>
-                          </td>
-                      </tr>
-                      <tr>
-                          <th className="border-bottom-0">Selected Materials</th>
-                          <td className="border-bottom-0">
-                              {/* Replicating renderNestedItemsList logic for the dumping site */}
-                              {dumping_sites.length === 0 ? (
-                                <p className="text-muted">N/A (No associated items)</p>
-                              ) : (
-                                <dl className="logistics-item-details-list">
-                                  {dumping_sites.map((entity, i) => {
-                                      const entityId = entity.id;
-                                      const entityName = entity.name || `ID: ${entityId}`;
-                                      const itemDetails = selected_dumping_materials[entityId];
-                                      const selectedMaterials = itemDetails?.selectedMaterials || [];
-                                      return (
-                                          <div key={i}>
-                                              <dt className="logistics-item-name">{entityName}</dt>
-                                              <dd className="logistics-item-materials">
-                                                  {selectedMaterials.length > 0 ? (
-                                                      <ul className="list-unstyled">
-                                                          {selectedMaterials.map((material, j) => {
-  // Try to find unit from the full materials list if missing
-  const fullMaterial =
-    itemDetails?.materials?.find(m => m.id === material.id);
-  const unit = material.unit || fullMaterial?.unit || "N/A Unit";
+      return (
+        <div key={catIndex} className="structured-box mt-4 mb-4">
+<h4 className="section-subtitle">
+  {category}
+</h4>
 
-  return (
-    <li key={j}>
-      {material.name} ({unit})
-    </li>
-  );
-})}
-
-                                                      </ul>
-                                                  ) : (
-                                                      <span className="text-muted">No associated items.</span>
-                                                  )}
-                                              </dd>
-                                          </div>
-                                      );
-                                  })}
-                                </dl>
-                              )}
-                          </td>
-                      </tr>
-                  </tbody>
-              </table>
-            </div>
-          </div>
+          
+          {/* SINGLE TABLE: Supplier | Material | Unit | Details */}
+          <table className="details-table compact-table">
+            <thead>
+              <tr>
+                <th>Supplier</th>
+                <th>Material</th>
+                <th>Unit</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categoryVendors.map((vendor, vIndex) => 
+                vendor.selectedMaterials?.map((material, mIndex) => (
+                  <tr key={`${vIndex}-${mIndex}`}>
+                    <td>{vendor.name}</td>
+                    <td>{material.material}</td>
+                    <td>{material.unit}</td>
+                    <td>{material.detail || "N/A"}</td>
+                  </tr>
+                ))
+              )}
+              {categoryVendors.every(v => !v.selectedMaterials?.length) && (
+                <tr>
+                  <td colSpan="4" className="text-muted text-center">No materials selected</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
+      );
+    })}
+
+{/* 🚚 Trucking Details (styled like vendor category tables) */}
+<div className="section">
+
+  <div className="structured-box mt-4 mb-4">
+    <h4 className="section-subtitle">
+      Trucking Items 
+    </h4>
+
+    {Object.keys(selected_material_items || {}).length === 0 ? (
+      <p className="text-muted">No trucking data available</p>
+    ) : (
+      <table className="details-table compact-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {Object.values(selected_material_items).map((item, i) => (
+            <tr key={i}>
+              <td>{item.name || `ID: ${item.id}`}</td>
+
+              {/* FIX: use item.notes for trucking */}
+              <td>
+                {item.notes ||
+                 item.detail ||
+                 item.details ||
+                 item.description ||
+                 "N/A"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+  </div>
+</div>
+
+  </div>
+</div>
+
+
+
         
       </div>
     </div>

@@ -377,7 +377,7 @@ class Timesheet(Base):
             "foreman_name": f"{self.foreman.first_name} {self.foreman.last_name}" if self.foreman else None,
             "job_phase_id": self.job_phase_id,
             "job_code": self.job_phase.job_code if self.job_phase else None,
-            "phase_name": self.job_phase.phase_name if self.job_phase else None
+            "phase_name": self.job_phase.job_description if self.job_phase else None
         }
 
 class TimesheetWorkflow(Base):

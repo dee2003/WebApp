@@ -11,14 +11,7 @@ import TimesheetCounts from './TimesheetCounts';
 import './Equipment.css';
 import AuditLogViewer from './AuditLogViewer'; // <-- ADD THIS LINE
 import { apiClient } from "../api";
-
-
-
-
-// ✅ Items per page constant
 export const ITEMSPERPAGE = 10;
-
-
 // Pagination controls component (reusable)
 const PaginationControls = ({ currentPage, totalPages, onPaginate }) => {
   if (totalPages <= 1) return null;
@@ -57,7 +50,6 @@ const PaginationControls = ({ currentPage, totalPages, onPaginate }) => {
     </nav>
   );
 };
-
 // --- Reusable Modal Component (Unchanged) ---
 const Modal = ({ title, children, onClose, size = "medium" }) => (
     <div className="modal">
@@ -70,7 +62,6 @@ const Modal = ({ title, children, onClose, size = "medium" }) => (
         </div>
     </div>
 );
-
 // --- Notification & Confirmation Modals (Unchanged) ---
 const NotificationModal = ({ message, onClose }) => (
     // MODIFIED: Added inline style for centering the modal on the screen
@@ -103,7 +94,6 @@ const ConfirmationModal = ({ message, onConfirm, onCancel }) => (
         </div>
     </div>
 );
-
 const getIconForSection = (sec) => {
     switch(sec) {
         case 'dashboard': return <FaTachometerAlt />; // <= ADD THIS CASE
@@ -118,9 +108,7 @@ const getIconForSection = (sec) => {
         default: return <FaTasks />;
     }
 };
-
 // --- Generic Form Component (Unchanged) ---
-
 const GenericForm = ({ fields,vendorOptions, fetchVendorOptions,materialOptions,fetchMaterialOptions,fetchDumpingSiteOptions,dumpingSiteOptions, onSubmit, defaultValues = {}, errorMessage,genericErrorMessage, categories = [] }) => {
     const [formData, setFormData] = useState(defaultValues);
     const [errors, setErrors] = useState({}); // Add this state for inline errors
@@ -134,7 +122,6 @@ const GenericForm = ({ fields,vendorOptions, fetchVendorOptions,materialOptions,
         });
         return initialValues;
     });
-
     const [vendorData, setVendorData] = useState({
   id: "",
   name: "",
@@ -143,20 +130,17 @@ const GenericForm = ({ fields,vendorOptions, fetchVendorOptions,materialOptions,
   status: "ACTIVE",
   materials: [{ material: "", unit: "" }],
 });
-
 const handleMaterialChange = (index, field, value) => {
   const newMaterials = [...vendorData.materials];
   newMaterials[index][field] = value;
   setVendorData({ ...vendorData, materials: newMaterials });
 };
-
 const addMaterialRow = () => {
   setVendorData({
     ...vendorData,
     materials: [...vendorData.materials, { material: "", unit: "" }],
   });
 };
-
     const validateField = (name, value) => {
         let error = "";
         const field = fields.find(f => f.name === name);
@@ -166,14 +150,12 @@ const addMaterialRow = () => {
         setErrors(prev => ({ ...prev, [name]: error }));
         return error;
     };
-
 const handleChange = (e) => {
   if (!e || !e.target) return; // prevent crash
   const { name, value } = e.target;
 let error = '';
   let processedValue = value; // This will be the cleaned value
       let newValues = { ...values, [name]: value };
-
    if (name === 'firstname' || name === 'lastname') {
     // If the input contains a number...
     if (/[0-9]/.test(value)) {
@@ -182,12 +164,8 @@ let error = '';
     // This line automatically removes any numbers the user types
     processedValue = value.replace(/[0-9]/g, '');
   }
-
-  // Update the input's value with the cleaned text
   setValues((prev) => ({ ...prev, [name]: processedValue }));
-  // Update the error state for this specific field
   setErrors((prev) => ({ ...prev, [name]: error }));
-  // When category number changes
 if (name === 'categorynumber') {
       const selectedCategory = categories.find(c => c.number === value);
       if (selectedCategory) {
@@ -201,17 +179,13 @@ if (name === 'categorynumber') {
       }
     }
         setValues(newValues);
-
   validateField(name, value);
 };
-
-// Add this inside the GenericForm component
 useEffect(() => {
   if (errorMessage) {
     setErrors(prev => ({ ...prev, ...errorMessage }));
   }
 }, [errorMessage]);
-
 const handleSubmit = e => {
   e.preventDefault();
   let newErrors = {};
@@ -220,7 +194,6 @@ const handleSubmit = e => {
     if (error) newErrors[f.name] = error;
   });
   setErrors(newErrors);
-
   if (Object.keys(newErrors).length === 0) {
     if (values.category_number && !values.category) {
       const selectedCategory = categories.find(c => c.number === values.category_number);
@@ -228,20 +201,17 @@ const handleSubmit = e => {
         values.category = selectedCategory.name;
       }
     }
-
     if (values.category_number) {
       const selectedCategory = categories.find(c => c.number === values.category_number);
       if (selectedCategory) {
         values.category_id = selectedCategory.id;
       }
     }
-
     console.log("Submitting form values:", values);
     values.materials = vendorData.materials;
     onSubmit(values);
   }
 };
-
 return (
   <form onSubmit={handleSubmit} className="generic-form">
     {/* Top error message */}
@@ -265,13 +235,10 @@ return (
           />
         );
       }
-
-      // Custom select with add
    if (field.type === "custom") {
   // Decide whether this is vendor, material, or dumping site dropdown
   const isMaterial = ["material_type", "material_category"].includes(field.customType);
   const isDumping = ["dumping_type", "dumping_category"].includes(field.customType);
-
   let optionsSource;
   let reloadFunction;
 
@@ -285,8 +252,6 @@ return (
     optionsSource = vendorOptions;
     reloadFunction = fetchVendorOptions;
   }
-
-  // Determine which key in optionsSource to use
   const optionsKey = isMaterial
     ? field.customType === "material_type" ? "type" : "category"
     : isDumping
@@ -309,10 +274,7 @@ return (
       reloadOptions={reloadFunction}
     />
   );
-}
-
-      // Regular input or select with optional Add New
-      return (
+}      return (
         <div className="form-group" key={field.name}>
           <label className="form-label">
             {field.label}
@@ -349,7 +311,6 @@ return (
                 />
               )}
             </div>
-
             {/* Add New button if defined */}
             {field.onAddNew && (
               <button
@@ -371,7 +332,6 @@ return (
         </div>
       );
     })}
-
     <div className="modal-actions">
       <button type="submit" className="btn btn-primary">
         Save
@@ -397,9 +357,6 @@ const JobPhasesTable = ({ phases, onEdit, onDelete }) => (
         </tbody>
     </table>
 );
-
-// In AdminDashboard.js
-
 const JobWithPhasesModal = ({ mode, job, onSave, onClose, showNotification }) => {
     const [jobCode, setJobCode] = useState(job?.job_code || "");
     const [contractNo, setContractNo] = useState(job?.contract_no || "");
@@ -407,16 +364,9 @@ const JobWithPhasesModal = ({ mode, job, onSave, onClose, showNotification }) =>
 const [projectEngineer, setProjectEngineer] = useState(
   job?.project_engineer_id || job?.project_engineer || ""
 );
-
 const [jurisdiction, setJurisdiction] = useState("");
-
-
 const [projectEngineerId, setProjectEngineerId] = useState('');
-
-
-    // ✅ FIX: Ensure status is always handled in lowercase for the backend
     const [status, setStatus] = useState(job?.status?.toLowerCase() || "active"); 
-    
     const [phaseCode, setPhaseCode] = useState("");
     const [phases, setPhases] = useState(job?.phases || []);
     const [editIdx, setEditIdx] = useState(null);
@@ -469,8 +419,6 @@ useEffect(() => {
     }
   }
 }, [job, locations]);
-
-
 useEffect(() => {
   if (!job || locations.length === 0) return;
 
@@ -490,13 +438,10 @@ useEffect(() => {
   if (matchedId) {
     setJurisdiction(String(matchedId));
   }
-
   console.log("🔍 Job:", job);
   console.log("📍 Locations:", locations);
   console.log("✅ Matched Jurisdiction ID:", matchedId);
 }, [job, locations]);
-
-    // ... (Your handleAddPhase, handleEditPhase, handleDeletePhase functions remain the same)
     const handleAddPhase = () => {
       if (!phaseCode.trim()) return showNotification("Please enter a phase code.");
       if (phases.some((p, idx) => p.phase_code === phaseCode.trim() && idx !== editIdx))
@@ -509,24 +454,16 @@ useEffect(() => {
       }
       setPhaseCode("");
     };
-
     const handleEditPhase = (idx) => {
       setPhaseCode(phases[idx].phase_code);
       setEditIdx(idx);
     };
-
     const handleDeletePhase = (idx) => {
       setPhases(phases.filter((_, i) => i !== idx));
     };
-
-
     const handleSubmit = () => {
         if (!jobCode.trim()) return showNotification("Job code is a required field.");
-
-        // 1. Get a clean list of all phase code strings
         const finalPhaseStrings = [...new Set([...phases.map(p => p.phase_code), ...fixedPhases])];
-
-        // ✅ FIX: Construct the payload with the EXACT field names the backend expects
 const payload = {
   job_code: jobCode.trim(),
   contract_no: contractNo.trim(),
@@ -536,9 +473,7 @@ const payload = {
   project_engineer: projectEngineer, // keep name if your backend uses both
   status: status.toLowerCase(),
   phase_codes: finalPhaseStrings
-};
-
-        
+};        
         onSave(payload);
     };
 
@@ -547,8 +482,6 @@ const payload = {
             <div className="form-grid">
                 <div className="form-group"><label>Job Code</label><input type="text" value={jobCode} onChange={(e) => setJobCode(e.target.value)} disabled={mode === "edit"} className="form-control" required /></div>
                 <div className="form-group"><label>Contract No.</label><input type="text" value={contractNo} onChange={(e) => setContractNo(e.target.value)} className="form-control" /></div>
-                {/* <div className="form-group"><label>Project Engineer</label><input type="text" value={projectEngineer} onChange={(e) => setProjectEngineer(e.target.value)} className="form-control" /></div> */}
-                {/* <div className="form-group"><label>Jurisdiction</label><input type="text" value={jurisdiction} onChange={(e) => setJurisdiction(e.target.value)} className="form-control" /></div> */}
 <div className="form-group">
   <label>Location</label>
 <select
@@ -564,8 +497,6 @@ const payload = {
     ))}
   </select>
 </div>
-
-
 <div className="form-group">
   <label>Project Engineer</label>
  <select
@@ -594,7 +525,6 @@ const payload = {
 </select>
 </div>
 
-                
                 <div className="form-group full-width"><label>Job Description</label><textarea value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} className="form-control" rows="3"></textarea></div>
                 
                 {/* ✅ FIX: The select now correctly uses lowercase values */}
@@ -620,10 +550,6 @@ const payload = {
     );
 };
 
-
-// In AdminDashboard.js
-// In AdminDashboard.js
-
 const JobPhasesViewModal = ({ job, onClose }) => (
     <Modal title={`Phases for ${job.job_code}`} onClose={onClose}>
         <table className="data-table">
@@ -647,8 +573,6 @@ const JobPhasesViewModal = ({ job, onClose }) => (
         </table>
     </Modal>
 );
-
-
 // Mapping from section key to page number
 const SECTIONS = [
     "users","employees","equipment","job-phases",
@@ -661,10 +585,7 @@ const capitalizeFirstLetter = (str) => {
   if (!str) return "";
   return str.charAt(0).toUpperCase() + str.slice(1);
 };
-// --- imports ---
 
-
-// ✅ Define this before AdminDashboard
 const SelectWithAdd = ({ label, options, type, onChange, value, reloadOptions }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [newOption, setNewOption] = useState("");
@@ -684,9 +605,6 @@ const queryParam =
     await apiClient.post(
   `/${endpoint}?${queryParam}=${type}&value=${encodeURIComponent(newOption)}`
 );
-
-
-      // await apiClient.post(`/vendor-options/${type}?value=${encodeURIComponent(newOption)}`);
       alert(`${newOption} added to ${type}`);
       setNewOption("");
       setShowAdd(false);
@@ -714,7 +632,6 @@ const queryParam =
           +
         </button>
       </div>
-
       {showAdd && (
         <div style={{ marginTop: "5px", display: "flex", gap: "5px" }}>
           <input
@@ -862,8 +779,6 @@ const MultiSelectWithAdd = ({ label, options, onChange, value = [], reloadOption
     </button>
   </div>
 )}
-
-
     </div>
   );
 };
@@ -887,10 +802,8 @@ const [activeSection, setActiveSection] = useState('dashboard');
     const [confirmation, setConfirmation] = useState({ shown: false, message: "", onConfirm: () => {} });
     const [formError, setFormError] = useState("");
     const [fieldErrors, setFieldErrors] = useState({});
-
     const [isLoading, setIsLoading] = useState(true);
     const [fetchError, setFetchError] = useState(null);
-
     const [departments, setDepartments] = useState([]);
 const [categories, setCategories] = useState([]);
 const [categoryNumbers, setCategoryNumbers] = useState([]);
@@ -900,10 +813,7 @@ const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
 // In AdminDashboard.js
 // ... existing states
 const [subModal, setSubModal] = useState({ shown: false, type: null, title: '' }); // <-- ADD THIS
-// ...
-const [form, setForm] = useState({});
 
-// 🔹 Dumping Site States
 const [dumpingSiteOptions, setDumpingSiteOptions] = useState({
   type: [],
   category: [],
@@ -930,15 +840,10 @@ const fetchDumpingSiteOptions = async () => {
     console.error("Error fetching Dumping Site Options:", err);
   }
 };
-
 console.log("Dumping Sites Data:", data.dumping_sites);
-
-
 useEffect(() => {
   fetchDumpingSiteOptions();
 }, []);
-
-
 const [materialOptions, setMaterialOptions] = useState({
   type: [],
   category: []
@@ -1054,9 +959,6 @@ useEffect(() => {
     .catch(err => console.error("Error fetching categories:", err));
 }, []);
 
-
-
-
 const openSubModal = (type, title) => {
   setSubModal({ shown: true, type, title });
 };
@@ -1116,9 +1018,7 @@ const handleAddSubItem = async (type, formData) => {
     const [isResizing, setIsResizing] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [currentDate, setCurrentDate] = useState("");
-    
-
-
+  
     useEffect(() => {
         const fetchData = async () => {
     setIsLoading(true);
@@ -1127,7 +1027,6 @@ const handleAddSubItem = async (type, formData) => {
     // in case some of the API calls fail.
     const newData = { ...data };
     let errorOccurred = false;
-
     for (const endpoint of API_ENDPOINTS) {
         try {
             const response = await apiClient.get(`/${endpoint}`);
@@ -1188,12 +1087,8 @@ const typeToStateKey = {
   
 
 };
-    // const typeToStateKey = { user: "users", employee: "employees", equipment: "equipment", job_phase: "job-phases", materials_trucking: "materials_trucking", vendor: "vendors", dumping_sites: "dumping_sites" };
 
     const onUpdate = (key, newList) => setData(prev => ({ ...prev, [key]: newList }));
-
-// In AdminDashboard.js
-
 const handleSaveJob = async (jobData) => {
     // `jobData` is the payload coming directly from the modal. It's already correct.
     const isEditMode = jobModal.mode === 'edit';
@@ -1241,8 +1136,7 @@ const handleAddOrUpdateItem = async (type, itemData, mode, existingItem = null) 
   let payload;
 
   try {
-    // ----------------------------
-    // 1. TYPE-SPECIFIC PAYLOAD PREPARATION
+    
 if (type === "vendor") {
   const baseUrl = `/vendors/`;
   let response;
@@ -1258,11 +1152,8 @@ if (type === "vendor") {
       }));
       alert("Vendor added successfully");
     } else {
-      // :white_check_mark: EDIT FIX: Use the specific /vendors/details/{id}/ path and PATCH method
       const detailsUrl = `/vendors/details/${existingItem.id}/`;
-      // Use PATCH to hit the update_vendor_details function
       response = await apiClient.patch(detailsUrl, formData);
-      // Replace the existing vendor with the updated one
       setData(prev => ({
         ...prev,
         vendors: (prev.vendors || []).map(v =>
@@ -1281,9 +1172,6 @@ if (type === "vendor") {
   }
   return;
 }
-
-
-
 
     if (type === "materials_trucking") {
   const baseUrl = "/materials-trucking/";
@@ -1315,8 +1203,6 @@ if (type === "vendor") {
 
 } catch (err) {
   console.error("Error while saving Material/Trucking:", err.response?.data || err);
-
-  // 🔹 Handle duplicate ID error or any backend 400 message
   if (err.response && err.response.status === 400 && err.response.data?.detail) {
     alert(`❌ ${err.response.data.detail}`);
   } else {
@@ -1327,16 +1213,6 @@ if (type === "vendor") {
 }
 if (type === "dumping_sites") {
   try {
-    // Map form fields to backend expected keys
-    // const payload = {
-    //   ...formData,
-    //   dumping_type: formData.dumping_type || formData.type,        // map type -> dumping_type
-    //   dumping_category: formData.dumping_category || formData.category, // map category -> dumping_category
-    //   material_ids: (vendorData.materials || [])
-    // .map(m => m.id)      // must be valid numbers
-    // .filter(id => id !== undefined),       // map selected materials
-    // };
-
     let response;
     if (mode === "add") {
       response = await apiClient.post("/dumping_sites/", formData);
@@ -1353,7 +1229,6 @@ if (type === "dumping_sites") {
         (data[type] || []).map(d => d.id === existingItem.id ? response.data : d)
       );
     }
-
     if (typeof fetchDumpingSiteOptions === "function") await fetchDumpingSiteOptions();
     closeMainModal();
 
@@ -1411,10 +1286,6 @@ if (type === "dumping_sites") {
     if (payload.status) payload.status = payload.status.toLowerCase();
 
     closeMainModal();
-
-    // ----------------------------
-    // 2. CLIENT-SIDE DUPLICATE CHECKS
-    // ----------------------------
     if (mode === 'add') {
       const newErrors = {};
       if (type === 'equipment' && data.equipment?.some(e => e.id === payload.id)) {
@@ -1431,9 +1302,6 @@ if (type === "dumping_sites") {
       }
     }
 
-    // ----------------------------
-    // 3. SEND DATA TO BACKEND
-    // ----------------------------
     let response;
     if (mode === "edit" && existingItem) {
       const itemId = existingItem.id;
@@ -1447,9 +1315,7 @@ if (type === "dumping_sites") {
     closeMainModal();
 
   } catch (error) {
-    // ----------------------------
-    // 4. ERROR HANDLING
-    // ----------------------------
+
     const errorData = error.response?.data?.detail;
     if (error.response?.status === 422 && errorData) {
       const newErrors = {};
@@ -1473,10 +1339,6 @@ if (type === "dumping_sites") {
   }
 };
 
-
-
-// In AdminDashboard.js
-
 const handleToggleStatus = async (type, item, newStatus) => {
   const stateKey = typeToStateKey[type];
   if (!stateKey) {
@@ -1486,8 +1348,6 @@ const handleToggleStatus = async (type, item, newStatus) => {
 
   const payload = { status: newStatus.toLowerCase() };
   const oldStatus = item.status;
-
-  // Optimistic update: immediately reflect change in UI
   setData(prev => {
     const currentList = prev[stateKey] || [];
     const updatedList = currentList.map(it =>
@@ -1497,19 +1357,15 @@ const handleToggleStatus = async (type, item, newStatus) => {
   });
 
   try {
-    // Determine correct endpoint
     let resourcePath = type.toLowerCase().includes('job') ? 'job-phases/by-id' : stateKey;
 
-    // 👇 FIX: Change 'materials_trucking' (from stateKey) to 'materials-trucking' (for API path)
     if (resourcePath === 'materials_trucking') {
         resourcePath = 'materials-trucking';
     }
-    // 👆 END OF FIX 👆
 
     const endpoint = `/${resourcePath}/${encodeURIComponent(item.id)}/`;
     const method = type === "vendor" ? apiClient.patch : apiClient.put; // ✅ PATCH for vendor
 
-    // Send PUT request to backend
     const response = await method(endpoint, payload);
 
     // Ensure frontend state matches backend response

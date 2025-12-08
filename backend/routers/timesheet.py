@@ -11,6 +11,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 from sqlalchemy.orm.attributes import flag_modified
 import os
+from ..models import Timesheet  # <-- import your model
+
 load_dotenv()
 load_dotenv(r"C:\TimesheetWebApp\timesheet-app-dev\backend\.env")  # Use raw string for Windows
 sender_email = os.getenv("SMTP_USER")
@@ -177,9 +179,6 @@ def get_timesheet_workflows(timesheet_id: int, db: Session = Depends(get_db)):
     )
 
 @router.get("/{timesheet_id}")
-
-
-
 def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
     """
     Returns a single timesheet, prioritizing saved JSON data and only enriching
@@ -623,3 +622,52 @@ def send_notification(request: NotificationRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email failed: {str(e)}")
+    
+
+
+
+@router.post("/{timesheet_id}/resend/", response_model=dict)
+def resend_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
+    """
+    Resend a timesheet (e.g., re-process, notify stakeholders, etc.)
+    """
+    try:
+        # Fetch the timesheet from the database
+        timesheet = db.query(Timesheet).filter(Timesheet.id == timesheet_id).first()
+        if not timesheet:
+            raise HTTPException(status_code=404, detail="Timesheet not found")
+
+        # Convert to dict safely using as_dict
+        data = timesheet.as_dict()
+
+        # Extract safe fields
+        foreman_name = data.get("foreman_name") or "Unknown Foreman"
+        job_code = data.get("job_code") or "N/A"
+        phase_name = data.get("phase_name") or "N/A"
+
+        # Log the resend action
+        print(f"🔄 RESENDING TIMESHEET ID {timesheet_id} - Foreman: {foreman_name}, Job: {job_code}, Phase: {phase_name}")
+
+        # TODO: Add your actual resend logic here (email, notifications, OCR re-processing, etc.)
+        # Example:
+        # send_email(timesheet)
+        # process_ocr_again(timesheet)
+        # notify_foreman(timesheet)
+
+        # Optionally update a "last_resent_at" timestamp
+        # timesheet.last_resent_at = datetime.utcnow()
+        # db.commit()
+
+        return {
+            "message": "Timesheet resent successfully",
+            "timesheet_id": timesheet_id,
+            "foreman": foreman_name,
+            "job_code": job_code,
+            "phase_name": phase_name
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Resend error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to resend timesheet")
