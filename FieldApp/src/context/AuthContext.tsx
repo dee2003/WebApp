@@ -1,19 +1,19 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useState, useContext, ReactNode, useEffect, useRef } from 'react';
 import { Alert } from 'react-native'; 
-import { User } from '../types';
 import axios from 'axios'; 
-import AsyncStorage from '@react-native-async-storage/async-storage'; // ✅ Make sure this is installed
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
+import { User } from '../types';
 
-// ✅ YOUR URL (Keep this consistent with api.js)
-const API_BASE_URL = "https://61e78ab11008.ngrok-free.app";
+// ✅ YOUR URL
+const API_BASE_URL = "https://03cdd0f94238.ngrok-free.app";
 
 interface AuthContextType {
   user: User | null;
-  token: string | null; // ✅ Added token to context
-  isLoading: boolean;   // ✅ Added loading state
-  login: (userData: User, token: string) => Promise<void>; // ✅ Updated signature
-  logout: () => Promise<void>; // ✅ Updated signature to Promise
+  token: string | null;
+  isLoading: boolean;
+  login: (userData: User, token: string) => Promise<void>;
+  logout: () => Promise<void>;
   ticketRefreshTrigger: number; 
 }
 
@@ -22,7 +22,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true); // Start true to check storage
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [ticketRefreshTrigger, setTicketRefreshTrigger] = useState(0); 
   
   const ws = useRef<WebSocket | null>(null);
@@ -38,7 +38,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (storedUser && storedToken) {
           setUser(JSON.parse(storedUser));
           setToken(storedToken);
-          // Optional: Configure axios default header here if not using interceptor
         }
       } catch (e) {
         console.error("Failed to load user data", e);
@@ -49,8 +48,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loadStorageData();
   }, []);
 
-  // --- 2. Login Function (Updated) ---
+  // --- 2. Login Function ---
   const login = async (userData: User, newToken: string) => {
+    // Explicitly clear any previous state first
+    cleanUpSocket();
+    
     setIsLoading(true);
     try {
         setUser(userData);
@@ -64,7 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
   
-  // --- 3. Logout Function (Updated) ---
+  // --- 3. Logout Function ---
   const logout = async () => {
     setIsLoading(true);
     try {
@@ -81,6 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const cleanUpSocket = () => {
+    console.log("🧹 Cleaning up WebSocket...");
     if (pingInterval.current) {
       clearInterval(pingInterval.current);
       pingInterval.current = null;
@@ -91,26 +94,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // --- 4. WebSocket Logic (Kept mostly same, added safety) ---
+  // --- 4. WebSocket Logic (FIXED FOR MULTI-USER SWITCHING) ---
   useEffect(() => {
+    // A. Guard: If no user, ensure socket is dead and stop.
     if (!user) {
       cleanUpSocket();
       return;
     }
 
+    // B. Connection Logic
     const connectWebSocket = () => {
-      if (ws.current) return;
+      // Force close existing socket if ID mismatch or simple cleanup
+      if (ws.current) {
+         console.log("⚠️ Closing existing socket before opening new one for user:", user.id);
+         ws.current.close();
+         ws.current = null;
+      }
 
       console.log(`🔌 Initializing Global WebSocket for user ${user.id}...`);
-      // Convert http/https to ws/wss
       const wsUrl = `${API_BASE_URL.replace('https', 'wss').replace('http', 'ws')}/api/ocr/ws/${user.id}`;
       
       const socket = new WebSocket(wsUrl);
       ws.current = socket;
 
       socket.onopen = () => {
-        console.log("✅ Global WebSocket Connected");
-        // Keep-alive mechanism
+        console.log(`✅ Global WebSocket Connected for User ${user.id}`);
+        
+        // Clear old ping interval if exists
+        if (pingInterval.current) clearInterval(pingInterval.current);
+
+        // Setup Keep-alive
         pingInterval.current = setInterval(() => {
           if (socket.readyState === 1) socket.send("ping");
         }, 30000);
@@ -120,6 +133,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           const data = JSON.parse(event.data);
           
+          // Debugging log
+          console.log(`📩 WS Message for ${user.id}:`, data.type);
+
           // --- HANDLE DUPLICATE ALERT ---
           if (data.type === "DUPLICATE_ALERT") {
             Alert.alert(
@@ -154,10 +170,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // --- HANDLE SUCCESS ---
           else if (data.type === "TICKET_PROCESSED") {
              console.log("✅ Ticket processed msg received:", data);
-             
-             // Refresh lists
              setTicketRefreshTrigger(prev => prev + 1);
-             
              Alert.alert(
                  "✅ AI Processing Complete",
                  `Ticket #${data.ticket_number || 'New'} is now available in the Review tab.`
@@ -172,18 +185,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       socket.onerror = (e) => console.log("❌ WebSocket error:", (e as any).message);
 
       socket.onclose = () => {
-        console.log("⚠️ WebSocket disconnected");
-        ws.current = null;
-        if (pingInterval.current) clearInterval(pingInterval.current);
-        // Auto reconnect logic
-        setTimeout(() => { if(user) connectWebSocket(); }, 5000);
+        console.log(`⚠️ WebSocket disconnected for User ${user.id}`);
+        // Only reconnect if the user state hasn't changed to null
+        if (ws.current === socket && user) {
+            ws.current = null;
+            if (pingInterval.current) clearInterval(pingInterval.current);
+            // Optional: Auto-reconnect after 5s
+            // setTimeout(() => connectWebSocket(), 5000); 
+        }
       };
     };
 
     connectWebSocket();
 
-    return () => cleanUpSocket();
-  }, [user]); 
+    // C. Lifecycle Cleanup: Runs when 'user.id' changes or component unmounts
+    return () => {
+      console.log(`🔄 React Effect Cleanup for User ${user.id}`);
+      cleanUpSocket();
+    };
+
+  // ✅ CRITICAL FIX: Depend on user.id to trigger re-run when user changes
+  }, [user?.id]); 
 
   return (
     <AuthContext.Provider value={{ user, token, isLoading, login, logout, ticketRefreshTrigger }}>

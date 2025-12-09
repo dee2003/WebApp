@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
     FaArrowLeft, FaCalendarAlt, FaUser, FaExternalLinkAlt, FaEye, 
-    FaSearch, FaUpload, FaTimes 
+    FaSearch, FaUpload, FaTimes, FaFilePdf 
 } from 'react-icons/fa';
 import { apiClient, API_URL } from "../api"; 
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable"; // ✅ FIXED IMPORT
 import './Tickets.css';
 
 // Remove /api suffix for file links
@@ -11,31 +13,20 @@ const API_BASE_URL = API_URL.replace(/\/api\/?$/, '');
 
 // --- HELPERS ---
 
-/**
- * Formats any date string to MM-DD-YYYY
- */
 const formatDateForDisplay = (dateStr) => {
     if (!dateStr) return "-";
     const s = String(dateStr).trim();
-
-    // 1. If already MM-DD-YYYY, return it
     if (/^\d{2}-\d{2}-\d{4}$/.test(s)) return s;
-
-    // 2. Handle YYYY-MM-DD (Standard Backend Format)
     const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (isoMatch) {
         const [_, y, m, d] = isoMatch;
         return `${m}-${d}-${y}`;
     }
-
-    // 3. Handle YYYY/MM/DD
     const isoSlashMatch = s.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
     if (isoSlashMatch) {
         const [_, y, m, d] = isoSlashMatch;
         return `${m}-${d}-${y}`;
     }
-
-    // 4. Fallback: Try Date object
     const d = new Date(s);
     if (!isNaN(d.getTime())) {
         const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -43,7 +34,6 @@ const formatDateForDisplay = (dateStr) => {
         const yyyy = d.getFullYear();
         return `${mm}-${dd}-${yyyy}`;
     }
-
     return s;
 };
 
@@ -87,15 +77,12 @@ const TicketDetailView = ({ ticket, onBack }) => {
 
     return (
         <div className="ticket-detail-full-page">
-            {/* Header / Navigation */}
             <div className="ticket-list-header">
                 <button onClick={onBack} className="back-btn"><FaArrowLeft /> Back to List</button>
                 <div>
                     <h2 style={{margin:0}}>Ticket #{ticket.ticket_number || "Unknown"}</h2>
                     <small style={{color: '#666'}}>Foreman: {ticket.foreman_name}</small>
                 </div>
-                
-                {/* Actions */}
                 <div style={{marginLeft: 'auto'}}>
                     {finalUrl && (
                         <a 
@@ -111,18 +98,13 @@ const TicketDetailView = ({ ticket, onBack }) => {
                 </div>
             </div>
 
-            {/* Scrollable Data Content */}
             <div className="detail-content-container">
-                
                 <div className="panel-section">
                     <h4>📋 Ticket Data</h4>
                     <table className="detail-table">
                         <tbody>
                             <tr><th>Ticket Number</th><td>{ticket.ticket_number || "-"}</td></tr>
-                            
-                            {/* Display Scanned Date if available (from search), else Ticket Date */}
                             <tr><th>Scanned Date</th><td>{formatDateForDisplay(ticket.scanned_date || ticket.ticket_date)}</td></tr>
-                            
                             <tr><th>Foreman</th><td><strong>{ticket.foreman_name}</strong></td></tr>
                             <tr><th>Category</th><td>{ticket.category || "-"}</td></tr>
                             <tr><th>Sub-Category</th><td>{ticket.sub_category || "-"}</td></tr>
@@ -194,7 +176,6 @@ const Tickets = () => {
     const fetchTicketsAndUsers = async () => {
         setLoading(true);
         try {
-            // 1. Fetch Users
             const usersRes = await apiClient.get('/users/');
             const userMapping = {};
             if(usersRes.data) {
@@ -204,10 +185,8 @@ const Tickets = () => {
             }
             setUsersMap(userMapping);
 
-            // 2. Fetch Tickets
             const response = await apiClient.get('/ocr/all-images-grouped'); 
             
-            // 3. Inject Foreman Name
             const enrichedData = response.data.map(group => ({
                 ...group,
                 images: group.images.map(img => ({
@@ -224,18 +203,15 @@ const Tickets = () => {
         }
     };
 
-    // --- SEARCH LOGIC (Updated to use Scanned/Header Date) ---
     const handleSearchSubmit = (e) => {
         e.preventDefault(); 
         
         const { ticket_number, haul_vendor, material, job_number, date_from, date_to } = searchFilters;
         
-        // ✅ FLATTEN & INJECT SCANNED DATE
-        // We take the 'date' from the group (header) and attach it to each ticket as 'scanned_date'
         const allTickets = ticketsByDate.flatMap(group => 
             group.images.map(ticket => ({
                 ...ticket,
-                scanned_date: group.date // Inject group date for searching
+                scanned_date: group.date 
             }))
         );
 
@@ -250,7 +226,6 @@ const Tickets = () => {
 
             let matchDate = true;
             if (fromTs || toTs) {
-                // ✅ FILTER BY SCANNED DATE (Not OCR Date)
                 const tDateTs = parseAnyDate(t.scanned_date);
                 if (!tDateTs) matchDate = false;
                 else {
@@ -274,8 +249,8 @@ const Tickets = () => {
         setViewLevel(1); 
     };
 
-    // --- EXPORT LOGIC ---
-    const handleExportCSV = () => {
+    // --- SHARED DATA GATHERING FOR EXPORTS ---
+    const getExportData = () => {
         let ticketsToExport = [];
         if (isSearching) {
             ticketsToExport = searchResults;
@@ -287,7 +262,12 @@ const Tickets = () => {
                 group.images.map(t => ({ ...t, scanned_date: group.date }))
             );
         }
+        return ticketsToExport;
+    };
 
+    // --- CSV EXPORT ---
+    const handleExportCSV = () => {
+        const ticketsToExport = getExportData();
         if (ticketsToExport.length === 0) return alert("No data to export.");
 
         const headers = ["Date Scanned", "Foreman", "Ticket #", "Category", "Sub-Category", "Vendor", "Material", "Job #", "Truck #", "Phase", "Hours", "Table Entry (JSON)", "Image URL"];
@@ -295,7 +275,6 @@ const Tickets = () => {
         const csvContent = [
             headers.join(","),
             ...ticketsToExport.map(t => [
-                // ✅ EXPORT SCANNED DATE
                 escapeCsvCell(formatDateForDisplay(t.scanned_date || t.ticket_date)), 
                 escapeCsvCell(t.foreman_name),
                 escapeCsvCell(t.ticket_number),
@@ -320,6 +299,55 @@ const Tickets = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    // --- PDF EXPORT (CORRECTED) ---
+    const handleExportPDF = () => {
+        const ticketsToExport = getExportData();
+        if (ticketsToExport.length === 0) return alert("No data to export.");
+
+        // Initialize jsPDF in Landscape to fit more columns
+        const doc = new jsPDF('landscape');
+
+        // Add Header
+        doc.setFontSize(18);
+        doc.text("Ticket Report", 14, 15);
+        
+        doc.setFontSize(10);
+        const dateStr = new Date().toLocaleDateString();
+        doc.text(`Generated on: ${dateStr}`, 14, 22);
+        if(isSearching) {
+            doc.text(`(Filtered Search Results: ${ticketsToExport.length} tickets)`, 14, 28);
+        }
+
+        // Define Columns
+        const tableColumn = ["Date", "Foreman", "Ticket #", "Category", "Vendor", "Material", "Job #", "Truck #", "Phase", "Hours"];
+        
+        // Define Rows
+        const tableRows = ticketsToExport.map(t => [
+            formatDateForDisplay(t.scanned_date || t.ticket_date),
+            t.foreman_name,
+            t.ticket_number || "-",
+            t.category || "-",
+            t.haul_vendor || "-",
+            t.material || "-",
+            t.job_number || "-",
+            t.truck_number || "-",
+            t.phase_code_ || "-",
+            t.hours || "-"
+        ]);
+
+        // Generate Table - ✅ FIXED: Using autoTable(doc, options)
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 35,
+            styles: { fontSize: 8 }, // Smaller font to fit columns
+            headStyles: { fillColor: [66, 66, 66] }, // Dark Grey Header
+        });
+
+        // Save PDF
+        doc.save(`tickets_report_${new Date().toISOString().slice(0,10)}.pdf`);
     };
 
     // --- NAVIGATION HELPERS ---
@@ -391,6 +419,11 @@ const Tickets = () => {
             <div className="tickets-header">
                 <h2>{isSearching ? `Search Results (${searchResults.length})` : "Ticket Daily Logs"}</h2>
                 <div className="header-actions">
+                    {/* PDF EXPORT BUTTON */}
+                    <button className="header-btn btn-outline" onClick={handleExportPDF} title="Export PDF" style={{marginRight:'10px'}}>
+                        <FaFilePdf /> Export PDF
+                    </button>
+
                     <button className="header-btn btn-outline" onClick={handleExportCSV} title="Export CSV">
                         <FaUpload /> Export CSV
                     </button>
@@ -473,7 +506,6 @@ const Tickets = () => {
                             <tbody>
                                 {getTicketsForList().map((ticket) => (
                                     <tr key={ticket.id} onClick={() => handleTicketClick(ticket)}>
-                                        {/* ✅ DISPLAY SCANNED DATE IN RESULTS */}
                                         {isSearching && <td>{formatDateForDisplay(ticket.scanned_date)}</td>}
                                         {isSearching && <td><strong>{ticket.foreman_name}</strong></td>}
                                         <td><strong>{ticket.ticket_number || "-"}</strong></td>

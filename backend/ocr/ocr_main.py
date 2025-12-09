@@ -70,9 +70,13 @@ async def websocket_endpoint(websocket: WebSocket, foreman_id: int):
     print(f"WebSocket connected for foreman {foreman_id}")
     try:
         while True:
+            # Waits for "ping" messages from the React app to keep connection open
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(foreman_id)
+        # ✅ CRITICAL CHANGE HERE: 
+        # Pass 'websocket' so the manager knows WHICH connection dropped.
+        # This prevents an old closed tab from killing a new active connection.
+        manager.disconnect(foreman_id, websocket)
         print(f"WebSocket disconnected for foreman {foreman_id}")
 
 # --------------------------------------------------------

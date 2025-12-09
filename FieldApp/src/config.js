@@ -1,4 +1,4 @@
 // src/config.js
-const API_URL = "https://61e78ab11008.ngrok-free.app";
+const API_URL = "https://03cdd0f94238.ngrok-free.app";
 
 export default API_URL;
