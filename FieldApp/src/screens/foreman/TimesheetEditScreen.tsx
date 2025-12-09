@@ -28,9 +28,7 @@ const THEME = {
 type ComplexHourState = { [key: string]: { [key: string]: { REG?: string; S_B?: string } } };
 type EmployeeHourState = { [key: string]: { [key: string]: { [classCode: string]: string } } };
 type SimpleHourState = { [key: string]: { [key: string]: string } };
-
 type Props = { route: any; navigation: any };
-
 const MATERIAL_UNITS = [
   { label: 'Hrs', value: 'Hrs' },
   { label: 'CY', value: 'CY' },
@@ -40,7 +38,6 @@ const MATERIAL_UNITS = [
   { label: 'LF', value: 'LF' },
   { label: 'EA', value: 'EA' },
 ];
-
 const WORK_PERFORMED_UNITS = [
   { label: 'CY', value: 'CY' },
   { label: 'TON', value: 'TON' },
@@ -49,10 +46,6 @@ const WORK_PERFORMED_UNITS = [
   { label: 'LF', value: 'LF' },
   { label: 'EA', value: 'EA' },
 ];
-
-
-// --- MOVE THESE TO TOP OF TimesheetEditScreen ---
-
 
 const TimesheetEditScreen = ({ route, navigation }: Props) => {
   const timesheetId = route?.params?.timesheetId;
@@ -314,24 +307,23 @@ if (Array.isArray(d.vendors)) {
   d.vendors.forEach((v: any, index: number) => {
     const vendorId = Number(v.vendor_id ?? v.id);
     const materialId = Number(v.material_id ?? v.id);
-    const key = `${vendorId}_${materialId}`;
 
     // Hours from draft vendors
     if (v.hours_per_phase) {
-      vHours[key] = {};
+      vHours[vendorId] = {};
       Object.keys(v.hours_per_phase).forEach(phase => {
-        vHours[key][phase] = String(v.hours_per_phase[phase] ?? '');
+        vHours[vendorId][phase] = String(v.hours_per_phase[phase] ?? '');
       });
     }
 
     // ✅ FIX: Tickets from workPerformed (newer data), fallback to draft
     const ticketsFromWorkPerformed = rebuiltWorkPerformed[index]?.ticketsloads || String(v.tickets_loads ?? '0');
-    vTickets[key] = ticketsFromWorkPerformed;
+    vTickets[vendorId] = ticketsFromWorkPerformed;
 
     vUnits[vendorId] = v.unit ?? null;
 
     rebuiltWorkPerformed.push({
-      id: key,
+id: vendorId, 
       vendor_id: vendorId,
       vendorname: v.vendor_name ?? '',
       vendor_category: v.vendor_category ?? null,
@@ -401,6 +393,8 @@ if (Array.isArray(d.vendors)) {
 
         // normalize arrays
       // ---------- NORMALIZE VENDORS: merge grouped + flat rows ----------
+// TimesheetEditScreen.tsx (Approx. Line 416 - inside fetchData logic)
+
 const wp: any[] = [];
 
 // 1) If server has grouped selected_vendor_materials, convert to flat rows
@@ -413,8 +407,11 @@ if (ts.data?.selected_vendor_materials) {
     const sm = vendor.selectedMaterials || [];
     sm.forEach((m: any) => {
       const materialId = Number(m.id);
+      const uniqueKey = `${vendorId}_${materialId}`; // ✅ NEW: Unique key for internal tracking/removal
+
       wp.push({
-        id: `${vendorId}_${materialId}`, // unique UI id
+        id: vendorId.toString(), // ⬅️ VENDOR ID ONLY as requested
+        __key: uniqueKey,        // ✅ NEW: Unique key for internal tracking/removal
         vendor_id: vendorId,
         vendor_name: vendorName,
         vendor_category: vendorCat,
@@ -422,50 +419,61 @@ if (ts.data?.selected_vendor_materials) {
         material_name: m.material ?? m.material_name ?? '',
         unit: m.unit ?? null,
         detail: m.detail ?? '',
-        hours_per_phase: m.hours_per_phase ?? {},   // <--- ADDED
-    tickets_loads: m.tickets_loads ?? {}, 
+        hours_per_phase: m.hours_per_phase ?? {},
+        tickets_loads: m.tickets_loads ?? {},
       });
     });
   });
 }
 
-const seen = new Set(wp.map(r => `${r.vendor_id}_${r.material_id}`));
+// 🔥 FIX: 'seen' MUST track the unique combination (vendor_id_material_id)
+// This is critical to prevent mixing data and correctly updating existing materials.
+const seen = new Set(wp.map(r => r.__key)); // ✅ FIX: Track by unique __key
+
 // 2) MERGE ts.data.vendors into wp (CRITICAL for hours_per_phase)
 if (Array.isArray(ts.data?.vendors)) {
   ts.data.vendors.forEach((r: any) => {
-    const vendorId = Number(r.vendor_id ?? r.vendorId ?? r.vendor?.id ?? r.id);
+    const vendorIdNum = Number(r.vendor_id ?? r.vendorId ?? r.vendor?.id ?? r.id);
+    const vendorId = vendorIdNum.toString();
     const materialId = Number(r.material_id ?? r.materialId ?? r.material?.id ?? r.id);
-    const key = `${vendorId}_${materialId}`;
+    const uniqueKey = `${vendorIdNum}_${materialId}`; // ✅ NEW: Unique key for tracking/updating
 
-    if (!seen.has(key)) {
+    // If this specific vendor-material combination hasn't been added yet
+    if (!seen.has(uniqueKey)) { // ✅ FIX: Check for unique __key
       wp.push({
-        id: key,
-        vendor_id: vendorId,
+        id: vendorId,        // ⬅️ VENDOR ID ONLY as requested
+        __key: uniqueKey,    // ✅ NEW: Unique key for internal tracking/removal
+        vendor_id: vendorIdNum,
         vendor_name: r.vendor_name ?? r.vendor?.name ?? '',
         vendor_category: r.vendor_category ?? r.vendor?.vendor_category ?? null,
         material_id: materialId,
         material_name: r.material_name ?? r.material ?? '',
         unit: r.unit ?? r.unit_name ?? null,
         detail: r.detail ?? '',
-        hours_per_phase: r.hours_per_phase ?? {},  // ✅ SAVED HOURS
-        tickets_loads: r.tickets_loads ?? {},      // ✅ SAVED TICKETS
+        hours_per_phase: r.hours_per_phase ?? {},
+        tickets_loads: r.tickets_loads ?? {},
       });
-      seen.add(key);
+      seen.add(uniqueKey);
     } else {
-      // UPDATE existing wp row with vendor data (hours/tickets take priority)
-      const existingIndex = wp.findIndex(row => row.id === key);
-      if (existingIndex !== -1) {
-        wp[existingIndex] = {
-          ...wp[existingIndex],
-          hours_per_phase: { ...wp[existingIndex].hours_per_phase, ...r.hours_per_phase },
-          tickets_loads: r.tickets_loads ?? wp[existingIndex].tickets_loads,
-          unit: r.unit ?? wp[existingIndex].unit,
-          detail: r.detail ?? wp[existingIndex].detail,
+      // UPDATE existing entry (must find by the unique combination)
+      const index = wp.findIndex(row => row.__key === uniqueKey); // ✅ FIX: Find by unique __key
+      if (index !== -1) {
+        wp[index] = {
+          ...wp[index],
+          hours_per_phase: {
+            ...wp[index].hours_per_phase,
+            ...r.hours_per_phase,
+          },
+          tickets_loads: r.tickets_loads ?? wp[index].tickets_loads,
+          unit: r.unit ?? wp[index].unit,
+          detail: r.detail ?? wp[index].detail,
         };
       }
     }
   });
 }
+// ... rest of fetchData
+
 console.log('🔥 RAW ts.data.vendors:', ts.data?.vendors?.map((v: any) => ({
   id: v.id,
   vendor_id: v.vendor_id,
@@ -571,33 +579,6 @@ const serverUpdatedAt = timestamp
     console.log('Server newer — ignoring local draft for UI (but still kept for sync).');
   }
 }
-//   setWorkPerformed(wp);
-//   const vh: SimpleHourState = {};
-// const tl: Record<string, string> = {};
-// const vu: Record<string, string> = {};
-
-// wp.forEach(row => {
-//   const key = row.id; // "2976_6"
-  
-//   // Hours per phase
-//   vh[key] = {};
-//   Object.keys(row.hours_per_phase || {}).forEach(phase => {
-//     vh[key][phase] = String(row.hours_per_phase[phase] ?? '');
-//   });
-  
-//   // Tickets
-//   tl[key] = String(row.tickets_loads?.[key] ?? '');
-  
-//   // Units (vendor-level)
-//   vu[row.vendor_id] = row.unit ?? vu[row.vendor_id] ?? "Hrs";
-// });
-
-// setVendorHours(vh);
-// setTicketsLoads(prev => ({ ...prev, ...tl }));
-// setVendorUnits(vu);
-// After wp build:
-
-
 if (!restoredFromDraft) {
   setSelectedPhases(ts.data?.job?.phase_codes || []);
 
@@ -616,37 +597,34 @@ if (!restoredFromDraft) {
     setStopHours(e);
   }
 
-  setWorkPerformed(wp);
-  const vh: SimpleHourState = {};
+setWorkPerformed(wp);
+
+const vh: SimpleHourState = {};
 const tl: Record<string, string> = {};
-const vu: Record<string, string> = {};
+const vu: Record<string, string | null> = {};
 
 wp.forEach(row => {
-  const key = row.id; // "2976_6"
+  const key = row.id;  // ✅ Vendor ID for all state
   
-  // Hours per phase
-  vh[key] = {};
-  Object.keys(row.hours_per_phase || {}).forEach(phase => {
-    vh[key][phase] = String(row.hours_per_phase[phase] ?? '');
-  });
-  
-  // Tickets (FIXED)
-  const rawTickets = row.tickets_loads;
-  let ticketValue = rawTickets;
-
-  if (typeof rawTickets === 'object' && rawTickets !== null) {
-    ticketValue = rawTickets[key];
+  // Hours per phase (shared across materials for this vendor)
+  if (row.hoursperphase) {
+    vh[key] = {};
+    Object.keys(row.hoursperphase).forEach(phase => {
+      vh[key][phase] = String(row.hoursperphase[phase] ?? '');
+    });
   }
-
-  tl[key] = String(ticketValue ?? '');
-
-  // Units (vendor-level)
-  vu[row.vendor_id] = row.unit ?? vu[row.vendor_id] ?? "Hrs";
+  
+  // Tickets (shared across materials for this vendor)  
+  tl[key] = String(row.ticketsloads ?? '');
 });
+
+
+
 
 setVendorHours(vh);
 setTicketsLoads(tl);
 setVendorUnits(vu);
+
 
         setMaterialHours(populateSimple(ts.data?.materials_trucking || [], 'hours_per_phase'));
         setDumpingSiteHours(populateSimple(ts.data?.dumping_sites || [], 'hours_per_phase'));
@@ -786,8 +764,6 @@ const handleEmployeeHourChange = (
         },
       },
     };
-
-    // 3️⃣ Compute total hours for this employee (REG + SB across all phases)
     let total = 0;
 
      selectedPhases.forEach(ph => {
@@ -1128,8 +1104,6 @@ location: locationData,
       material_name: r.material_name ?? r.material ?? '',
       unit: r.unit ?? null,
       detail: r.detail ?? '',
-  // tickets_loads: { [r.id]: Number(ticketsLoads?.[r.id] ?? r.tickets_loads?.[r.id] ?? 0) },
-  //     hours_per_phase: r.hours_per_phase ?? {}
  tickets_loads: Number(ticketsLoads?.[r.id] ?? 0), 
   hours_per_phase: vendorHours?.[r.id] || r.hours_per_phase || {}
   
@@ -1214,71 +1188,62 @@ const handleSelectVendor = (vendor: any) => {
     return;
   }
   // Build material-rows
-  const newRows: any[] = materials.map((m: any) => ({
-    id: `${vendor.id}_${m.id}`,   
+const newRows: any[] = materials.map((m: any) => {
+  const materialId = m.id;
+
+  return {
+id: vendor.id.toString(),
     vendor_id: vendor.id,
     vendor_name: vendor.name,
 
-    material_id: m.id,
+    material_id: materialId,
     material_name: m.material,
     unit: m.unit,
     detail: m.detail,
     hours_per_phase: {},
     tickets_loads: {}
-  }));
+  };
+});
+
 
   // Add all rows
   setWorkPerformed(prev => [...prev, ...newRows]);
 
-  // Initialize states for each row
-  newRows.forEach(row => {
-   setVendorHours(prev => ({
-    ...prev,
-    [row.id]: {}  // Empty object - will be populated by user edits
-  }));
+newRows.forEach((row: any) => {
+  setVendorHours(prev => ({ ...prev, [row.key]: {} }));  // ✅ Use row.key
+  setVendorUnits(prev => ({ ...prev, [row.vendorid]: row.unit || 'Hrs' }));
+  setTicketsLoads(prev => ({ ...prev, [row.key]: '' }));  // ✅ Use row.key
+});
 
-    setVendorUnits(prev => ({ ...prev, [row.id]: row.unit || "Hrs" }));
-    setTicketsLoads(prev => ({
-    ...prev,
-    [row.id]: ""  // Empty string for new rows
-  }));
-
-  });
 
   setShowVendorPicker(false);
 };
 
-
-
-const handleRemoveVendor = (vendorId: number) => {
-  Alert.alert("Remove Vendor", "Are you sure?", [
-    { text: "Cancel", style: "cancel" },
-    {
-      text: "Remove",
-      onPress: () => {
-        setWorkPerformed(prev => prev.filter(v => v.id !== vendorId));
-
-        setVendorHours(prev => {
-          const copy = { ...prev };
-          delete copy[vendorId];
-          return copy;
-        });
-
-        setVendorUnits(prev => {
-          const copy = { ...prev };
-          delete copy[vendorId];
-          return copy;
-        });
-
-        setTicketsLoads(prev => {
-          const copy = { ...prev };
-          delete copy[vendorId];
-          return copy;
-        });
+const handleRemoveVendor = (vendorId: string) => {
+  Alert.alert(
+    'Remove Material',
+    'Are you sure you want to remove this material?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          // ✅ Remove ONLY the FIRST row with this vendorId (the clicked one)
+          setWorkPerformed(prev => {
+            const index = prev.findIndex(row => row.id === vendorId);
+            return index !== -1 ? prev.filter((_, i) => i !== index) : prev;
+          });
+          
+          // ✅ Hours/tickets stay (aggregate for vendor) - don't delete
+          // This keeps other materials working
+        }
       }
-    }
-  ]);
+    ]
+  );
 };
+
+
 
 
 interface Material {
@@ -2048,63 +2013,6 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
 
 </View>
 
-
-                    {/* <View style={[tableStyles.cellFixed, { width: 200 }]}>
-                      <Text style={tableStyles.cellText}>{name}</Text>
-                    </View> */}
-{/* Start Hours cell */}
-{/* {type === 'equipment' && (
-  <View style={[tableStyles.cellFixed, { width: 100 }]}>
-    <InlineEditableNumber
-      value={startHours[ent.id] ?? ""}
-      onChange={(v) =>
-   setStartHours(prev => ({
-      ...prev,
-      [ent.id]: v
-    }))
-}
- validateHours={true} 
-      placeholder="0.0"
-    />
-  </View>
-)} */}
-
-{/* Stop Hours cell */}
-{/* {type === 'equipment' && (
-  <View style={[tableStyles.cellFixed, { width: 100 }]}>
-    <InlineEditableNumber
-      value={stopHours[ent.id] ?? ""}
-      onChange={(v) =>
-  setStopHours(prev => ({
-    ...prev,
-    [ent.id]: v
-  }))
-}
- validateHours={true} 
-      placeholder="0.0"
-    />
-  </View>
-)} */}
-
-                   {/* CLASS / TICKETS / LOADS cell */}
-{/* {type !== 'equipment' && (
-<View style={[tableStyles.cellFixed, { width: 140 }]}>
-    <InlineEditableNumber
-      value={ticketsLoads[String(ent.id)] ?? ""}
-      onChange={(v) => {
-        // sanitize: keep only digits
-        const clean = v.replace(/[^0-9]/g, "");
-        setTicketsLoads(prev => ({
-          ...prev,
-          [String(ent.id)]: clean
-        }));
-      }}
-      placeholder={type === 'dumping_site' ? "0 loads" : "0 tickets"}
-      style={tableStyles.hourInput}
-    />
-  </View>
-)} */}
-
 {type === "vendor" ? (
   <>
     {/* Vendor Name */}
@@ -2130,13 +2038,13 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
     {/* Tickets */}
     
     <View style={[tableStyles.cellFixed, { width: 120 }]}>
-       <InlineEditableNumber
-    value={ticketsLoads[ent.id] ?? ''}  // ✅ Direct ticketsLoads state
-    onChange={(v) => handleVendorTicketsChange(ent.id, v)}  // ✅ Correct handler
-    placeholder="0"
-    style={tableStyles.hourInput}
-    validateHours={false}
-  />
+<InlineEditableNumber
+  value={ticketsLoads[ent.id] ?? ''}  // ✅ ent.id
+  onChange={(v) => handleVendorTicketsChange(ent.id, v)}  // ✅ ent.id
+  placeholder="0"
+/>
+
+
     </View>
     
   </>
