@@ -28,11 +28,14 @@ from datetime import datetime
 from sqlalchemy import func, case
 from .. import models, schemas, database
 from sqlalchemy import String, literal
+
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 load_dotenv(dotenv_path=ENV_PATH)
 BASE_URL = os.getenv("BASE_URL")
 print("🔗 [Router] BASE_URL loaded:", BASE_URL)
+
 @router.get("/counts-by-status", response_model=schemas.TimesheetCountsResponse)
 def get_timesheet_counts_by_status(db: Session = Depends(get_db)):
     try:
@@ -383,6 +386,7 @@ from ..models import SubmissionStatus
 
 from datetime import datetime
 from sqlalchemy import func
+
 @router.post("/{timesheet_id}/send", response_model=schemas.Timesheet)
 def send_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
     ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()

@@ -127,6 +127,18 @@ def list_crew_mappings(db: Session = Depends(database.get_db)):
         # --- ADD THIS FILTER ---
         models.CrewMapping.status == 'Active' # Assuming status is a string here
     ).all()
+
+@crew_mapping_router.get("/foreman-list", response_model=List[int])
+def get_foremen_with_crew(db: Session = Depends(database.get_db)):
+    foremen = db.query(models.CrewMapping.foreman_id).filter(
+        models.CrewMapping.is_deleted == False,
+        models.CrewMapping.status == 'Active'
+    ).distinct().all()
+
+    # each result is a tuple like: (3,) → so flatten it
+    return [f[0] for f in foremen]
+
+
 @crew_mapping_router.get("/by-foreman/{foreman_id}", response_model=schemas.CrewMappingResponse)
 def get_crew_details_by_foreman(foreman_id: int, db: Session = Depends(database.get_db)):
     mapping_details = crud.get_crew_mapping(db, foreman_id=foreman_id)
@@ -306,6 +318,8 @@ def update_user(
     db.refresh(db_user)
     
     return db_user
+
+
 @user_router.get("/role/{role_name}", response_model=List[schemas.User])
 def get_active_users_by_role(role_name: str, db: Session = Depends(database.get_db)):
     """
@@ -339,6 +353,7 @@ def get_user(user_id: int, db: Session = Depends(database.get_db)):
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
+
 @user_router.get("/", response_model=List[schemas.User])
 def list_users(
     skip: int = 0,
