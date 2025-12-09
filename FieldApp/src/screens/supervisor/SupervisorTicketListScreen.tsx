@@ -8,281 +8,416 @@ import {
     Alert,
     FlatList,
     ActivityIndicator,
-    Modal, // ⭐ IMPORT MODAL
-    Dimensions, // ⭐ IMPORT Dimensions
+    Modal,
+    Dimensions,
+    TextInput,
+    ScrollView,
+    KeyboardAvoidingView,
+    Platform
 } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/apiClient';
 import { THEME } from '../../constants/theme';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { SupervisorStackParamList } from '../../navigation/AppNavigator';
-import Pdf from 'react-native-pdf'; // ⭐ IMPORT PDF LIBRARY
+import Pdf from 'react-native-pdf';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
-type SupervisorTicketsScreenNavigationProp = StackNavigationProp<
-    SupervisorStackParamList,
-    'SupervisorTicketList'
->;
-
+// --- Types ---
 interface Ticket {
     id: number;
-    image_path: string; // can be .jpg or .pdf
+    image_path: string;
     phase_code_id?: number | null;
+    
+    ticket_number?: string;
+    ticket_date?: string;
+    haul_vendor?: string;
+    truck_number?: string;
+    material?: string;
+    job_number?: string;
+    phase_code_?: string; 
+    zone?: string;
+    hours?: number;
+    
+    table_data?: any[] | null; 
 }
 
-// Helper function for simple date formatting (replaces moment.js)
-const formatDate = (dateString: string) => {
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    } catch {
-        return dateString; // Fallback
-    }
-};
+interface PhaseOption {
+    label: string;
+    value: number;
+}
 
 export default function SupervisorTicketsScreen({ route }: any) {
-    const navigation = useNavigation<SupervisorTicketsScreenNavigationProp>();
+    const navigation = useNavigation();
     const { foremanId, foremanName, date: routeDate } = route.params;
 
     const [tickets, setTickets] = useState<Ticket[]>([]);
-    const [phaseCodes, setPhaseCodes] = useState<Record<number, number | null>>({});
-    const [savedStatus, setSavedStatus] = useState<Record<number, boolean>>({});
+    const [availablePhases, setAvailablePhases] = useState<PhaseOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [availablePhases, setAvailablePhases] = useState<{ label: string; value: number }[]>([]);
 
-    // ⭐ NEW STATE for PDF Modal
-    const [pdfUri, setPdfUri] = useState<string | null>(null);
+    // --- Modal State ---
+    const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+    const [isModalVisible, setModalVisible] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [viewMode, setViewMode] = useState<'form' | 'file'>('form'); 
+    const [formData, setFormData] = useState<Partial<Ticket>>({});
 
-    // ✅ Set screen title dynamically and display the date
     useEffect(() => {
-        const formattedDate = formatDate(routeDate);
         navigation.setOptions({
-            title: `${foremanName}'s Tickets (${formattedDate})`,
+            title: `${foremanName} (${new Date(routeDate).toLocaleDateString()})`,
         });
-    }, [foremanName, navigation, routeDate]);
+    }, [foremanName, routeDate, navigation]);
 
-    // ✅ Fetch available phase codes
-    useEffect(() => {
-        const fetchPhaseCodes = async () => {
-            try {
-                const res = await apiClient.get('/api/job-phases/phase-codes');
-                const options = res.data.map((p: any) => ({
-                    label: `${p.code} - ${p.description || ''}`,
-                    value: p.id,
-                }));
-                setAvailablePhases(options);
-            } catch (err) {
-                console.error('Failed to load phase codes', err);
-            }
-        };
-        fetchPhaseCodes();
-    }, []);
-
-    // ✅ Fetch supervisor tickets
-    const loadTickets = useCallback(async () => {
+    // ✅ Load Data
+    const loadData = useCallback(async () => {
         const fetchStateSetter = refreshing ? setRefreshing : setLoading;
         fetchStateSetter(true);
         try {
-            const response = await apiClient.get('/api/tickets/for-supervisor', {
+            const phasesRes = await apiClient.get('/api/job-phases/phase-codes');
+            const phases = phasesRes.data.map((p: any) => ({
+                label: `${p.code} - ${p.description || ''}`,
+                value: p.id,
+            }));
+            setAvailablePhases(phases);
+
+            const ticketRes = await apiClient.get('/api/tickets/for-supervisor', {
                 params: { foreman_id: foremanId, date: routeDate },
             });
-
-            const data: Ticket[] = response.data || [];
-            setTickets(data);
-
-            const codes: Record<number, number | null> = {};
-            data.forEach(t => {
-                codes[t.id] = t.phase_code_id || null;
-            });
-            setPhaseCodes(codes);
-            setSavedStatus({}); // Reset saved status on load
+            setTickets(ticketRes.data || []);
         } catch (err: any) {
-            Alert.alert('Error', err.response?.data?.detail || 'Failed to load tickets');
+            console.error('Load Error:', err);
+            Alert.alert('Error', 'Failed to load data.');
         } finally {
-            fetchStateSetter(false);
+            setLoading(false);
+            setRefreshing(false);
         }
     }, [foremanId, routeDate, refreshing]);
 
     useEffect(() => {
-        loadTickets();
-    }, [loadTickets]);
+        loadData();
+    }, [loadData]);
 
     const handleRefresh = () => {
         setRefreshing(true);
-        loadTickets();
+        loadData();
     };
 
-    // ✅ Save selected phase code (takes value directly)
-    const savePhaseCode = async (ticketId: number, phase_code_id: number) => {
-        const originalTicket = tickets.find(t => t.id === ticketId);
-        if (originalTicket?.phase_code_id === phase_code_id) return; // no change
-
+    const handleQuickPhaseUpdate = async (ticketId: number, newPhaseId: number) => {
+        if (!newPhaseId) return;
+        setTickets(prev => prev.map(t => 
+            t.id === ticketId ? { ...t, phase_code_id: newPhaseId } : t
+        ));
         try {
-            setSavedStatus(prev => ({ ...prev, [ticketId]: false }));
-            await apiClient.patch(`/api/tickets/${ticketId}`, { phase_code_id });
-            setTickets(prev =>
-                prev.map(t =>
-                    t.id === ticketId ? { ...t, phase_code_id } : t
-                )
-            );
-            setSavedStatus(prev => ({ ...prev, [ticketId]: true }));
-        } catch (err: any) {
-            console.error(err);
-            Alert.alert('Save Error', err.response?.data?.detail || 'Failed to save phase code');
-            setSavedStatus(prev => ({ ...prev, [ticketId]: false }));
+            await apiClient.patch(`/api/tickets/${ticketId}`, { phase_code_id: newPhaseId });
+        } catch (error) {
+            Alert.alert("Error", "Failed to save phase selection.");
+            loadData(); 
         }
     };
-    
-    // ⭐ PDF Source Logic from previous context
-    const modalPdfSource = pdfUri ? { uri: pdfUri, cache: true } : undefined;
-    
-    // 💡 List Empty Component
-    const ListEmptyComponent = () => (
-        <View style={styles.emptyContainer}>
-            <Ionicons name="document-text-outline" size={60} color={THEME.colors.subtleLight} />
-            <Text style={styles.emptyText}>
-                No submitted tickets found for {foremanName} on {formatDate(routeDate)}.
-            </Text>
-            <Text style={styles.emptySubText}>
-                If tickets were submitted today, please refresh or check the date on the previous screen.
-            </Text>
-            <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
-                <Ionicons name="refresh" size={20} color={THEME.colors.brandStone} />
-                <Text style={styles.refreshButtonText}>Refresh</Text>
-            </TouchableOpacity>
-        </View>
-    );
 
-    // ✅ Render each ticket - DEFINED INSIDE COMPONENT TO FIX TS ERROR
-    const renderTicket = ({ item }: { item: Ticket }) => (
-        <View style={styles.ticketContainer}>
-            <TouchableOpacity
-                onPress={() => {
-                    // ⭐ Correctly construct the full URI
-                    const fileUri = `${apiClient.defaults.baseURL}${item.image_path}`;
-                    
-                    // 🟥 If it's a PDF → open the Modal
-                    if (item.image_path.toLowerCase().endsWith('.pdf')) {
-                        setPdfUri(fileUri); // Set the URI to open the modal
-                    } 
-                    // 🟩 If it's an image → navigate or open image viewer (current image preview is static)
-                    // You might want to navigate to an image viewer for images as well, 
-                    // but for this fix, we focus on the PDF.
-                }}
-            >
-                {item.image_path.toLowerCase().endsWith('.pdf') ? (
-                    // 🟥 PDF Preview Block
-                    <View style={styles.pdfContainer}>
-                        <Ionicons name="document-text" size={48} color="#d32f2f" />
-                        <Text style={styles.pdfText}>Tap to View PDF</Text>
-                    </View>
-                ) : (
-                    // 🟩 Image file preview
-                    <Image
-                        source={{ uri: `${apiClient.defaults.baseURL}${item.image_path}` }}
-                        style={styles.image}
-                    />
-                )}
-            </TouchableOpacity>
-            <View style={styles.inputRow}>
-                <View style={{ flex: 1 }}>
-                    <RNPickerSelect
-                        onValueChange={(value) => {
-                            if (value == null) return;
-                            setPhaseCodes(prev => ({ ...prev, [item.id]: value }));
-                            setSavedStatus(prev => ({ ...prev, [item.id]: false }));
-                            savePhaseCode(item.id, value); // ✅ pass value directly
-                        }}
-                        items={availablePhases}
-                        value={phaseCodes[item.id]}
-                        placeholder={{ label: 'Select Phase Code', value: null }}
-                        style={{
-                            inputIOS: styles.input,
-                            inputAndroid: styles.input,
-                        }}
-                        useNativeAndroidPickerStyle={false}
-                    />
-                </View>
+    const openTicketModal = (ticket: Ticket, initialViewMode: 'form' | 'file') => {
+        setSelectedTicket(ticket);
+        
+        let safeTableData: any[] = [];
+        if (Array.isArray(ticket.table_data)) {
+            safeTableData = ticket.table_data;
+        }
 
-                <View
-                    style={[
-                        styles.statusIndicator,
-                        { backgroundColor: savedStatus[item.id] ? THEME.colors.success : THEME.colors.brandStone },
-                    ]}
-                >
-                    <Ionicons
-                        name={savedStatus[item.id] ? 'checkmark' : 'sync'}
-                        size={16}
-                        color={THEME.colors.cardLight}
-                    />
-                </View>
-            </View>
+        setFormData({
+            ticket_number: ticket.ticket_number,
+            ticket_date: ticket.ticket_date,
+            haul_vendor: ticket.haul_vendor,
+            truck_number: ticket.truck_number,
+            material: ticket.material,
+            job_number: ticket.job_number,
+            zone: ticket.zone,
+            hours: ticket.hours,
+            table_data: safeTableData 
+        });
 
-            {savedStatus[item.id] && (
-                <Text style={styles.savedText}>Saved</Text>
-            )}
-        </View>
-    );
+        setViewMode(initialViewMode);
+        setModalVisible(true);
+    };
 
-    if (loading && !refreshing) {
+    const handleFormChange = (key: keyof Ticket, value: any) => {
+        setFormData(prev => ({ ...prev, [key]: value }));
+    };
+
+    // ⭐ UPDATED: Handle Editing with Header Row Offset
+    const handleTableCellChange = (visualRowIndex: number, colIndex: string, value: string) => {
+        if (!formData.table_data) return;
+
+        // Visual Row 0 is actually Data Row 1 (because Data Row 0 is the header)
+        const actualRowIndex = visualRowIndex + 1;
+
+        const updatedTable = [...formData.table_data];
+        
+        // Handle array of arrays (standard grid) or array of objects
+        if (Array.isArray(updatedTable[actualRowIndex])) {
+            updatedTable[actualRowIndex] = [...updatedTable[actualRowIndex]]; // Copy row
+            updatedTable[actualRowIndex][Number(colIndex)] = value; // Update cell
+        } else {
+            updatedTable[actualRowIndex] = { ...updatedTable[actualRowIndex], [colIndex]: value };
+        }
+
+        setFormData(prev => ({ ...prev, table_data: updatedTable }));
+    };
+
+    // ⭐ UPDATED: Render Table Logic
+    const renderTable = () => {
+        const data = formData.table_data;
+        if (!data || !Array.isArray(data) || data.length < 2) { 
+            // Need at least 2 rows (1 header + 1 data) to show a meaningful table
+            return <Text style={styles.noDataText}>No valid table data found.</Text>;
+        }
+
+        // 1. Extract Headers from the FIRST row of data
+        // If data is [["Item", "Cost"], ["Apple", "5"]], headers = ["Item", "Cost"]
+        const headerRow = Object.values(data[0]); 
+        
+        // 2. Extract Data Rows (skip the first row)
+        const bodyRows = data.slice(1);
+
         return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color={THEME.colors.brandStone} />
+            <View style={styles.tableBorder}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                    <View>
+                        {/* Header Row (Static, Grey) */}
+                        <View style={styles.tableHeaderRow}>
+                            {headerRow.map((headerText, index) => (
+                                <View key={index} style={styles.headerCell}>
+                                    <Text style={styles.headerText}>{String(headerText)}</Text>
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* Data Rows (Editable, White/Grey) */}
+                        {bodyRows.map((row, rowIndex) => {
+                            // Normalize row to array values to map easily
+                            const rowValues = Object.values(row);
+                            const rowKeys = Object.keys(row); // needed for updates
+
+                            return (
+                                <View key={rowIndex} style={[styles.tableRow, rowIndex % 2 === 0 ? styles.evenRow : styles.oddRow]}>
+                                    {rowValues.map((cellValue, colIndex) => (
+                                        <View key={colIndex} style={styles.cell}>
+                                            <TextInput
+                                                style={styles.cellInput}
+                                                value={String(cellValue || '')}
+                                                onChangeText={(text) => 
+                                                    handleTableCellChange(rowIndex, rowKeys[colIndex], text)
+                                                }
+                                                multiline={true} 
+                                            />
+                                        </View>
+                                    ))}
+                                </View>
+                            );
+                        })}
+                    </View>
+                </ScrollView>
             </View>
         );
-    }
+    };
 
-    return (
-        <View style={{ flex: 1 }}>
-            <FlatList
-                data={tickets}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={renderTicket}
-                onRefresh={handleRefresh}
-                refreshing={refreshing}
-                ListEmptyComponent={ListEmptyComponent} // 💡 Added ListEmptyComponent
-                contentContainerStyle={styles.listContainer}
+    const saveTicketChanges = async () => {
+        if (!selectedTicket) return;
+        setIsSaving(true);
+        try {
+            const payload = {
+                ...formData,
+                hours: formData.hours ? Number(formData.hours) : null
+            };
+            const res = await apiClient.patch(`/api/tickets/${selectedTicket.id}`, payload);
+
+            setTickets(prev => prev.map(t => 
+                t.id === selectedTicket.id ? { ...t, ...res.data } : t
+            )); 
+
+            Alert.alert("Success", "Ticket details updated.");
+            setModalVisible(false);
+        } catch (error: any) {
+            Alert.alert("Error", "Failed to save changes.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const renderInput = (label: string, field: keyof Ticket, placeholder: string, keyboardType: 'default' | 'numeric' = 'default') => (
+        <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>{label}</Text>
+            <TextInput
+                style={styles.textInput}
+                value={formData[field] ? String(formData[field]) : ''}
+                onChangeText={(text) => handleFormChange(field, text)}
+                placeholder={placeholder}
+                placeholderTextColor="#ccc"
+                keyboardType={keyboardType}
             />
+        </View>
+    );
 
-            {/* ⭐ PDF Viewing Modal (reusing logic from previous context) */}
-            <Modal
-                visible={!!pdfUri}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setPdfUri(null)}
-            >
-                <View style={styles.modalContainer}>
-                    <View style={styles.modalContent}>
-                        {modalPdfSource ? (
+    const renderTicketItem = ({ item }: { item: Ticket }) => {
+        const isPdf = item.image_path.toLowerCase().endsWith('.pdf');
+        const fileUri = `${apiClient.defaults.baseURL}${item.image_path}`;
+
+        return (
+            <View style={styles.card}>
+                <View style={styles.previewColumn}>
+                    <TouchableOpacity onPress={() => openTicketModal(item, 'file')} style={styles.previewContainer}>
+                        {isPdf ? (
                             <Pdf
-                                source={modalPdfSource}
-                                onLoadComplete={(numberOfPages, filePath) => {
-                                    console.log(`PDF loaded with ${numberOfPages} pages.`);
-                                }}
-                                onError={(error) => {
-                                    console.error('PDF Modal Error:', error);
-                                    Alert.alert('Error', 'Could not load PDF file.');
-                                    setPdfUri(null);
-                                }}
-                                style={styles.fullPdf}
+                                source={{ uri: fileUri, cache: true }}
+                                style={styles.pdfPreview}
+                                singlePage={true} 
                                 trustAllCerts={false}
                             />
                         ) : (
-                            <View style={styles.centered}>
-                                <ActivityIndicator size="large" color="#fff" />
+                            <Image
+                                source={{ uri: fileUri }}
+                                style={styles.imagePreview}
+                                resizeMode="cover"
+                            />
+                        )}
+                        <View style={styles.previewOverlay}>
+                            <Ionicons name="expand-outline" size={20} color="#fff" />
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.actionsColumn}>
+                    <View style={styles.cardHeader}>
+                        <Text style={styles.cardTitle}>Ticket #{item.ticket_number || item.id}</Text>
+                    </View>
+
+                    <Text style={styles.labelSmall}>Phase Code</Text>
+                    <View style={styles.pickerContainer}>
+                        <RNPickerSelect
+                            onValueChange={(value) => handleQuickPhaseUpdate(item.id, value)}
+                            items={availablePhases}
+                            value={item.phase_code_id}
+                            placeholder={{ label: 'Select Phase...', value: null }}
+                            style={{
+                                inputIOS: styles.pickerText,
+                                inputAndroid: styles.pickerText,
+                                placeholder: styles.pickerPlaceholder,
+                                iconContainer: {
+                                    top: 12,
+                                    right: 10,
+                                }
+                            }}
+                            useNativeAndroidPickerStyle={false}
+                            Icon={() => <Ionicons name="chevron-down" size={16} color="#666" />}
+                        />
+                    </View>
+
+                    <TouchableOpacity 
+                        style={styles.editButton} 
+                        onPress={() => openTicketModal(item, 'form')}
+                    >
+                        <Ionicons name="create-outline" size={18} color="#fff" />
+                        <Text style={styles.editButtonText}>View & Edit Data</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    };
+
+    return (
+        <View style={styles.container}>
+            {loading && !refreshing ? (
+                <ActivityIndicator size="large" color={THEME.colors.brandStone} style={{ marginTop: 20 }} />
+            ) : (
+                <FlatList
+                    data={tickets}
+                    keyExtractor={item => item.id.toString()}
+                    renderItem={renderTicketItem}
+                    onRefresh={handleRefresh}
+                    refreshing={refreshing}
+                    contentContainerStyle={styles.listContent}
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <Text style={styles.emptyText}>No submitted tickets found.</Text>
+                        </View>
+                    }
+                />
+            )}
+
+            <Modal
+                visible={isModalVisible}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalHeader}>
+                        <TouchableOpacity onPress={() => setModalVisible(false)}>
+                            <Text style={styles.cancelText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.modalTitle}>Ticket Details</Text>
+                        <TouchableOpacity onPress={saveTicketChanges} disabled={isSaving}>
+                            {isSaving ? <ActivityIndicator size="small" color={THEME.colors.primary} /> : <Text style={styles.saveText}>Save</Text>}
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.tabContainer}>
+                        <TouchableOpacity style={[styles.tab, viewMode === 'form' && styles.activeTab]} onPress={() => setViewMode('form')}>
+                            <Text style={[styles.tabText, viewMode === 'form' && styles.activeTabText]}>Data</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.tab, viewMode === 'file' && styles.activeTab]} onPress={() => setViewMode('file')}>
+                            <Text style={[styles.tabText, viewMode === 'file' && styles.activeTabText]}>File</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.modalContent}>
+                        {viewMode === 'file' && selectedTicket && (
+                            <View style={styles.fileViewerContainer}>
+                                {selectedTicket.image_path.toLowerCase().endsWith('.pdf') ? (
+                                    <Pdf
+                                        source={{ uri: `${apiClient.defaults.baseURL}${selectedTicket.image_path}`, cache: true }}
+                                        style={styles.fullPdf}
+                                        trustAllCerts={false}
+                                    />
+                                ) : (
+                                    <Image
+                                        source={{ uri: `${apiClient.defaults.baseURL}${selectedTicket.image_path}` }}
+                                        style={styles.fullImage}
+                                        resizeMode="contain"
+                                    />
+                                )}
                             </View>
                         )}
+
+                        {viewMode === 'form' && (
+                            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+                                <ScrollView contentContainerStyle={styles.formContainer}>
+                                    <Text style={styles.sectionHeader}>Extracted Data</Text>
+                                    <View style={styles.row}>
+                                        <View style={styles.halfInput}>{renderInput('Ticket #', 'ticket_number', '1001')}</View>
+                                        <View style={styles.halfInput}>{renderInput('Date', 'ticket_date', 'YYYY-MM-DD')}</View>
+                                    </View>
+                                    {renderInput('Vendor', 'haul_vendor', 'Vendor Name')}
+                                    <View style={styles.row}>
+                                        <View style={styles.halfInput}>{renderInput('Truck #', 'truck_number', 'T-101')}</View>
+                                        <View style={styles.halfInput}>{renderInput('Job #', 'job_number', 'Job Code')}</View>
+                                    </View>
+                                    {renderInput('Material', 'material', 'Material Name')}
+                                    <View style={styles.row}>
+                                        <View style={styles.halfInput}>{renderInput('Zone', 'zone', 'Zone')}</View>
+                                        <View style={styles.halfInput}>{renderInput('Hours', 'hours', '0.0', 'numeric')}</View>
+                                    </View>
+
+                                    {/* Table Data */}
+                                    <Text style={styles.sectionHeader}>Table Data</Text>
+                                    {renderTable()}
+
+                                    <View style={{ height: 40 }} />
+                                </ScrollView>
+                            </KeyboardAvoidingView>
+                        )}
                     </View>
-                    <TouchableOpacity
-                        style={styles.closeButton}
-                        onPress={() => setPdfUri(null)}
-                    >
-                        <Ionicons name="close" size={30} color="#fff" />
-                    </TouchableOpacity>
                 </View>
             </Modal>
         </View>
@@ -290,133 +425,186 @@ export default function SupervisorTicketsScreen({ route }: any) {
 }
 
 const styles = StyleSheet.create({
-    listContainer: {
-        padding: 10,
-        flexGrow: 1, // Allows ListEmptyComponent to center
-    },
-    ticketContainer: {
-        backgroundColor: THEME.colors.cardLight,
+    container: { flex: 1, backgroundColor: '#f5f5f5' },
+    listContent: { padding: 12 },
+    emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 50 },
+    emptyText: { color: '#888', fontSize: 16 },
+
+    card: {
+        flexDirection: 'row', 
+        backgroundColor: 'white',
         borderRadius: 12,
         marginBottom: 16,
         overflow: 'hidden',
+        height: 160, 
         shadowColor: '#000',
         shadowOpacity: 0.1,
-        shadowRadius: 5,
+        shadowRadius: 4,
         elevation: 3,
-        paddingBottom: 8,
     },
-    image: {
+    previewColumn: {
+        width: 110,
+        backgroundColor: '#eee',
+    },
+    previewContainer: {
+        flex: 1,
         width: '100%',
-        height: 200,
-        borderTopLeftRadius: 12,
-        borderTopRightRadius: 12,
+        height: '100%',
+        position: 'relative',
     },
-    inputRow: {
+    pdfPreview: {
+        flex: 1,
+        width: 110,
+        height: 160,
+        backgroundColor: '#f0f0f0',
+    },
+    imagePreview: {
+        width: '100%',
+        height: '100%',
+    },
+    previewOverlay: {
+        position: 'absolute',
+        bottom: 5,
+        right: 5,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: 15,
+        padding: 4,
+    },
+    actionsColumn: {
+        flex: 1,
+        padding: 12,
+        justifyContent: 'space-between',
+        backgroundColor: '#c2c2c2ff', 
+    },
+    cardHeader: {
         flexDirection: 'row',
-        alignItems: 'center',
-        padding: 10,
-    },
-    input: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: THEME.colors.subtleLight,
-        borderRadius: 8,
-        padding: 8,
-        color: THEME.colors.textDark,
-        backgroundColor: '#f9f9f9',
-    },
-    statusIndicator: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        marginLeft: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    savedText: {
-        textAlign: 'right',
-        color: THEME.colors.success,
-        fontSize: 12,
-        marginRight: 10,
-        marginTop: -6,
-    },
-    centered: {
-        flex: 1,
-        justifyContent: 'center',
+        justifyContent: 'space-between',
         alignItems: 'center',
     },
-    pdfContainer: {
-        height: 200,
-        backgroundColor: '#fdecea',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderTopLeftRadius: 12,
-        borderTopRightRadius: 12,
-    },
-    pdfText: {
-        marginTop: 10,
-        color: '#d32f2f',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    // Styles for Empty State (unchanged)
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 30,
-        marginTop: 50,
-    },
-    emptyText: {
-        marginTop: 15,
-        textAlign: 'center',
+    cardTitle: {
         fontSize: 16,
-        color: THEME.colors.textMuted,
+        fontWeight: '700',
+        color: '#333',
     },
-    emptySubText: {
-        marginTop: 5,
-        textAlign: 'center',
-        fontSize: 12,
-        color: THEME.colors.textMuted,
+    
+    labelSmall: {
+        fontSize: 11,
+        color: '#181717ff', 
+        marginBottom: 4,
+        textTransform: 'uppercase',
+        fontWeight: '700',
     },
-    refreshButton: {
+    pickerContainer: {
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        borderRadius: 8,
+        backgroundColor: '#fff', 
+        paddingHorizontal: 8,
+        height: 40,
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    pickerText: {
+        fontSize: 14,
+        color: '#333',
+        paddingRight: 20, 
+    },
+    pickerPlaceholder: {
+        color: '#999',
+        fontSize: 14,
+    },
+    editButton: {
+        backgroundColor: THEME.colors.primary,
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 20,
-        padding: 10,
+        justifyContent: 'center',
+        paddingVertical: 8,
         borderRadius: 8,
-        backgroundColor: THEME.colors.cardLight,
-        borderWidth: 1,
-        borderColor: THEME.colors.brandStone,
     },
-    refreshButtonText: {
-        marginLeft: 5,
-        color: THEME.colors.brandStone,
-        fontWeight: 'bold',
+    editButtonText: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '600',
+        marginLeft: 6,
     },
 
-    // ⭐ NEW MODAL STYLES (from previous context)
-    modalContainer: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,1)', // Fully dark background for PDF
-        paddingTop: 40,
+    modalContainer: { flex: 1, backgroundColor: '#fff' },
+    modalHeader: {
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee', backgroundColor: '#fff',
     },
-    modalContent: {
-        flex: 1,
-        backgroundColor: '#333',
+    modalTitle: { fontSize: 17, fontWeight: 'bold' },
+    cancelText: { fontSize: 16, color: '#666' },
+    saveText: { fontSize: 16, color: THEME.colors.primary, fontWeight: 'bold' },
+    tabContainer: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#eee' },
+    tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+    activeTab: { borderBottomWidth: 2, borderBottomColor: THEME.colors.primary },
+    tabText: { fontSize: 15, color: '#666' },
+    activeTabText: { color: THEME.colors.primary, fontWeight: 'bold' },
+    modalContent: { flex: 1, backgroundColor: '#f8f9fa' },
+    fileViewerContainer: { flex: 1, backgroundColor: '#222' },
+    fullPdf: { flex: 1, width: width },
+    fullImage: { width: '100%', height: '100%' },
+    formContainer: { padding: 20 },
+    sectionHeader: { fontSize: 13, fontWeight: '700', color: '#888', marginBottom: 12, marginTop: 15 },
+    row: { flexDirection: 'row', justifyContent: 'space-between' },
+    halfInput: { width: '48%' },
+    inputGroup: { marginBottom: 16 },
+    inputLabel: { fontSize: 14, color: '#444', marginBottom: 6, fontWeight: '600' },
+    textInput: {
+        backgroundColor: 'white', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 8,
+        padding: 12, fontSize: 16, color: '#333',
     },
-    fullPdf: {
-        flex: 1,
-        width: width,
-        height: height,
+    noDataText: { fontStyle: 'italic', color: '#999', textAlign: 'center' },
+
+    // ⭐ TABLE GRID STYLES ⭐
+    tableBorder: {
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 6,
+        overflow: 'hidden',
+        marginTop: 10,
+        backgroundColor: '#fff',
     },
-    closeButton: {
-        position: 'absolute',
-        top: 50, // Safe area
-        right: 20,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        borderRadius: 20,
-        padding: 5,
-        zIndex: 10,
+    tableHeaderRow: {
+        flexDirection: 'row',
+        backgroundColor: '#e0e0e0',
+        borderBottomWidth: 1,
+        borderBottomColor: '#999',
+    },
+    headerCell: {
+        width: 120, 
+        padding: 10,
+        borderRightWidth: 1,
+        borderRightColor: '#ccc',
+        backgroundColor: '#d6d6d6',
+        justifyContent: 'center',
+    },
+    headerText: {
+        fontWeight: 'bold',
+        fontSize: 13,
+        color: '#333',
+        textAlign: 'center',
+    },
+    tableRow: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    evenRow: { backgroundColor: '#fff' },
+    oddRow: { backgroundColor: '#f9f9f9' },
+    cell: {
+        width: 120, // Match header width
+        borderRightWidth: 1,
+        borderRightColor: '#eee',
+        padding: 4,
+        justifyContent: 'center',
+    },
+    cellInput: {
+        fontSize: 14,
+        color: '#000',
+        paddingHorizontal: 6,
+        paddingVertical: 8,
+        textAlign: 'center',
     },
 });

@@ -680,7 +680,18 @@ class Ticket(BaseModel):
     foreman_id: int
     job_phase_id: int
     image_path: str
-    extracted_text: Optional[str] = None
+    ticket_number: Optional[str] = None
+    ticket_date: Optional[str] = None
+    haul_vendor: Optional[str] = None
+    truck_number: Optional[str] = None
+    material: Optional[str] = None
+    job_number: Optional[str] = None
+    phase_code_: Optional[str] = None # The string text from OCR
+    zone: Optional[str] = None
+    hours: Optional[float] = None
+    
+    # ✅ 3. ADD: The dynamic JSON table data
+    table_data: Optional[Dict[str, Any] | List[Any]] = None
     status: str
     created_at: Optional[datetime]
     timesheet_id: Optional[int]
@@ -705,6 +716,18 @@ class PhaseCodeSchema(BaseModel):
 class TicketSummary(BaseModel):
     id: int
     image_path: str
+    ticket_number: Optional[str] = None
+    ticket_date: Optional[str] = None
+    haul_vendor: Optional[str] = None
+    truck_number: Optional[str] = None
+    material: Optional[str] = None
+    job_number: Optional[str] = None
+    phase_code_: Optional[str] = None 
+    zone: Optional[str] = None
+    hours: Optional[float] = None
+    
+    # JSON Data
+    table_data: Optional[Dict[str, Any] | List[Any]] = None
     phase_code_id: Optional[int]
     phase_code: Optional[PhaseCodeSchema] = None
 
@@ -712,7 +735,24 @@ class TicketSummary(BaseModel):
         from_attributes = True
 
 
+class TicketUpdate(BaseModel):
+    phase_code_id: Optional[int] = None
+    
+    # Editable Fields
+    ticket_number: Optional[str] = None
+    ticket_date: Optional[str] = None
+    haul_vendor: Optional[str] = None
+    truck_number: Optional[str] = None
+    material: Optional[str] = None
+    job_number: Optional[str] = None
+    phase_code_: Optional[str] = None
+    zone: Optional[str] = None
+    hours: Optional[float] = None
+    
+    # Editable JSON
+    table_data: Optional[Dict[str, Any] | List[Any]] = None
 
+    model_config = ConfigDict(from_attributes=True)
 
 class TimesheetSummary(BaseModel):
     id: int

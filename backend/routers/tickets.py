@@ -1,71 +1,23 @@
-from fastapi import APIRouter, Depends, Query, HTTPException, Path, status
+# C:\admin_webpage\backend\routers\tickets.py
+
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import cast, Date
-from datetime import date as date_type
-from collections import defaultdict
 from typing import List
-from pydantic import BaseModel
-from ..database import get_db
-
-from ..models import SubmissionStatus
+from datetime import datetime, date as date_type
 
 from .. import models, schemas, database
+from ..models import SubmissionStatus
+from ..database import get_db
 
-
-# ==========================================================
-# 🔹 SINGLE Router Declaration
-# ==========================================================
 router = APIRouter(
     prefix="/api/tickets",
     tags=["Tickets"]
 )
 
-
 # ==========================================================
-# 🔹 1️⃣ Foreman View: All Tickets (optional)
+# 🔹 1. Supervisor View: Get Submitted Tickets
 # ==========================================================
-# (You can keep your commented block here if needed)
-
-
-# ==========================================================
-# 🔹 2️⃣ Supervisor View: Only Submitted Tickets
-# ==========================================================
-from datetime import date
-from sqlalchemy import func
-
-# @router.get("/counts")
-# def get_ticket_counts(
-#     foreman_id: int = Query(...),
-#     db: Session = Depends(database.get_db)
-# ):
-
-#     today = date.today()
-
-#     total = db.query(func.count(models.Ticket.id)).filter(
-#         models.Ticket.foreman_id == foreman_id,
-#         models.Ticket.date == today
-#     ).scalar()
-
-#     submitted = db.query(func.count(models.Ticket.id)).filter(
-#         models.Ticket.foreman_id == foreman_id,
-#         models.Ticket.date == today,
-#         models.Ticket.status == "SUBMITTED"
-#     ).scalar()
-
-#     pending = db.query(func.count(models.Ticket.id)).filter(
-#         models.Ticket.foreman_id == foreman_id,
-#         models.Ticket.date == today,
-#         models.Ticket.status == "PENDING"
-#     ).scalar()
-
-#     return {
-#         "total": total,
-#         "submitted": submitted,
-#         "pending": pending
-#     }
-
-from datetime import datetime, date as date_type
-
 @router.get("/for-supervisor", response_model=List[schemas.TicketSummary])
 def get_tickets_for_supervisor(
     foreman_id: int = Query(...),
@@ -94,35 +46,60 @@ def get_tickets_for_supervisor(
 
     return tickets
 
+# ==========================================================
+# 🔹 2. Update Ticket (Phase Code + Data + Table Data)
+# ==========================================================
+@router.patch("/{ticket_id}", response_model=schemas.TicketSummary)
+def update_ticket(
+    ticket_id: int,
+    update: schemas.TicketUpdate,
+    db: Session = Depends(get_db),
+):
+    ticket = db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    # 1. Update Phase Code ID specifically if provided
+    if update.phase_code_id is not None:
+        ticket.phase_code_id = update.phase_code_id
+
+    # 2. Update all other fields dynamically
+    # exclude_unset=True ensures we don't set fields to None unless explicitly sent as None
+    update_data = update.model_dump(exclude_unset=True)
+    
+    for key, value in update_data.items():
+        # Check if the model has this column (prevent errors on extra fields)
+        if hasattr(ticket, key):
+            setattr(ticket, key, value)
+
+    db.commit()
+    db.refresh(ticket)
+    return ticket
 
 # ==========================================================
-# 🔹 3️⃣ Project Engineer View: Approved Tickets
+# 🔹 3. Project Engineer View (Approved Tickets)
 # ==========================================================
 @router.get("/for-project-engineer", response_model=List[schemas.TicketSummary])
 def get_tickets_for_project_engineer(
     db: Session = Depends(database.get_db),
     supervisor_id: int = Query(...),
     date: str = Query(...),
-    project_engineer_id: int = Query(...),  # ✅ new param
+    project_engineer_id: int = Query(...),
 ):
-    """
-    Get all tickets for the given Project Engineer,
-    limited to their assigned job codes.
-    """
     target_date = date_type.fromisoformat(date)
 
-    # ✅ Get all job codes assigned to this Project Engineer
+    # Get job codes for PE
     job_codes = (
         db.query(models.JobPhase.job_code)
         .filter(models.JobPhase.project_engineer_id == project_engineer_id)
         .all()
     )
-    job_codes = [jc[0] for jc in job_codes]  # flatten list of tuples
+    job_codes = [jc[0] for jc in job_codes]
 
     if not job_codes:
         raise HTTPException(status_code=404, detail="No jobs assigned to this Project Engineer")
 
-    # ✅ Get foremen whose submissions belong to the supervisor on that date
+    # Get foremen for this supervisor/date/status
     foremen = (
         db.query(models.DailySubmission.foreman_id)
         .filter(
@@ -134,47 +111,23 @@ def get_tickets_for_project_engineer(
         .subquery()
     )
 
-    # ✅ Get tickets only for those job codes belonging to the engineer
     tickets = (
         db.query(models.Ticket)
         .filter(
             models.Ticket.foreman_id.in_(foremen),
             cast(models.Ticket.created_at, Date) == target_date,
             models.Ticket.sent == True,
-            models.Ticket.job_code.in_(job_codes)  # ✅ filter by assigned job codes
+            models.Ticket.job_code.in_(job_codes)
         )
         .all()
     )
 
-    return [schemas.TicketSummary.from_orm(t) for t in tickets]
+    return tickets
 
 # ==========================================================
-# 🔹 4️⃣ Ticket Update Endpoint
-from pydantic import BaseModel
-
-class TicketUpdatePhase(BaseModel):
-    phase_code_id: int  # Must match the frontend payload
-
-@router.patch("/{ticket_id}", response_model=schemas.Ticket)
-def update_ticket_phase_code(
-    ticket_id: int,
-    update: TicketUpdatePhase,
-    db: Session = Depends(get_db),
-):
-    ticket = db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-
-    ticket.phase_code_id = update.phase_code_id
-    db.commit()
-    db.refresh(ticket)
-    return ticket
-
-# ==========================================================
-# 🔹 5️⃣ Submit Tickets
+# 🔹 4. Submit Tickets (Status Change)
 # ==========================================================
 @router.post("/submit", status_code=status.HTTP_200_OK)
-# @audit(action="submitted", entity="Ticket")
 def submit_tickets(payload: dict, db: Session = Depends(database.get_db)):
     ticket_ids = payload.get("ticket_ids", [])
     if not ticket_ids:
@@ -191,10 +144,9 @@ def submit_tickets(payload: dict, db: Session = Depends(database.get_db)):
     db.commit()
     return {"message": "Tickets submitted successfully", "count": len(tickets)}
 
-
 # ==========================================================
-# 🔹 6️⃣ Health Check Endpoint
+# 🔹 5. Health Check
 # ==========================================================
 @router.get("/")
 async def root():
-    return {"message": "OCR API is running successfully!"}
+    return {"message": "Tickets API is running successfully!"}
