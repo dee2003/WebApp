@@ -50,8 +50,9 @@ type TableCategory =
 
 // --- FIXED WIDTHS (for perfect tablet behavior) ---
 const COL_NAME = 160;
-const COL_ID = 70;              // NEW: Width for EMP# and EQUIP #ER
+const COL_ID = 70;              // NEW: Width for EMP# and EQUIP #ER / Vendor ID
 const COL_CLASS = 80;
+const COL_MATERIAL = 130;       // ADDED: Width for Material Name column (Material/Vendor/Dumping tables)
 const COL_EMPLOYEE_HOUR = 110;   // Employee hours column width 
 const COL_SIMPLE_HOUR = 110;    // Used for Material/Vendor/Dumping Qty/Hours
 const COL_EQUIP = 110;          // Used for Equipment REG/S.B (per column)
@@ -384,7 +385,8 @@ const handleSendTimesheet = async (timesheetId: number) => {
         const isEmployee = type === 'employee';
         const isEquipment = type === 'equipment';
         const isMaterial = type === 'material';
-        const isSimple = isMaterial || type === 'vendor' || type === 'dumping_site';
+        const isVendor = type === 'vendor'; // ADDED: Variable for vendor type
+        const isSimple = isMaterial || isVendor || type === 'dumping_site';
 
         const phaseCodes = timesheet?.data.job.phase_codes || [];
         // Even if there are no phases, we can't render the table structure correctly
@@ -432,9 +434,14 @@ const handleSendTimesheet = async (timesheetId: number) => {
             fixedWidth += COL_ID + COL_CLASS;
         } else if (isEquipment) {
             // Name + EQUIP #ER + Start Hours + Stop Hours + Total
-            fixedWidth += COL_ID + (COL_START_STOP * 2); // <--- ADDED START/STOP COLUMNS
+            fixedWidth += COL_ID + (COL_START_STOP * 2); 
         } else {
-            // Simple tables just have the Name and Total fixed columns
+            // Simple tables fixed columns:
+            fixedWidth += COL_MATERIAL + COL_TICKET;
+            // NEW: Add COL_ID for Vendor table
+            if (isVendor) {
+                fixedWidth += COL_ID;
+            }
         }
         
         // Calculate total content width by multiplying phase group width by the number of phases
@@ -506,7 +513,6 @@ const handleSendTimesheet = async (timesheetId: number) => {
                         <View key={`${entity.id}-${classCode}`} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
                             {/* Show name only in the first row for this employee. */}
                             {/* NAME CELL (first row shows name + optional reason) */}
-{/* NAME CELL */}
 <View
   style={[
     styles.dataCell,
@@ -581,6 +587,9 @@ const handleSendTimesheet = async (timesheetId: number) => {
             });
         };
         // End of Custom Employee Table Renderer
+        
+        // --- NEW: Grouping variable for simple tables (must be outside the map, but inside renderTableBlock) ---
+        let lastEntityName = '';
 
 
         return (
@@ -593,19 +602,36 @@ const handleSendTimesheet = async (timesheetId: number) => {
                         
                         {/* -------------------- TABLE HEADER START (DYNAMIC) -------------------- */}
                         <View style={styles.tableHeader}>
-                            {/* Fixed columns at the start */}
+                            
+                            {/* 1. VENDOR ID COLUMN (Vendor Only - NEW FIRST COLUMN) */}
+                            {isVendor && (
+                                <Text 
+                                    style={[
+                                        styles.headerCell, 
+                                        styles.colId, 
+                                        styles.borderRight,
+                                        styles.headerCellBottomBorder
+                                    ]}
+                                >
+                                    Vendor ID
+                                </Text>
+                            )}
+                            
+                            {/* 2. NAME COLUMN (Always present - Second for Vendor, First otherwise) */}
                             <Text 
                                 style={[
                                     styles.headerCell, 
                                     styles.colName, 
-                                    styles.borderRight, // Keep border right here
-                                    !isEmployee && styles.headerCellBottomBorder // Simple tables start border here
+                                    styles.borderRight,
+                                    styles.headerCellBottomBorder // Simple tables start border here, so always add.
                                 ]}
                             >
                                 Name
                             </Text>
                             
-                            {/* NEW EMP# COLUMN */}
+                            {/* 3. FIXED ID/CLASS/START/STOP COLUMNS (Positioned after Name) */}
+
+                            {/* NEW EMP# COLUMN (Employee only) */}
                             {isEmployee && (
                                 <Text 
                                     style={[
@@ -619,7 +645,7 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                 </Text>
                             )}
 
-                            {/* NEW EQUIP #ER COLUMN */}
+                            {/* NEW EQUIP #ER COLUMN (Equipment only) */}
                             {isEquipment && (
                                 <Text 
                                     style={[
@@ -638,7 +664,7 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                 <Text 
                                     style={[
                                         styles.headerCell, 
-                                        styles.colStartStop, // Use new style
+                                        styles.colStartStop, 
                                         styles.borderRight,
                                         styles.headerCellBottomBorder
                                     ]}
@@ -652,7 +678,7 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                 <Text 
                                     style={[
                                         styles.headerCell, 
-                                        styles.colStartStop, // Use new style
+                                        styles.colStartStop, 
                                         styles.borderRight,
                                         styles.headerCellBottomBorder
                                     ]}
@@ -673,16 +699,30 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                     Class Code
                                 </Text>
                             )}
-                         {!isEmployee && !isEquipment && (
-    <Text style={[
-        styles.headerCell, 
-        styles.colTickets, 
-        styles.borderLeft,
-        styles.headerCellBottomBorder
-    ]}>
-        {type === "dumping_site" ? "# Loads" : "# Tickets"}
-    </Text>
-)}
+
+                            {/* 4. MATERIAL COLUMN (Simple tables only - Third column for Vendor) */}
+                            {isSimple && (
+                                <Text style={[
+                                    styles.headerCell, 
+                                    styles.colMaterial, 
+                                    styles.borderRight, 
+                                    styles.headerCellBottomBorder
+                                ]}>
+                                    Material
+                                </Text>
+                            )}
+
+                            {/* 5. TICKETS COLUMN (Simple tables only - Fourth column for Vendor) */}
+                            {isSimple && (
+                                <Text style={[
+                                    styles.headerCell, 
+                                    styles.colTickets, 
+                                    styles.borderRight, 
+                                    styles.headerCellBottomBorder
+                                ]}>
+                                    {type === "dumping_site" ? "# Loads" : "# Tickets"}
+                                </Text>
+                            )}
 
 
                             {/* DYNAMIC PHASE COLUMNS (These scroll) */}
@@ -718,7 +758,8 @@ const handleSendTimesheet = async (timesheetId: number) => {
             styles.headerCellBottomBorder
         ]}
     >
-        {type === 'material' ? 'Hours/Qty' :
+        {isEmployee ? 'Hours' : // Employee tables use 'Hours'
+            type === 'material' ? 'Hours/Qty' :
             type === 'dumping_site' ? 'Loads' :
             'Quantity'}
     </Text>
@@ -756,19 +797,64 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                     entityId = entity.id || entity.name || entity.key || entity.vendor_id;
                                 }
 
-                                const entityName = entity.first_name
-                                    ? `${entity.first_name} ${entity.middle_name || ''} ${entity.last_name}`.trim()
-                                    : entity.name;
+                                // ⭐️ FIX: Correctly derive the display name based on entity type and available properties in the raw data.
+                                const entityName = (type === 'vendor')
+                                    ? entity.vendor_name // Vendors use vendor_name (from LOG 1)
+                                    : (type === 'material' || type === 'dumping_site')
+                                        ? entity.name || entity.material_name // Fallback for materials/dumping sites
+                                        : entity.first_name
+                                            ? `${entity.first_name} ${entity.middle_name || ''} ${entity.last_name}`.trim()
+                                            : entity.name;
                                 
+                                // --- NEW GROUPING LOGIC START ---
+                                const isNewGroup = isSimple && entityName !== lastEntityName;
+                                const shouldShowName = isNewGroup || isEquipment; // Always show name for Equipment
+                                // --- NEW GROUPING LOGIC END ---
+
                                 const totalHours = isEquipment 
                                     ? calculateTotalComplexHours(hoursState as ComplexHourState, entityId)
                                     : calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
+                                    
+                                // FIX APPLIED HERE: Calculate total tickets for simple tables, falling back to tickets_loads if phase breakdown is empty.
+                                const totalPhaseTickets = isSimple && ticketsState 
+                                    ? calculateTotalSimpleHours(ticketsState as SimpleHourState, entityId)
+                                    : 0;
+
+                                const totalTickets = totalPhaseTickets > 0 
+                                    ? totalPhaseTickets 
+                                    : (isSimple && entity.tickets_loads) ? entity.tickets_loads : 0; // Use raw tickets_loads if phase breakdown is empty or missing
+
+
+                                // --- UPDATE lastEntityName for the next iteration ---
+                                if (isSimple) {
+                                    lastEntityName = entityName;
+                                }
+
 
                                 return (
                                     <View key={entityId} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
-                                        <Text style={[styles.dataCell, styles.colName, styles.borderRight]} numberOfLines={2}>
-                                            {entityName}
-                                        </Text>
+                                        
+                                        {/* NEW VENDOR ID COLUMN (Vendor only - RENDERED FIRST) */}
+                                        {isVendor && (
+                                            <Text style={[styles.dataCell, styles.colId, styles.borderRight, shouldShowName ? null : styles.transparentCell]}>
+                                                {shouldShowName ? entity.vendor_id : ''}
+                                            </Text>
+                                        )}
+                                        
+                                        {/* NAME CELL (CONDITIONAL RENDER for Simple Tables - RENDERED SECOND for Vendor) */}
+                                        <View 
+                                            style={[
+                                                styles.dataCell, 
+                                                styles.colName, 
+                                                styles.borderRight,
+                                            ]} 
+                                        >
+                                            {shouldShowName ? (
+                                                <Text style={{ fontSize: 12, textAlign: 'left', color: THEME.text }} numberOfLines={2}>
+                                                    {entityName}
+                                                </Text>
+                                            ) : null}
+                                        </View>
                                         
                                         {/* NEW EQUIP #ER COLUMN (Equipment only) */}
                                         {isEquipment && (
@@ -790,13 +876,21 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                                 {entity.stop_hours || ''}
                                             </Text>
                                         )}
-                                      {!isEmployee && !isEquipment && (
-    <View style={[styles.dataCell, styles.colTickets, styles.borderLeft]}>
-        <Text style={styles.valueText}>
-            {entity.tickets_loads?.[entityId] ?? 0}
-        </Text>
-    </View>
-)}
+                                        
+                                        {/* NEW MATERIAL NAME COLUMN (Simple tables only) - RENDERED THIRD for Vendor (Always rendered) */}
+                                        {isSimple && (
+                                            <Text style={[styles.dataCell, styles.colMaterial, styles.borderRight]} numberOfLines={2}>
+                                                {entity.material_name || entity.name || ''} 
+                                            </Text>
+                                        )}
+                                        
+                                        {/* TICKETS COLUMN (Simple tables only) - RENDERED FOURTH for Vendor */}
+                                        {isSimple && (
+                                            <Text style={[styles.dataCell, styles.colTickets, styles.borderRight]}>
+                                                {totalTickets > 0 ? totalTickets : ''}
+                                            </Text>
+                                        )}
+
                                         {/* Dynamic Phase Columns */}
                                         {phaseCodes.map((phase, phaseIndex) => {
                                             const isLastPhase = phaseIndex === phaseCodes.length - 1;
@@ -843,29 +937,51 @@ const handleSendTimesheet = async (timesheetId: number) => {
 
                         {/* -------------------- PHASE TOTALS ROW (DYNAMIC) -------------------- */}
                         <View style={[styles.tableRow, styles.phaseTotalRow]}>
-                            <Text style={[styles.dataCell, styles.colName, styles.phaseTotalText,styles.noBorderRight,styles.phaseTotalLabelAlignment]}>Phase Total</Text>
-                            {isSimple && (
-    <View style={[styles.dataCell, styles.colTickets]} />
-)}
+                            
+                            {/* VENDOR ID PLACEHOLDER (Vendor only - FIRST COLUMN) */}
+                            {isVendor && (
+                                <View style={[styles.dataCell, styles.colId, styles.borderRight]} />
+                            )}
+                            
+                            {/* NAME CELL (ALWAYS FIRST/SECOND COLUMN - HOLDS LABEL) */}
+                            <Text style={[
+                                styles.dataCell, 
+                                styles.colName, 
+                                styles.phaseTotalText,
+                                styles.borderRight, 
+                                styles.phaseTotalLabelAlignment
+                            ]}>
+                                Phase Total
+                            </Text>
 
-                            {/* ID Column Placeholder */}
+                            {/* ID Column Placeholder (Employee/Equipment only - Third/Second column) */}
                             {(isEmployee || isEquipment) && (
-                                <View style={[styles.dataCell, styles.colId]} /> 
+                                <View style={[styles.dataCell, styles.colId, styles.borderRight]} /> 
                             )}
                             
                             {/* NEW START HOURS PLACEHOLDER (Equipment only) */}
                             {isEquipment && (
-                                <View style={[styles.dataCell, styles.colStartStop]} /> 
+                                <View style={[styles.dataCell, styles.colStartStop, styles.borderRight]} /> 
                             )}
 
                             {/* NEW STOP HOURS PLACEHOLDER (Equipment only) */}
                             {isEquipment && (
-                                <View style={[styles.dataCell, styles.colStartStop]} /> 
+                                <View style={[styles.dataCell, styles.colStartStop, styles.borderRight]} /> 
                             )}
                             
                             {/* Class Code Placeholder (Employee only) */}
                             {isEmployee && (
-                                <View style={[styles.dataCell, styles.colClassCode]} /> 
+                                <View style={[styles.dataCell, styles.colClassCode, styles.borderRight]} /> 
+                            )}
+
+                            {/* MATERIAL COLUMN PLACEHOLDER (Simple tables only - Third column for Vendor) */}
+                            {isSimple && (
+                                <View style={[styles.dataCell, styles.colMaterial, styles.borderRight]} />
+                            )}
+                           
+                            {/* TICKETS COLUMN PLACEHOLDER (Simple tables only - Fourth column for Vendor) */}
+                            {isSimple && (
+                                <View style={[styles.dataCell, styles.colTickets, styles.borderRight]} />
                             )}
                             
                             {phaseCodes.map((phase, phaseIndex) => {
@@ -909,12 +1025,8 @@ const handleSendTimesheet = async (timesheetId: number) => {
             styles.dataCell,
             styles.colHoursSimple,
             styles.phaseTotalText,
-            // ⭐️ FIX: Explicitly add borderRight. Since isSimple tables don't have sub-columns, 
-            // the dataCell automatically uses styles.borderRight, but we need to ensure the phaseGroupBorderRight 
-            // is not applied to the parent Vew's right border.
-            // Let's rely on the phaseGroupBorderRight being applied to the parent view EXCEPT for the last one.
-            // For the last phase, we will manually add the border right here.
-            isLastPhase ? styles.borderRight : styles.noBorderRight,
+            // Simple tables only have one cell under the phase code, so it is the last cell.
+            styles.lastCell,
         ]}>
             {(simplePhaseTotals[phase] || 0).toFixed(1)}
         </Text>
@@ -925,6 +1037,8 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                 );
                             })}
                             
+                            {/* Total Column placeholder */}
+                            <View style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft]} />
                            
                         </View>
                         {/* -------------------- PHASE TOTALS ROW END -------------------- */}
@@ -1125,6 +1239,7 @@ const styles = StyleSheet.create({
   },
   colId: { width: COL_ID }, // NEW ID Column Style
   colClassCode: { width: COL_CLASS },
+  colMaterial: { width: COL_MATERIAL }, // NEW Material Column Style
   colHoursSimple: { width: COL_SIMPLE_HOUR }, // Used by Material/Vendor/Dumping for Qty/Hours
   colHoursEquipment: { width: COL_EQUIP },
   colTickets: { width: COL_TICKET },
