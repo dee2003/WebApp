@@ -114,15 +114,25 @@ const ForemanTimesheetViewScreen = ({ navigation, route }: any) => {
                 setNotes(tsData.data.notes || '');
 
 
+                // ⭐️ FIX 1: Corrected populateSimple to use a composite key for vendors
                 const populateSimple = (entities: any[] = [], field: 'hours_per_phase' | 'tickets_per_phase', type?: 'material' | 'vendor' | 'dumping_site'): SimpleHourState => {
                     const state: SimpleHourState = {};
                     entities.forEach((e) => {
-                        // NEW FIX: If type is 'material', prioritize 'name' as the key is often derived from it in the saved data.
                         let id;
                         if (type === 'material') {
                             id = e.name || e.id || e.key || e.vendor_id;
+                        } else if (type === 'vendor') { 
+                            // FIX: Create a unique composite key for vendor materials (VendorID_UniqueLineItemKey)
+                            const vendorId = e.vendor_id || e.id;
+                            // Use e.key (likely a unique internal ID) or e.material_name/e.name as the unique part
+                            const uniqueLineItemKey = e.key || e.material_name || e.name || e.id;
+
+                            // Use a composite key (e.g., '1465_P. Gravel')
+                            // This ensures each material is stored distinctly in the state object.
+                            id = (vendorId && uniqueLineItemKey) ? `${vendorId}_${uniqueLineItemKey}` : e.id || e.name || e.key || e.vendor_id;
+
                         } else {
-                            // Keep the standard priority (ID > Name) for others
+                            // Keep the standard priority (ID > Name) for dumping_site
                             id = e.id || e.name || e.key || e.vendor_id; 
                         }
                         
@@ -295,18 +305,27 @@ setSupervisorName(supervisorName);
     };
 
 
-    const calculateSimplePhaseTotals = (state: SimpleHourState, phaseCodes: string[]): Record<string, number> => {
-        const totals: Record<string, number> = {};
-        phaseCodes.forEach(p => { totals[p] = 0 });
-        Object.values(state).forEach((perEntity) => {
-            Object.entries(perEntity).forEach(([phase, value]) => {
-                if (totals[phase] !== undefined) {
-                    totals[phase] += parseFloat(value) || 0;
-                }
-            });
-        });
-        return totals;
-    };
+// ⭐️ FIX: Uses the general logic which sums all line items, now that populateSimple creates unique keys for each line item.
+const calculateSimplePhaseTotals = (
+  state: SimpleHourState, 
+  phaseCodes: string[], 
+  type: string  // Pass the table type
+): Record<string, number> => {
+  const totals: Record<string, number> = {};
+phaseCodes.forEach(p => { totals[p] = 0 });
+
+  // This general logic correctly sums all line items for all simple tables.
+  Object.values(state).forEach((perEntity) => {
+    Object.entries(perEntity).forEach(([phase, value]) => {
+      if (totals[phase] !== undefined) {
+        totals[phase] += parseFloat(value) || 0;
+      }
+    });
+  });
+  
+  return totals;
+};
+
     
     // ComplexPhaseTotals (for Equipment)
     const calculateComplexPhaseTotals = (state: ComplexHourState, phaseCodes: string[]): Record<string, { REG: number, 'S.B': number }> => {
@@ -410,18 +429,29 @@ const handleSendTimesheet = async (timesheetId: number) => {
             // Calculate Grand Total for Equipment
             grandTotal = entities.reduce((sum, e) => sum + calculateTotalComplexHours(hoursState as ComplexHourState, e.id), 0);
         } else if (isSimple) { // This handles Material/Vendor/Dumping
-            simplePhaseTotals = calculateSimplePhaseTotals(hoursState as SimpleHourState, phaseCodes);
-            // Calculate Grand Total for Simple Tables (Sum of Hours/Qty)
-            grandTotal = entities.reduce((sum, e) => {
-                // FIX APPLIED HERE: Match key derivation logic from populateSimple
-                let entityId;
-                if (type === 'material') {
-                    entityId = e.name || e.id || e.key || e.vendor_id;
-                } else {
-                    entityId = e.id || e.name || e.key || e.vendor_id;
-                }
-                return sum + calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
-            }, 0);
+simplePhaseTotals = calculateSimplePhaseTotals(
+  hoursState as SimpleHourState, 
+  phaseCodes, 
+  type  // Pass the table type
+);            // Calculate Grand Total for Simple Tables (Sum of Hours/Qty)
+  // In renderTableBlock, replace the grand total calculation:
+grandTotal = entities.reduce((sum, e) => {
+  // For vendors, sum ALL vendorid entries to handle multiple materials
+  if (type === 'vendor') {
+    // ⭐️ FIX: Grand Total must use the composite key (same logic as below)
+    const vendorId = e.vendor_id || e.id;
+    const uniqueLineItemKey = e.key || e.material_name || e.name || e.id;
+    const entityId = (vendorId && uniqueLineItemKey) ? `${vendorId}_${uniqueLineItemKey}` : e.id || e.name || e.key || e.vendor_id;
+    
+    // Sum across ALL phases for this composite key
+    return sum + calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
+  }
+  // Existing logic for other simple types
+  let entityId = type === 'material' ? e.name || e.id || e.key || e.vendor_id 
+              : e.id || e.name || e.key || e.vendor_id;
+  return sum + calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
+}, 0);
+
         }
         // -------------------------------------------------------------------------
 
@@ -790,27 +820,23 @@ const handleSendTimesheet = async (timesheetId: number) => {
                         // --- LOGIC FOR EQUIPMENT/MATERIAL/VENDOR (NON-EMPLOYEE) ---
                             entities.map((entity, index) => {
                                 let entityId;
-                                // FIX APPLIED HERE: Match key derivation logic from populateSimple
-                                if (type === 'material') {
-                                    entityId = entity.id || entity.name || entity.key || entity.vendor_id;
+                                // ⭐️ FIX 2: Re-create the composite key for the line item lookup
+                                if (type === 'vendor') { 
+                                    const vendorId = entity.vendor_id || entity.id;
+                                    const uniqueLineItemKey = entity.key || entity.material_name || entity.name || entity.id;
+                                    
+                                    // RE-CREATE THE SAME COMPOSITE KEY USED IN populateSimple
+                                    entityId = (vendorId && uniqueLineItemKey) 
+                                        ? `${vendorId}_${uniqueLineItemKey}` 
+                                        : entity.id || entity.name || entity.key || entity.vendor_id;
+                                        
+                                } else if (type === 'material') {
+                                    entityId = entity.name || entity.id || entity.key || entity.vendor_id;
                                 } else {
                                     entityId = entity.id || entity.name || entity.key || entity.vendor_id;
                                 }
 
-                                // ⭐️ FIX: Correctly derive the display name based on entity type and available properties in the raw data.
-                                const entityName = (type === 'vendor')
-                                    ? entity.vendor_name // Vendors use vendor_name (from LOG 1)
-                                    : (type === 'material' || type === 'dumping_site')
-                                        ? entity.name || entity.material_name // Fallback for materials/dumping sites
-                                        : entity.first_name
-                                            ? `${entity.first_name} ${entity.middle_name || ''} ${entity.last_name}`.trim()
-                                            : entity.name;
-                                
-                                // --- NEW GROUPING LOGIC START ---
-                                const isNewGroup = isSimple && entityName !== lastEntityName;
-                                const shouldShowName = isNewGroup || isEquipment; // Always show name for Equipment
-                                // --- NEW GROUPING LOGIC END ---
-
+                                // ⭐️ NOTE: totalHours and totalTickets now also use the correct entityId lookup
                                 const totalHours = isEquipment 
                                     ? calculateTotalComplexHours(hoursState as ComplexHourState, entityId)
                                     : calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
@@ -826,6 +852,17 @@ const handleSendTimesheet = async (timesheetId: number) => {
 
 
                                 // --- UPDATE lastEntityName for the next iteration ---
+                                const entityName = (type === 'vendor')
+                                    ? entity.vendor_name 
+                                    : (type === 'material' || type === 'dumping_site')
+                                        ? entity.name || entity.material_name 
+                                        : entity.first_name
+                                            ? `${entity.first_name} ${entity.middle_name || ''} ${entity.last_name}`.trim()
+                                            : entity.name;
+                                
+                                const isNewGroup = isSimple && entityName !== lastEntityName;
+                                const shouldShowName = isNewGroup || isEquipment; 
+                                
                                 if (isSimple) {
                                     lastEntityName = entityName;
                                 }
@@ -915,9 +952,9 @@ const handleSendTimesheet = async (timesheetId: number) => {
                                                         // Simple Logic (Material/Vendor/Dumping)
                                                         <>
                                                             <Text style={[styles.dataCell, styles.colHoursSimple, styles.lastCell]}>
-    {parseFloat((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toFixed(1)}
-</Text>
-
+                                                                {/* THIS LOOKUP NOW USES THE CORRECT COMPOSITE entityId FOR VENDORS */}
+                                                                {parseFloat((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toFixed(1)}
+                                                            </Text>
                                                             
                                                         </>
                                                     )}
