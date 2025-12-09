@@ -109,7 +109,11 @@ const TimesheetEditScreen = ({ route, navigation }: Props) => {
   const [showVendorPicker, setShowVendorPicker] = useState(false);
   const [vendorSearch, setVendorSearch] = useState('');
   const [vendorsList, setVendorsList] = useState<any[]>([]);
-  
+  // Trucking Picker States
+const [showTruckingPicker, setShowTruckingPicker] = useState(false);
+const [truckingSearch, setTruckingSearch] = useState('');
+const [truckingList, setTruckingList] = useState<any[]>([]);
+
 useEffect(() => {
   let unsubscribe: () => void;
   
@@ -134,6 +138,7 @@ useEffect(() => {
   if (timesheet?.data?.employees) {
     setEmployeesList(timesheet.data.employees);
   }
+  
 }, [timesheet]);
 
 
@@ -201,6 +206,25 @@ const calculateSimplePhaseTotals = (state: SimpleHourState, phaseCodes: string[]
   });
   return totals;
 };
+
+const calculateSimplePhaseTotalsByEntities = (
+  state: SimpleHourState, 
+  entities: Array<{ id: string }>, 
+  phaseCodes: string[]
+): Record<string, number> => {
+  const totals: Record<string, number> = {};
+  phaseCodes.forEach(p => totals[p] = 0);
+  
+  // Only sum entities that exist in the provided entities array
+  entities?.forEach(entity => {
+    phaseCodes.forEach(p => {
+      totals[p] += toNumber(state[entity.id]?.[p]);
+    });
+  });
+  
+  return totals;
+};
+
 
 const calculateTotalSimple = (state: SimpleHourState, entityId: string) => {
   const obj = state[entityId];
@@ -280,30 +304,32 @@ const restoreProcessedDraft = (draft: any, server: Timesheet | null) => {
   }
 
   // 6) materials / vendors / dumping -> simple hours & tickets
-  if (Array.isArray(d.materials_trucking)) {
-    const mHours: SimpleHourState = {};
-    const mTickets: SimpleHourState = {};
-    const units: { [k: string]: string | null } = {};
-    d.materials_trucking.forEach((m: any) => {
-      mHours[m.id] = {};
-      // mTickets[m.id] = {};
-      const hp = m.hours_per_phase || {};
-      // const tp = m.tickets_per_phase || {};
-      Object.keys(hp).forEach(phase => mHours[m.id][phase] = String(hp[phase] ?? ''));
-      // Object.keys(tp).forEach(phase => mTickets[m.id][phase] = String(tp[phase] ?? ''));
-      units[m.id] = m.unit ?? null;
-      if (m.tickets_loads && typeof m.tickets_loads[m.id] !== 'undefined') {
+if (Array.isArray(d.materials_trucking)) {
+  const mHours: SimpleHourState = {};
+  const units: { [k: string]: string | null } = {};
+
+  d.materials_trucking.forEach((m: any) => {
+    mHours[m.id] = {};
+    Object.keys(m.hours_per_phase || {}).forEach(phase => {
+      mHours[m.id][phase] = String(m.hours_per_phase[phase] ?? '');
+    });
+
+    units[m.id] = m.unit ?? null;
+
+    if (m.tickets_loads?.[m.id] !== undefined) {
       setTicketsLoads(prev => ({
         ...prev,
         [m.id]: String(m.tickets_loads[m.id])
       }));
     }
   });
-  
-    setMaterialHours(mHours);
-    // setMaterialTickets(mTickets);
-    setMaterialUnits(units);
-  }
+
+  setMaterialHours(mHours);
+  setMaterialUnits(units);
+
+  // 👉 MISSING PART (add this!)
+  setMaterialsTrucking(d.materials_trucking);
+}
 
 if (Array.isArray(d.vendors)) {
   const vHours: SimpleHourState = {};
@@ -475,10 +501,16 @@ console.log('🔥 RAW ts.data.vendors:', ts.data?.vendors?.map((v: any) => ({
   tickets: v.tickets_loads
 })));
 
+        // const mt: any[] = [];
+        // if (ts.data?.selected_material_items) {
+        //   Object.values(ts.data.selected_material_items).forEach((m: any) => mt.push({ id: m.id, name: m.name, materials: m.selectedMaterials || [] }));
+        // }
         const mt: any[] = [];
-        if (ts.data?.selected_material_items) {
-          Object.values(ts.data.selected_material_items).forEach((m: any) => mt.push({ id: m.id, name: m.name, materials: m.selectedMaterials || [] }));
-        }
+if (ts.data?.selected_material_items) {
+  Object.values(ts.data.selected_material_items).forEach(m => 
+    mt.push({ id: m.id, name: m.name, materials: m.selectedMaterials })
+  );
+}
         const ds: any[] = [];
         if (ts.data?.selected_dumping_materials) {
           Object.values(ts.data.selected_dumping_materials).forEach((d: any) => ds.push({ id: d.id, name: d.name, materials: d.selectedMaterials || [] }));
@@ -623,17 +655,18 @@ const vu: Record<string, string> = {};
 
 wp.forEach(row => {
   const key = row.id; // "2976_6"
-  
   // Hours per phase
   vh[key] = {};
   Object.keys(row.hours_per_phase || {}).forEach(phase => {
     vh[key][phase] = String(row.hours_per_phase[phase] ?? '');
   });
-  
-  // Tickets
-  // tl[key] = String(row.tickets_loads?.[key] ?? '');
-  tl[key] = String(row.tickets_loads ?? '');
-
+  // Tickets (FIXED)
+  const rawTickets = row.tickets_loads;
+  let ticketValue = rawTickets;
+  if (typeof rawTickets === 'object' && rawTickets !== null) {
+    ticketValue = rawTickets[key];
+  }
+  tl[key] = String(ticketValue ?? '');
   // Units (vendor-level)
   vu[row.vendor_id] = row.unit ?? vu[row.vendor_id] ?? "Hrs";
 });
@@ -670,6 +703,8 @@ if (Array.isArray(ts.data?.dumping_sites)) {
   });
 }
   setMaterialsTrucking(mt);
+  
+setMaterialsTrucking(ts.data?.materials_trucking || ts.data?.selected_material_items || []);
   setDumpingSites(ds);
 // after setVendorUnits(...)
 if (ts.data?.total_quantities) {
@@ -1273,6 +1308,95 @@ const handleRemoveVendor = (vendorId: number) => {
     }
   ]);
 };
+const handleAddTrucking = () => {
+  loadAvailableTrucking()
+  setShowTruckingPicker(true)
+}
+
+const handleSelectTrucking = (trucking: any) => {
+  console.log('🚛 SELECT TRUCKING CLICKED:', trucking.id, trucking.name);
+  
+  if (!timesheet) return;
+  
+  const alreadyExists = materialsTrucking?.some((t: any) => t.id === trucking.id);
+  if (alreadyExists) {
+    Alert.alert('Trucking Already Added');
+    return;
+  }
+  
+  // ✅ 1. Update materialsTrucking DIRECTLY (fixes table immediately)
+  setMaterialsTrucking(prev => [...(prev || []), trucking]);
+  
+  // ✅ 2. Also update timesheet for save
+  setTimesheet(prev => {
+    if (!prev) return prev;
+    return {
+      ...prev,
+      data: {
+        ...prev.data,
+        materials_trucking: [...(prev.data?.materials_trucking || []), trucking]
+      }
+    };
+  });
+  
+  const truckId = String(trucking.id);
+  const phaseHours: Record<string, string> = {};
+  selectedPhases.forEach(phase => {
+    phaseHours[phase] = '';
+  });
+  setMaterialHours(prev => ({
+    ...prev,
+    [truckId]: phaseHours
+  }));
+  
+  setMaterialUnits(prev => ({ ...prev, [String(trucking.id)]: 'Hrs' }));
+  setTicketsLoads(prev => ({ ...prev, [String(trucking.id)]: '' }));
+  
+  setTruckingList(prev => prev.filter((t: any) => t.id !== trucking.id));
+  setShowTruckingPicker(false);
+};
+
+
+
+const handleRemoveTrucking = (id: string) => {
+  Alert.alert('Remove Trucking', 'Are you sure?', [
+    { text: 'Cancel', style: 'cancel' },
+    { 
+      text: 'Remove', 
+      style: 'destructive', 
+      onPress: () => {
+        setMaterialsTrucking(prev => prev?.filter((t: any) => t.id !== id) || []);
+        // Remove from UI
+        setTimesheet(prev => {
+          if (!prev?.data?.materials_trucking) return prev
+          return {
+            ...prev,
+            data: {
+              ...prev.data,
+              materials_trucking: prev.data.materials_trucking.filter((t: any) => t.id !== id)
+            }
+          }
+        })
+        // Clean up state
+        setMaterialHours(prev => {
+          const copy = { ...prev }
+          delete copy[id]
+          return copy
+        })
+        setMaterialUnits(prev => {
+          const copy = { ...prev }
+          delete copy[id]
+          return copy
+        })
+        setTicketsLoads(prev => {
+          const copy = { ...prev }
+          delete copy[id]
+          return copy
+        })
+      }
+    }
+  ])
+}
 
 
 interface Material {
@@ -1287,6 +1411,38 @@ interface Vendor {
   vendor_category: string | null;
   selectedMaterials: Material[];
 }
+const loadAvailableTrucking = async () => {
+  console.log("🔵 loadAvailableTrucking() called");
+
+  try {
+    const res = await apiClient.get('/api/materials-trucking');
+    console.log("🟢 API /materials-trucking response:", res?.data);
+
+    const rawList = Array.isArray(res?.data)
+  ? res.data.map(t => ({
+      id: t.id,
+      name: t.name,
+      unit: null,
+      detail: t.material_category,
+      material_name: t.materials?.[0]?.name || "",
+    }))
+  : [];
+
+    console.log("🟢 Raw trucking list:", rawList);
+
+    // Already assigned from timesheet
+    const assigned = materialsTrucking?.map(t => t.id) || [];
+    console.log("🟠 Already assigned trucking IDs:", assigned);
+
+    const filtered = rawList.filter(t => !assigned.includes(t.id));
+    console.log("🟣 Filtered available trucking list:", filtered);
+
+    setTruckingList(filtered);
+  } catch (err) {
+    console.log("🔴 ERROR in loadAvailableTrucking:", err);
+  }
+};
+
 
 const loadAvailableVendors = async () => {
   try {
@@ -1806,6 +1962,20 @@ const renderTotalQuantities = () => {
     </View>
   );
 };
+const handleEquipmentHourChange = (entityId: string, phaseCode: string, hourType: 'REG' | 'S_B', value: string) => {
+  const sanitized = value.replace(/[^0-9.]/g, ''); // ✅ Sanitize
+  setEquipmentHours(prev => ({
+    ...prev,
+    [entityId]: {
+      ...prev[entityId],
+      [phaseCode]: {
+        ...prev[entityId]?.[phaseCode],
+        [hourType]: sanitized  // ✅ Safe deep update
+      }
+    }
+  }));
+};
+
 const handleVendorHourChange = (rowId: string, phaseCode: string, value: string) => {
   const sanitized = value.replace(/[^0-9.]/g, '');
 
@@ -1830,6 +2000,16 @@ const handleVendorHourChange = (rowId: string, phaseCode: string, value: string)
     )
   );
 };
+const handleMaterialHourChange = (entityId: string, phaseCode: string, value: string) => {
+  const sanitized = value.replace(/[^0-9.]/g, '');
+  setMaterialHours(prev => ({
+    ...prev,
+    [entityId]: {
+      ...prev[entityId],
+      [phaseCode]: sanitized
+    }
+  }));
+};
 
 
 const handleVendorTicketsChange = (rowId: string, value: string) => {
@@ -1847,6 +2027,16 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
   entities: any[],
   type: 'equipment' | 'material' | 'vendor' | 'dumping_site'
 ) => {
+
+   // 🔥 ADD DEBUG LOG HERE - FIRST LINE IN FUNCTION
+  console.log('🏗️ TABLE DEBUG:', {
+    type,
+    entitiesLength: entities?.length || 0,
+    entitiesSample: entities?.slice(0, 2),  // First 2 items
+    materialsTruckingLength: materialsTrucking?.length || 0,
+    materialHoursKeys: Object.keys(materialHours),
+    selectedPhasesLength: selectedPhases?.length || 0
+  });
   // const phaseCodes = timesheet?.data?.job?.phase_codes || [];
   const phaseCodes = jobPhaseCodes;
 
@@ -1856,9 +2046,12 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
     isEquipment ? equipmentHours : type === 'material' ? materialHours : type === 'vendor' ? vendorHours : dumpingSiteHours;
 
   // totals per phase (reuse your existing calculators)
-  const phaseTotals = isEquipment
-    ? calculateComplexPhaseTotals(equipmentHours, phaseCodes)
-    : calculateSimplePhaseTotals(hoursState, phaseCodes);
+  // const phaseTotals = isEquipment
+  //   ? calculateComplexPhaseTotals(equipmentHours, phaseCodes)
+  //   : calculateSimplePhaseTotals(hoursState, phaseCodes);
+const phaseTotals = isEquipment 
+  ? calculateComplexPhaseTotals(equipmentHours, phaseCodes)
+  : calculateSimplePhaseTotalsByEntities(hoursState, entities, phaseCodes);
 
   return (
     
@@ -1875,6 +2068,11 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
         {type === "vendor" && (
   <TouchableOpacity onPress={handleAddVendor}>
     <Text style={styles.addButton}>+ Add Vendor</Text>
+  </TouchableOpacity>
+)}
+{type === 'material' && (
+  <TouchableOpacity onPress={handleAddTrucking}>
+    <Text style={styles.addButton}>+ Add Trucking</Text>
   </TouchableOpacity>
 )}
       </View>
@@ -2024,11 +2222,11 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
   {/* Remove icon for vendor & equipment */}
 {(isEquipment || type === "vendor") && (
   <TouchableOpacity
-    onPress={() =>
-      type === "equipment"
-        ? handleRemoveEquipment(ent.id)
-        : handleRemoveVendor(ent.id)
-    }
+    onPress={() => {
+    if (type === 'equipment') handleRemoveEquipment(ent.id)
+    else if (type === 'vendor') handleRemoveVendor(ent.id)  // Note: uses ent.id for vendor row
+    else if (type === 'material') handleRemoveTrucking(ent.id)
+  }}
     style={{
       backgroundColor: "#ffe5e5",
       borderRadius: 10,
@@ -2208,36 +2406,14 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
                               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                                 <InlineEditableNumber
                                   value={regVal}
-                                  onChange={(v) =>
-                                    setEquipmentHours((prev: any) => ({
-                                      ...prev,
-                                      [ent.id]: {
-                                        ...prev[ent.id],
-                                        [p]: {
-                                          ...prev[ent.id]?.[p],
-                                          REG: v,
-                                        },
-                                      },
-                                    }))
-                                  }
+                                  onChange={(v) => handleEquipmentHourChange(ent.id, p, 'REG', v)}
                                    validateHours={true} 
                                   placeholder="0.0"
                                   style={tableStyles.hourInput}
                                 />
                                 <InlineEditableNumber
                                   value={sbVal}
-                                  onChange={(v) =>
-                                    setEquipmentHours((prev: any) => ({
-                                      ...prev,
-                                      [ent.id]: {
-                                        ...prev[ent.id],
-                                        [p]: {
-                                          ...prev[ent.id]?.[p],
-                                          S_B: v,
-                                        },
-                                      },
-                                    }))
-                                  }
+                                  onChange={(v) => handleEquipmentHourChange(ent.id, p, 'S_B', v)} 
                                    validateHours={true} 
                                   placeholder="0.0"
                                   style={tableStyles.hourInput}
@@ -2250,13 +2426,26 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
                         // Non-equipment: single input per phase
                         const val = hoursState[ent.id]?.[p] ?? '';
 console.log(`📊 TABLE RENDER ent.id=${ent.id}, phase=${p}, vendorHours[ent.id]?.[p]=`, vendorHours[ent.id]?.[p]);
+// ✅ FIXED - Type-specific state and handlers
+const getHourValue = () => {
+  if (type === 'vendor') return vendorHours[ent.id]?.[p] ?? '';
+  if (type === 'material') return materialHours[ent.id]?.[p] ?? '';
+  if (type === 'dumping_site') return dumpingSiteHours[ent.id]?.[p] ?? '';
+  return hoursState[ent.id]?.[p] ?? '';
+};
 
+const getHourChangeHandler = () => {
+  if (type === 'vendor') return (v: string) => handleVendorHourChange(ent.id, p, v);
+  if (type === 'material') return (v: string) => handleMaterialHourChange(ent.id, p, v);
+  // if (type === 'dumping_site') return (v: string) => handleDumpingSiteHourChange(ent.id, p, v);
+  return (v: string) => {}; // fallback
+};
                         return (
                           
                           <View key={`${ent.id}-${p}`} style={[tableStyles.cell, { width: 96 }]}>
                             <InlineEditableNumber
-        value={vendorHours[ent.id]?.[p] ?? ''}
-        onChange={v => handleVendorHourChange(ent.id, p, v)}
+       value={getHourValue()}  
+        onChange={getHourChangeHandler()}
         placeholder="0.0"
         validateHours={true}
         style={tableStyles.hourInput}
@@ -2437,8 +2626,8 @@ console.log(`📊 TABLE RENDER ent.id=${ent.id}, phase=${p}, vendorHours[ent.id]
         {/* Only render tables once a phase is selected - but we render full table anyway per request */}
         {renderEmployeeTable()}
         {renderEntityTable('Equipment', timesheet.data?.equipment || [], 'equipment')}
-        {renderEntityTable('Work Performed', workPerformed, 'vendor')}
-        {renderEntityTable('Materials and Trucking', materialsTrucking, 'material')}
+        {renderEntityTable('Materials', workPerformed, 'vendor')}
+        {renderEntityTable('Trucking', materialsTrucking, 'material')}
         {renderEntityTable('Dumping Site', dumpingSites, 'dumping_site')}
 {renderTotalQuantities()} {/* <--- INSERT THIS LINE HERE */}
 
@@ -2535,6 +2724,79 @@ console.log(`📊 TABLE RENDER ent.id=${ent.id}, phase=${p}, vendorHours[ent.id]
           </View>
         </View>
       )}
+
+
+      {showTruckingPicker && (
+  <View style={styles.bottomSheetOverlay}>
+    {(() => {
+      console.log("🟡 MODAL RENDERED");
+      console.log("🟡 showTruckingPicker:", showTruckingPicker);
+      console.log("🟡 truckingList.length:", truckingList?.length);
+      console.log("🟡 truckingSearch text:", truckingSearch);
+      return null;
+    })()}
+    <Pressable style={{ flex: 1 }} onPress={() => setShowTruckingPicker(false)} />
+    <View style={[styles.bottomSheetSmall, { flexGrow: 0.5 }]}>
+      <View style={styles.dragHandle} />
+      
+      <TextInput 
+        placeholder="Search trucking company..."
+        value={truckingSearch}
+        onChangeText={setTruckingSearch}
+        style={styles.searchBox}
+        placeholderTextColor="#999"
+      />
+      
+    <ScrollView 
+  style={{ flex: 1, maxHeight: 400 }} 
+  nestedScrollEnabled={true} 
+  showsVerticalScrollIndicator={true}
+>
+{(() => {
+          console.log("🔵 ScrollView is rendered");
+          console.log("🔵 truckingList inside ScrollView:", truckingList);
+          return null;
+        })()}
+{truckingList
+  .filter(t => 
+    t.name.toLowerCase().includes(truckingSearch.toLowerCase()) ||
+    t.id.toString().includes(truckingSearch)
+  )
+  .map((trucking: any) => {
+    console.log("🟢 Rendering trucking item:", trucking);
+
+    return (
+      <Pressable 
+        key={trucking.id} 
+        style={styles.employeeRowSmall} 
+        onPress={() => handleSelectTrucking(trucking)}
+      >
+        <View>
+          <Text style={styles.empNameSmall}>{trucking.name}</Text>
+          <Text style={styles.empIdSmall}>ID: {trucking.id}</Text>
+
+          {trucking.detail && (
+            <Text style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
+              {trucking.detail}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+    );
+  })
+}
+
+</ScrollView>
+
+
+      <Pressable style={styles.closeButton} onPress={() => setShowTruckingPicker(false)}>
+        <Text style={styles.closeButtonText}>Cancel</Text>
+      </Pressable>
+    </View>
+  </View>
+)}
+
+
       <View style={styles.footer}>
         <TouchableOpacity style={[styles.saveBtn, { backgroundColor: isSubmitting ? '#999' : THEME.primary }]} onPress={handleSave} disabled={isSubmitting}>
           {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Draft</Text>}
