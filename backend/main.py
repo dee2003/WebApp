@@ -81,7 +81,7 @@ def on_startup():
 # Static Files
 # -------------------------------
 app.mount("/storage", StaticFiles(directory="storage"), name="storage")
-TICKETS_DIR = r"D:\WebApp\backend\tickets"
+TICKETS_DIR = r"D:\WebApp\backend\tickets_dir"
 app.mount("/media/tickets", StaticFiles(directory=os.path.abspath(TICKETS_DIR)), name="tickets")
 
 PDF_TICKETS_DIR = r"D:\WebApp\backend\ticket_pdfs"

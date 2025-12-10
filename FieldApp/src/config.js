@@ -1,4 +1,4 @@
 // src/config.js
-const API_URL = "https://312688ba0191.ngrok-free.app/api";
+const API_URL = "https://coated-nonattributive-babara.ngrok-free.dev";
 
 export default API_URL;

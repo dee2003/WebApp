@@ -14,7 +14,7 @@ import os
 from ..models import Timesheet  # <-- import your model
 
 load_dotenv()
-load_dotenv(r"C:\TimesheetWebApp\timesheet-app-dev\backend\.env")  # Use raw string for Windows
+load_dotenv(r"D:\WebApp\backend\.env")  # Use raw string for Windows
 sender_email = os.getenv("SMTP_USER")
 sender_password = os.getenv("SMTP_PASSWORD")
 print("SMTP_USER:", sender_email)
