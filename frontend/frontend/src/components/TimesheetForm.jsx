@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import DumpingSiteEditModal from "./DumpingSiteEditModal";
+// import DumpingSiteEditModal from "./DumpingSiteEditModal";
 import Select from "react-select";
 import "./VendorForm.css";
 import { useLocation } from "react-router-dom";
@@ -467,9 +467,6 @@ const getSelectedMaterialItems = () => {  // Keep this name
 
   return result;
 };
-
-
-
 // Get selected dumping sites with edited names and materials
 const getSelectedDumpingMaterials = () => {
   const result = {};
@@ -512,19 +509,7 @@ const handleSubmit = async (e) => {
     (sup) => sup.id === parseInt(selectedSupervisorId, 10)
   );
 
-  // const selectionData = {
-  //   vendor_categories: selectedVendorCategories,
-  //   selected_vendors: selectedVendors,
-  //   selected_vendor_materials: getSelectedVendorMaterials(),
-
-  //   material_categories: selectedMaterialCategories,
-  //   selected_materials: selectedMaterials,
-  // // selectedmaterialitems: getSelectedMaterialItems(), // ✅ Trucking vendors here
-
-  //   dumping_categories: selectedDumpingCategories,
-  //   selected_dumping_sites: selectedDumpingSites,
-  //   selected_dumping_materials: getSelectedDumpingMaterials(),
-  // };
+ 
 const selectionData = {
   vendor_categories: selectedVendorCategories,
   selectedvendors: selectedVendors,
@@ -613,10 +598,18 @@ if (recipientEmail) {
     return (
       <div className="vendor-form-page">
         <div className="timesheet-page-container">
-           <header className="page-header">
-  <h2>{isResend ? 'Resend Timesheet' : 'Create Timesheet'}</h2>
-  <button onClick={onClose} className="modal-close-btn">×</button>
-</header>
+<header className="page-header">
+                <div className="header-text-container"> 
+                    <div className="module-context-label-h2">
+                        Dispatch Module
+                    </div>
+                    <h2 className="main-form-title">
+                        {isResend ? 'Resend Timesheet' : 'Create Timesheet'}
+                    </h2>
+                </div>
+                <button onClick={onClose} className="modal-close-btn">×</button>
+            </header>
+
 
             <form onSubmit={handleSubmit} className="form-content">
                <div className="form-group">
@@ -625,27 +618,7 @@ if (recipientEmail) {
                         <option value="">-- Select Job Code --</option>
                         {jobCodes.map((job) => (<option key={job.job_code} value={job.job_code}>{job.job_code}</option>))}
                     </select>
-                    {/* {jobData?.phase_codes?.length > 0 && (
-                        <fieldset className="phase-selection-fieldset">
-                            <legend>Select Phases:</legend>
-                            <div className="phase-list">
-                                {jobData.phase_codes.map((phaseObject) => (
-                                    <label
-                                        key={phaseObject.id}
-                                        className={selectedPhases.includes(phaseObject.code) ? "selected-phase" : ""}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedPhases.includes(phaseObject.code)}
-                                            onChange={() => handlePhaseChange(phaseObject.code)}
-                                            disabled={loading}
-                                        />
-                                        <span>{phaseObject.code}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </fieldset>
-                    )} */}
+                    
                 </div>
                 {/* Job Name and Date */}
                 <div className="grid-2-cols">
@@ -1379,117 +1352,10 @@ if (recipientEmail) {
   );
 })()}
 
-{/* === Dumping Site Section === */}
-<h3>Dump Site Details</h3>
 
-<div className="form-group">
-  <label>Site Category</label>
-  <div className="checkbox-list">
-    {dumpingCategories.map((cat) => (
-      <label key={cat} className="checkbox-item d-block">
-        <input
-          type="checkbox"
-          value={cat}
-          checked={selectedDumpingCategories.includes(cat)}
-          onChange={(e) => {
-            const value = e.target.value;
-            if (e.target.checked) {
-              setSelectedDumpingCategories((prev) => [...prev, value]);
-            } else {
-              setSelectedDumpingCategories((prev) =>
-                prev.filter((c) => c !== value)
-              );
-              setDumpingList((prev) =>
-                prev.filter((d) => d.category !== value)
-              );
-            }
-          }}
-        />
-        {cat}
-      </label>
-    ))}
-  </div>
-</div>
 
-{/* For each selected Dumping category */}
 
-{selectedDumpingCategories.map((cat) => {
-  const categoryDumpingSites = dumpingList.filter((d) => d.category === cat);
-
-  return (
-    <div key={cat} className="form-group mt-3">
-      {/* <label><b>{cat} Dumping Sites</b></label> */}
-{/* <label className="vendor-subheading">{cat} Sites</label> */}
-<label className="vendor-subheading">
-    {cat === "Dump Site" ? "Available Dump Sites" : `${cat} Sites`}
-  </label>
-      {categoryDumpingSites.length === 0 ? (
-        <p className="text-muted ms-2">No dumping sites found for {cat}</p>
-      ) : (
-        <div className="vendor-list">
-          {categoryDumpingSites.map((d) => {
-            const isSelected = selectedDumpingSites.includes(d.id);
-            const displayName = editedDumpingSites[d.id]?.name || d.name;
-
-            return (
-              <div key={d.id} className="vendor-item mb-2 d-flex align-items-center">
-                {/* Checkbox: open modal immediately */}
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedDumpingSites(prev => [...prev, d.id]);
-
-                      setEditingDumpingSite({
-                        ...d,
-                        name: editedDumpingSites[d.id]?.name || d.name,
-                        selectedCategories: editedDumpingSites[d.id]?.selectedCategories || (d.categories?.map(c => c.id) || [])
-                      });
-                      setShowDumpingModal(true);
-                    } else {
-                      setSelectedDumpingSites(prev => prev.filter(id => id !== d.id));
-                      setEditedDumpingSites(prev => {
-                        const updated = { ...prev };
-                        delete updated[d.id];
-                        return updated;
-                      });
-                    }
-                  }}
-                />
-
-                {/* Dumping site name: click to edit modal */}
-                <span
-                  className="ms-2 vendor-name"
-                  style={{ cursor: "pointer" }}
-                  onClick={() => {
-                    setEditingDumpingSite({
-                      ...d,
-                      name: editedDumpingSites[d.id]?.name || d.name,
-                      selectedCategories: editedDumpingSites[d.id]?.selectedCategories || (d.categories?.map(c => c.id) || [])
-                    });
-                    setShowDumpingModal(true);
-                  }}
-                >
-                  {displayName}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-})}
-
-<DumpingSiteEditModal
-  show={showDumpingModal}
-  onClose={() => setShowDumpingModal(false)}
-  site={editingDumpingSite}
-  onSave={handleDumpingSave}
-/>
-
-                {/* Submit Actions */}
+          {/* Submit Actions */}
                 <div className="form-actions">
                     <button type="submit" disabled={loading} className={`btn ${loading ? "btn-secondary" : "btn-primary"}`}>
                         {loading ? "Sending..." : "Submit"}
