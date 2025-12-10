@@ -37,9 +37,9 @@ from ultralytics import YOLO
 YOLO_MODEL_PATH = os.path.join(os.path.dirname(__file__), "best.pt")
 
 # --- File Storage Setup ---
-TICKETS_DIR = r"C:\TimesheetWebApp\timesheet-app-dev\backend\tickets"
-DEBUG_DIR = r"C:\TimesheetWebApp\timesheet-app-dev\backend\ocr\debug_output"
-PDF_TICKETS_DIR = r"C:\TimesheetWebApp\timesheet-app-dev\backend\ticket_pdfs"
+TICKETS_DIR = r"C:\Mluis\WebApp\backend\tickets"
+DEBUG_DIR = r"C:\Mluis\WebApp\backend\ocr\debug_output"
+PDF_TICKETS_DIR = r"C:\Mluis\WebApp\backend\ticket_pdfs"
 os.makedirs(DEBUG_DIR, exist_ok=True)
 os.makedirs(PDF_TICKETS_DIR, exist_ok=True)
 

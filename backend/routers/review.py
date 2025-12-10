@@ -373,35 +373,49 @@ def get_pe_timesheets(foreman_id: int, date: str, db: Session = Depends(database
 
 # ---------------- PE Tickets ----------------
 
-@router.get("/pe/tickets")
-def get_pe_tickets(foreman_id: int, date: str, db: Session = Depends(get_db)):
+@router.get("/pe/tickets", response_model=List[schemas.Ticket]) 
+def get_pe_tickets(foreman_id: int, date: str, db: Session = Depends(database.get_db)):
     from datetime import date as date_type
-    from backend.models import SubmissionStatus  # ensure this import exists
-
-    target_date = date_type.fromisoformat(date)
+    
+    try:
+        target_date = date_type.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
     tickets = (
         db.query(models.Ticket)
         .filter(
             models.Ticket.foreman_id == foreman_id,
             cast(models.Ticket.created_at, Date) == target_date,
-            models.Ticket.status == SubmissionStatus.SUBMITTED
+            models.Ticket.status == models.SubmissionStatus.SUBMITTED
         )
         .all()
     )
-
-    return [
-        {
-            "id": t.id,
-            "job_code": t.job_phase.job_code if t.job_phase else None,
-            "phase_code": t.phase_code.code if t.phase_code else None,  # ✅ show phase code
-            "image_path": t.image_path,
-        }
-        for t in tickets
-    ]
+    
+    # Return raw objects; Pydantic response_model will handle serialization
+    return tickets
 
 
+# 2. NEW: Endpoint to Update Ticket Data
+@router.patch("/pe/tickets/{ticket_id}", response_model=schemas.Ticket)
+def update_pe_ticket(
+    ticket_id: int, 
+    payload: schemas.TicketUpdate, 
+    db: Session = Depends(database.get_db)
+):
+    ticket = db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
 
+    # Update fields if they are provided in the payload
+    update_data = payload.model_dump(exclude_unset=True)
+    
+    for key, value in update_data.items():
+        setattr(ticket, key, value)
+
+    db.commit()
+    db.refresh(ticket)
+    return ticket
 
 # In your schemas.py or at the top of your router file:
 class BulkApprovalPayload(BaseModel):

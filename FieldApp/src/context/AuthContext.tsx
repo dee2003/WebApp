@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../types';
 
 // ✅ YOUR URL
-const API_BASE_URL = "https://03cdd0f94238.ngrok-free.app";
+const API_BASE_URL = "https://9e0837b343bf.ngrok-free.app";
 
 interface AuthContextType {
   user: User | null;
