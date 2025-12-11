@@ -1029,7 +1029,7 @@ const SupervisorDashboard = () => {
 
         Object.entries(summary).forEach(([foremanName, counts]) => {
             const parts = [];
-            if (counts.timesheet > 0) parts.push(`${counts.timesheet} T/S`);
+            if (counts.timesheet > 0) parts.push(`${counts.timesheet} Timesheets`);
             if (counts.ticket > 0) parts.push(`${counts.ticket} Ticket${counts.ticket > 1 ? 's' : ''}`);
 
             if (parts.length > 0) {

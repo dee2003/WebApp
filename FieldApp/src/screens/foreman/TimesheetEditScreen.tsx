@@ -33,31 +33,11 @@ type SimpleHourState = { [key: string]: { [key: string]: string } };
 
 type Props = { route: any; navigation: any };
 
-const MATERIAL_UNITS = [
-  { label: 'Hrs', value: 'Hrs' },
-  { label: 'CY', value: 'CY' },
-  { label: 'TON', value: 'TON' },
-  { label: 'SF', value: 'SF' },
-  { label: 'SY', value: 'SY' },
-  { label: 'LF', value: 'LF' },
-  { label: 'EA', value: 'EA' },
-];
-
-const WORK_PERFORMED_UNITS = [
-  { label: 'CY', value: 'CY' },
-  { label: 'TON', value: 'TON' },
-  { label: 'SF', value: 'SF' },
-  { label: 'SY', value: 'SY' },
-  { label: 'LF', value: 'LF' },
-  { label: 'EA', value: 'EA' },
-];
-
 
 // --- MOVE THESE TO TOP OF TimesheetEditScreen ---
 
-
 const TimesheetEditScreen = ({ route, navigation }: Props) => {
-  const timesheetId = route?.params?.timesheetId;
+    const timesheetId = route?.params?.timesheetId;
   const [loading, setLoading] = useState(true);
   const [timesheet, setTimesheet] = useState<Timesheet | null>(null);
   const [selectedPhases, setSelectedPhases] = useState<string[]>([]);
@@ -66,8 +46,8 @@ const TimesheetEditScreen = ({ route, navigation }: Props) => {
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
   const [notes, setNotes] = useState('');
   const [foremanName, setForemanName] = useState('');
-  const [isClassModalVisible, setIsClassModalVisible] = useState(false);
-  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
+  // const [isClassModalVisible, setIsClassModalVisible] = useState(false);
+  // const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   // states for inputs
   const [employeeHours, setEmployeeHours] = useState<EmployeeHourState>({});
   const [equipmentHours, setEquipmentHours] = useState<ComplexHourState>({});
@@ -111,7 +91,15 @@ const TimesheetEditScreen = ({ route, navigation }: Props) => {
   const [showVendorPicker, setShowVendorPicker] = useState(false);
   const [vendorSearch, setVendorSearch] = useState('');
   const [vendorsList, setVendorsList] = useState<any[]>([]);
-  
+  // Trucking Picker States
+const [showTruckingPicker, setShowTruckingPicker] = useState(false);
+const [truckingSearch, setTruckingSearch] = useState('');
+const [truckingList, setTruckingList] = useState<any[]>([]);
+// Dumping Site Picker States
+const [showDumpingPicker, setShowDumpingPicker] = useState(false);
+const [dumpingSearch, setDumpingSearch] = useState("");
+const [dumpingList, setDumpingList] = useState<any[]>([]);
+
 useEffect(() => {
   let unsubscribe: () => void;
   
@@ -136,6 +124,7 @@ useEffect(() => {
   if (timesheet?.data?.employees) {
     setEmployeesList(timesheet.data.employees);
   }
+  
 }, [timesheet]);
 
 
@@ -203,6 +192,25 @@ const calculateSimplePhaseTotals = (state: SimpleHourState, phaseCodes: string[]
   });
   return totals;
 };
+
+const calculateSimplePhaseTotalsByEntities = (
+  state: SimpleHourState, 
+  safeEntities : Array<{ id: string }>, 
+  phaseCodes: string[]
+): Record<string, number> => {
+  const totals: Record<string, number> = {};
+  phaseCodes.forEach(p => totals[p] = 0);
+  
+  // Only sum entities that exist in the provided entities array
+  safeEntities ?.forEach(entity => {
+    phaseCodes.forEach(p => {
+      totals[p] += toNumber(state[entity.id]?.[p]);
+    });
+  });
+  
+  return totals;
+};
+
 
 const calculateTotalSimple = (state: SimpleHourState, entityId: string) => {
   const obj = state[entityId];
@@ -281,31 +289,38 @@ const restoreProcessedDraft = (draft: any, server: Timesheet | null) => {
     }
   }
 
-  // 6) materials / vendors / dumping -> simple hours & tickets
-  if (Array.isArray(d.materials_trucking)) {
-    const mHours: SimpleHourState = {};
-    const mTickets: SimpleHourState = {};
-    const units: { [k: string]: string | null } = {};
-    d.materials_trucking.forEach((m: any) => {
-      mHours[m.id] = {};
-      // mTickets[m.id] = {};
-      const hp = m.hours_per_phase || {};
-      // const tp = m.tickets_per_phase || {};
-      Object.keys(hp).forEach(phase => mHours[m.id][phase] = String(hp[phase] ?? ''));
-      // Object.keys(tp).forEach(phase => mTickets[m.id][phase] = String(tp[phase] ?? ''));
-      units[m.id] = m.unit ?? null;
-      if (m.tickets_loads && typeof m.tickets_loads[m.id] !== 'undefined') {
+// 6) materials / vendors / dumping -> simple hours & tickets
+if (Array.isArray(d.materials_trucking)) {
+  const mHours: SimpleHourState = {};
+  const units: { [k: string]: string | null } = {};
+
+  d.materials_trucking.forEach((m: any) => {
+    const key = String(m.id);           // normalize id to string
+
+    mHours[key] = {};
+    Object.keys(m.hours_per_phase || {}).forEach(phase => {
+      mHours[key][phase] = String(m.hours_per_phase[phase] ?? '');
+    });
+
+    units[key] = m.unit ?? null;
+
+    if (m.tickets_loads?.[m.id] !== undefined) {
       setTicketsLoads(prev => ({
         ...prev,
-        [m.id]: String(m.tickets_loads[m.id])
+        [key]: String(m.tickets_loads[m.id]),
       }));
     }
   });
-  
-    setMaterialHours(mHours);
-    // setMaterialTickets(mTickets);
-    setMaterialUnits(units);
-  }
+
+  setMaterialHours(mHours);
+  setMaterialUnits(units);
+
+  // trucking rows for the table
+  setMaterialsTrucking(
+    d.materials_trucking.map((m: any) => ({ ...m, id: String(m.id) }))
+  );
+}
+
 
 if (Array.isArray(d.vendors)) {
   const vHours: SimpleHourState = {};
@@ -355,24 +370,24 @@ id: vendorId,
 }
 
 
-  if (Array.isArray(d.dumping_sites)) {
-    const dsHours: SimpleHourState = {};
-    // const dsTickets: SimpleHourState = {};
-    d.dumping_sites.forEach((s: any) => {
-      dsHours[s.id] = {};
-      // dsTickets[s.id] = {};
-      Object.keys(s.hours_per_phase || {}).forEach(phase => dsHours[s.id][phase] = String(s.hours_per_phase[phase] ?? ''));
-      // Object.keys(s.tickets_per_phase || {}).forEach(phase => dsTickets[s.id][phase] = String(s.tickets_per_phase[phase] ?? ''));
-      if (d.tickets_loads && typeof d.tickets_loads[d.id] !== 'undefined') {
+ if (Array.isArray(d.dumping_sites)) {
+  const dsHours: SimpleHourState = {};
+  d.dumping_sites.forEach((s: any) => {
+    dsHours[s.id] = {};
+    Object.keys(s.hours_per_phase || {}).forEach(phase => {
+      dsHours[s.id][phase] = String(s.hours_per_phase[phase] ?? '');
+    });
+    // Correct tickets loading
+    if (s.tickets_loads && s.tickets_loads[s.id] !== undefined) {
       setTicketsLoads(prev => ({
         ...prev,
-        [d.id]: String(d.tickets_loads[d.id])
+        [s.id]: String(s.tickets_loads[s.id])
       }));
     }
-    });
-    setDumpingSiteHours(dsHours);
-    // setDumpingSiteTickets(dsTickets);
-  }
+  });
+  setDumpingSiteHours(dsHours);
+  setDumpingSites(d.dumping_sites); // <--- VERY IMPORTANT
+}
 
   // 7) replace server arrays if draft contains them (employees/equipment/materials) – your existing code already does that pattern
   if (d.employees && d.employees.length) {
@@ -492,10 +507,16 @@ console.log('🔥 RAW ts.data.vendors:', ts.data?.vendors?.map((v: any) => ({
   tickets: v.tickets_loads
 })));
 
+        // const mt: any[] = [];
+        // if (ts.data?.selected_material_items) {
+        //   Object.values(ts.data.selected_material_items).forEach((m: any) => mt.push({ id: m.id, name: m.name, materials: m.selectedMaterials || [] }));
+        // }
         const mt: any[] = [];
-        if (ts.data?.selected_material_items) {
-          Object.values(ts.data.selected_material_items).forEach((m: any) => mt.push({ id: m.id, name: m.name, materials: m.selectedMaterials || [] }));
-        }
+if (ts.data?.selected_material_items) {
+  Object.values(ts.data.selected_material_items).forEach(m => 
+    mt.push({ id: m.id, name: m.name, materials: m.selectedMaterials })
+  );
+}
         const ds: any[] = [];
         if (ts.data?.selected_dumping_materials) {
           Object.values(ts.data.selected_dumping_materials).forEach((d: any) => ds.push({ id: d.id, name: d.name, materials: d.selectedMaterials || [] }));
@@ -503,9 +524,9 @@ console.log('🔥 RAW ts.data.vendors:', ts.data?.vendors?.map((v: any) => ({
         
 
         // populate input states safely (existing helper logic ported)
-        const populateSimple = (entities: any[] = [], field: 'hours_per_phase' | 'tickets_per_phase') => {
+        const populateSimple = (safeEntities : any[] = [], field: 'hours_per_phase' | 'tickets_per_phase') => {
           const state: SimpleHourState = {};
-          entities.forEach(e => {
+          safeEntities .forEach(e => {
             state[e.id] = {};
             if (e[field]) for (const phase in e[field]) state[e.id][phase] = String(e[field][phase] ?? '');
           });
@@ -513,9 +534,9 @@ console.log('🔥 RAW ts.data.vendors:', ts.data?.vendors?.map((v: any) => ({
         };
 console.log(ts.data?.vendors);
 
-        const populateEmployees = (entities: any[] = []) => {
+        const populateEmployees = (safeEntities : any[] = []) => {
           const s: EmployeeHourState = {};
-          entities.forEach(e => {
+          safeEntities .forEach(e => {
             s[e.id] = {};
             if (e.hours_per_phase) {
               for (const phase in e.hours_per_phase) {
@@ -530,14 +551,14 @@ console.log(ts.data?.vendors);
           return s;
         };
 
-const populateEquipmentComplex = (entities: any[] = []) => {
+const populateEquipmentComplex = (safeEntities : any[] = []) => {
   
   
   const s: ComplexHourState = {};
   const start: { [id: string]: string } = {};
   const stop: { [id: string]: string } = {};
 
-  entities.forEach(e => {
+  safeEntities .forEach(e => {
     s[e.id] = {};
 
     // copy phase hours
@@ -560,9 +581,9 @@ const populateEquipmentComplex = (entities: any[] = []) => {
 };
 
 
-        const populateUnits = (entities: any[] = []) => {
+        const populateUnits = (safeEntities : any[] = []) => {
           const s: { [k: string]: string | null } = {};
-          entities.forEach(e => { s[e.id] = e.unit ?? null; });
+          safeEntities .forEach(e => { s[e.id] = e.unit ?? null; });
           return s;
         };
         // load autosave if present
@@ -616,11 +637,14 @@ const serverUpdatedAt = timestamp
 
 
 if (!restoredFromDraft) {
+  // phases
   setSelectedPhases(ts.data?.job?.phase_codes || []);
 
-        setEmployeeHours(populateEmployees(ts.data?.employees || []));
-        setEquipmentHours(populateEquipmentComplex(ts.data?.equipment || []));
-         if (Array.isArray(ts.data?.equipment)) {
+  // employees / equipment
+  setEmployeeHours(populateEmployees(ts.data?.employees || []));
+  setEquipmentHours(populateEquipmentComplex(ts.data?.equipment || []));
+
+  if (Array.isArray(ts.data?.equipment)) {
     const s: { [k: string]: string } = {};
     const e: { [k: string]: string } = {};
 
@@ -633,78 +657,103 @@ if (!restoredFromDraft) {
     setStopHours(e);
   }
 
+  // vendors (workPerformed)
   setWorkPerformed(wp);
   const vh: SimpleHourState = {};
-const tl: Record<string, string> = {};
-const vu: Record<string, string> = {};
+  const tl: Record<string, string> = {};
+  const vu: Record<string, string> = {};
 
-wp.forEach(row => {
-  const key = row.id; // "2976_6"
-  
-  // Hours per phase
-  vh[key] = {};
-  Object.keys(row.hours_per_phase || {}).forEach(phase => {
-    vh[key][phase] = String(row.hours_per_phase[phase] ?? '');
+  wp.forEach(row => {
+    const key = row.id; // e.g. "2976_6"
+
+    // Hours per phase
+    vh[key] = {};
+    Object.keys(row.hours_per_phase || {}).forEach(phase => {
+      vh[key][phase] = String(row.hours_per_phase[phase] ?? '');
+    });
+
+    // Tickets
+    const rawTickets = row.tickets_loads;
+    let ticketValue = rawTickets;
+    if (typeof rawTickets === 'object' && rawTickets !== null) {
+      ticketValue = rawTickets[key];
+    }
+    tl[key] = String(ticketValue ?? '');
+
+    // Units (vendor-level)
+    vu[row.vendor_id] = row.unit ?? vu[row.vendor_id] ?? 'Hrs';
   });
-  
-  // Tickets (FIXED)
-  const rawTickets = row.tickets_loads;
-  let ticketValue = rawTickets;
 
-  if (typeof rawTickets === 'object' && rawTickets !== null) {
-    ticketValue = rawTickets[key];
+  setVendorHours(vh);
+  setTicketsLoads(tl);
+  setVendorUnits(vu);
+
+  // 🔵 TRUCKING: normalize ids to string and hydrate maps + list
+  const truckingEntities = (ts.data?.materials_trucking || []).map((m: any) => ({
+    ...m,
+    id: String(m.id),
+  }));
+
+  setMaterialHours(populateSimple(truckingEntities, 'hours_per_phase'));
+  setMaterialUnits(populateUnits(truckingEntities));
+
+  if (Array.isArray(ts.data?.materials_trucking)) {
+    ts.data.materials_trucking.forEach((m: any) => {
+      const key = String(m.id);
+      const value = m.tickets_loads?.[m.id];
+      if (value != null) {
+        setTicketsLoads(prev => ({
+          ...prev,
+          [key]: String(value),
+        }));
+      }
+    });
   }
 
-  tl[key] = String(ticketValue ?? '');
+const selectedItemsArray = ts.data?.selected_material_items
+  ? Object.values(ts.data.selected_material_items)
+  : [];
 
-  // Units (vendor-level)
-  vu[row.vendor_id] = row.unit ?? vu[row.vendor_id] ?? "Hrs";
-});
+setMaterialsTrucking(
+  truckingEntities.length
+    ? truckingEntities
+    : selectedItemsArray
+);
 
-setVendorHours(vh);
-setTicketsLoads(tl);
-setVendorUnits(vu);
 
-        setMaterialHours(populateSimple(ts.data?.materials_trucking || [], 'hours_per_phase'));
-        setDumpingSiteHours(populateSimple(ts.data?.dumping_sites || [], 'hours_per_phase'));
-        setMaterialUnits(populateUnits(ts.data?.materials_trucking || []));
-        // setVendorUnits(populateUnits(ts.data?.vendors || []));
-        if (Array.isArray(ts.data?.materials_trucking)) {
-  ts.data.materials_trucking.forEach(m => {
-    const value = m.tickets_loads?.[m.id];
-    if (value != null) {
-      setTicketsLoads(prev => ({
-        ...prev,
-        [m.id]: String(value)
-      }));
-    }
-  });
-}
+  // dumping sites
+setDumpingSiteHours(
+  populateSimple(ts.data?.dumping_sites || [], 'hours_per_phase'),
+);
 
 if (Array.isArray(ts.data?.dumping_sites)) {
-  ts.data.dumping_sites.forEach(d => {
+  // 1) hydrate tickets
+  ts.data.dumping_sites.forEach((d: any) => {
     const value = d.tickets_loads?.[d.id];
     if (value != null) {
       setTicketsLoads(prev => ({
         ...prev,
-        [d.id]: String(value)
+        [d.id]: String(value),
       }));
     }
   });
+
+  // 2) IMPORTANT: use server dump sites as table rows
+  setDumpingSites(ts.data.dumping_sites);
 }
-  setMaterialsTrucking(mt);
-  setDumpingSites(ds);
-// after setVendorUnits(...)
-if (ts.data?.total_quantities) {
-  const pq: { [k: string]: string } = {};
-  for (const p in ts.data.total_quantities) {
-    pq[p] = String(ts.data.total_quantities[p]);
+
+
+  // total quantities
+  if (ts.data?.total_quantities) {
+    const pq: { [k: string]: string } = {};
+    for (const p in ts.data.total_quantities) {
+      pq[p] = String(ts.data.total_quantities[p]);
+    }
+    setTotalQuantities(pq);
+    setPhaseEntryQuantities(pq); // UI reads from here
   }
-  setTotalQuantities(pq);
-setPhaseEntryQuantities(pq);
- // ✅ this is what the UI reads
 }
-}else {
+else {
   console.log("✅ Draft restored — skipping server overwrite");
 }
         const eqRes = await apiClient.get('/api/equipment');
@@ -778,7 +827,7 @@ console.log('🚀 AUTOSAVE ticketsLoads:', ticketsLoads)
       } catch (e) { console.warn('Auto-save fail', e); }
     }, 1500);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [employeeHours, equipmentHours, materialHours, vendorHours, dumpingSiteHours,ticketsLoads, notes, materialUnits, vendorUnits, timesheetDate, selectedPhases, employeeReasons,phaseEntryQuantities,workPerformed]);
+  }, [employeeHours, equipmentHours, materialHours, vendorHours, dumpingSiteHours,ticketsLoads, notes, materialUnits, vendorUnits, timesheetDate, selectedPhases, employeeReasons,phaseEntryQuantities,workPerformed,dumpingSites]);
 
   // ---------------- HANDLERS ----------------
 const handleEmployeeHourChange = (
@@ -934,6 +983,49 @@ const handleRemoveEquipment = (id: string) => {
     ]
   );
 };
+const handleRemoveDumpingSite = (id: string) => {
+  Alert.alert(
+    'Remove Dump Site',
+    'Are you sure?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          // Remove from UI
+          setDumpingSites(prev => prev?.filter((d: any) => d.id !== id) ?? []);
+          
+          // Update timesheet.data for save - FIXED: use dumping_sites
+          setTimesheet(prev => {
+            if (!prev?.data?.dumping_sites) return prev;
+            return {
+              ...prev,
+              data: {
+                ...prev.data,
+                dumping_sites: prev.data.dumping_sites.filter((d: any) => d.id !== id)
+              }
+            };
+          });
+          
+          // Clean up state
+          setDumpingSiteHours(prev => {
+            const copy = { ...prev };
+            delete copy[id];
+            return copy;
+          });
+          
+          setTicketsLoads(prev => {
+            const copy = { ...prev };
+            delete copy[id];
+            return copy;
+          });
+        }
+      }
+    ]
+  );
+};
+
 
 const handleSave = async () => {
   if (!timesheet) return;
@@ -1271,6 +1363,153 @@ id: uniqueId,
 };
 
 
+const handleAddTrucking = () => {
+  loadAvailableTrucking()
+  setShowTruckingPicker(true)
+}
+const handleAddDumpingSite = () => {
+  console.log("Add Dump Site clicked");
+  console.log("Current dumpingSites", dumpingSites);
+  loadAvailableDumpingSites();
+  setShowDumpingPicker(true);
+};
+
+const handleSelectDumpingSite = (site: any) => {
+  if (!timesheet) return;
+
+  const alreadyExists = dumpingSites?.some((d: any) => d.id === site.id);
+  if (alreadyExists) {
+    Alert.alert("Dump Site Already Added");
+    return;
+  }
+
+  // 1. Update dumpingSites for UI
+  setDumpingSites(prev => [...(prev ?? []), site]);
+
+  // 2. Also update timesheet.data.dumping_sites for save
+  setTimesheet(prev => {
+    if (!prev) return prev;
+    return {
+      ...prev,
+      data: {
+        ...prev.data,
+        dumping_sites: [...(prev.data?.dumping_sites ?? []), site],
+      },
+    };
+  });
+
+  const siteId = String(site.id);
+
+  // 3. Initialize hours state for this dumping site for selected phases
+  const phaseHours: Record<string, string> = {};
+  selectedPhases.forEach(phase => {
+    phaseHours[phase] = "";
+  });
+  setDumpingSiteHours(prev => ({
+    ...prev,
+    [siteId]: phaseHours,
+  }));
+
+  // 4. Initialize ticketsLoads for this dumping site (optional)
+  setTicketsLoads(prev => ({
+    ...prev,
+    [siteId]: "",
+  }));
+
+  // Remove from picker list and close
+  setDumpingList(prev => prev.filter((d: any) => d.id !== site.id));
+  setShowDumpingPicker(false);
+};
+
+const handleSelectTrucking = (trucking: any) => {
+  console.log('SELECT TRUCKING CLICKED', trucking.id, trucking.name);
+  if (!timesheet) return;
+
+  // Treat IDs as strings for a strict, consistent duplicate check
+  const newId = String(trucking.id);
+
+  const alreadyExists =
+    (materialsTrucking ?? []).some((t: any) => String(t.id) === newId);
+
+  if (alreadyExists) {
+    Alert.alert('Trucking Already Added', 'This trucking is already in the table.');
+    return;
+  }
+
+  // 1. Update materialsTrucking (UI)
+  setMaterialsTrucking((prev: any[] = []) => [...prev, trucking]);
+
+  // 2. Initialize per‑truck maps only once
+  const phaseHours: Record<string, string> = {};
+  selectedPhases.forEach((phase: string) => {
+    phaseHours[phase] = '';
+  });
+
+  setMaterialHours((prev: any) => ({
+    ...prev,
+    [newId]: phaseHours,
+  }));
+
+  setMaterialUnits((prev: any) => ({
+    ...prev,
+    [newId]: trucking.unit ?? 'Hrs',
+  }));
+
+  setTicketsLoads((prev: any) => ({
+    ...prev,
+    [newId]: '',
+  }));
+
+  // 3. Remove from picker and close
+  setTruckingList((prev: any[] = []) =>
+    prev.filter((t: any) => String(t.id) !== newId),
+  );
+  setShowTruckingPicker(false);
+};
+
+
+
+
+const handleRemoveTrucking = (id: string) => {
+  Alert.alert('Remove Trucking', 'Are you sure?', [
+    { text: 'Cancel', style: 'cancel' },
+    { 
+      text: 'Remove', 
+      style: 'destructive', 
+      onPress: () => {
+        setMaterialsTrucking(prev => prev?.filter((t: any) => t.id !== id) || []);
+        // Remove from UI
+        setTimesheet(prev => {
+          if (!prev?.data?.materials_trucking) return prev
+          return {
+            ...prev,
+            data: {
+              ...prev.data,
+              materials_trucking: prev.data.materials_trucking.filter((t: any) => t.id !== id)
+            }
+          }
+        })
+        // Clean up state
+        setMaterialHours(prev => {
+          const copy = { ...prev }
+          delete copy[id]
+          return copy
+        })
+        setMaterialUnits(prev => {
+          const copy = { ...prev }
+          delete copy[id]
+          return copy
+        })
+        setTicketsLoads(prev => {
+          const copy = { ...prev }
+          delete copy[id]
+          return copy
+        })
+      }
+    }
+  ])
+}
+
 
 const handleRemoveVendor = (rowId: string) => {
   Alert.alert("Remove Vendor Material", "Are you sure you want to remove this material?", [
@@ -1321,6 +1560,61 @@ interface Vendor {
   vendor_category: string | null;
   selectedMaterials: Material[];
 }
+const loadAvailableTrucking = async () => {
+  console.log('loadAvailableTrucking called');
+  try {
+    const res = await apiClient.get('/api/materials-trucking');
+    const rawList: any[] = Array.isArray(res?.data)
+      ? res.data.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          unit: t.unit ?? null,
+          detail: t.materialcategory,
+          materialname: t.materials?.[0]?.name,
+        }))
+      : [];
+
+    // Collect all IDs already present in the UI table
+    const assignedIds = (materialsTrucking ?? []).map((t: any) =>
+      String(t.id),
+    );
+
+    const filtered = rawList.filter(
+      (t: any) => !assignedIds.includes(String(t.id)),
+    );
+
+    setTruckingList(filtered);
+  } catch (err) {
+    console.log('ERROR in loadAvailableTrucking', err);
+  }
+};
+
+
+
+const loadAvailableDumpingSites = async () => {
+  console.log("loadAvailableDumpingSites called");
+  try {
+    const res = await apiClient.get("/api/dumping_sites"); // ensure this path is correct
+    console.log("API dumping-sites response", res?.data);
+    // Normalize to array
+    const allSites: any[] = Array.isArray(res?.data) ? res.data : [];
+    // Already assigned in this timesheet
+    const assignedIds = (dumpingSites ?? []).map((d: any) => d.id);
+    const filtered = allSites.filter((s: any) => {
+      if (!s) return false;
+      const status = (s.status ?? "").toUpperCase();
+      const isActive = status === "ACTIVE"; // your table shows ACTIVE rows only
+      const notAssigned = !assignedIds.includes(s.id);
+      return isActive && notAssigned;
+    });
+console.log("API dumping-sites RAW", JSON.stringify(res.data, null, 2));
+    console.log("Filtered available dumping sites", filtered);
+    setDumpingList(filtered);
+  } catch (err) {
+    console.log("ERROR in loadAvailableDumpingSites", err);
+    setDumpingList([]); // avoid undefined
+  }
+};
 
 const loadAvailableVendors = async () => {
   try {
@@ -1627,15 +1921,9 @@ return [emp.class_1, emp.class_2].filter(Boolean);
       {/* Small subtle delete X */}
        <TouchableOpacity
         onPress={() => handleRemoveEmployee(emp.id)}
-        style={{
-          backgroundColor: '#ffe5e5', // light red background
-          borderRadius: 10,
-          paddingHorizontal: 4,
-          paddingVertical: 2,
-          marginLeft: 4,
-        }}
+        
       >
-        <Text style={{ color: '#cc2e2e', fontSize: 14, fontWeight: 'bold' }}>×</Text>
+       <Ionicons name="trash-outline" size={16} color="#dc1414ff" />
       </TouchableOpacity>
     </>
   ) : (
@@ -1844,6 +2132,20 @@ const renderTotalQuantities = () => {
     </View>
   );
 };
+const handleEquipmentHourChange = (entityId: string, phaseCode: string, hourType: 'REG' | 'S_B', value: string) => {
+  const sanitized = value.replace(/[^0-9.]/g, ''); // ✅ Sanitize
+  setEquipmentHours(prev => ({
+    ...prev,
+    [entityId]: {
+      ...prev[entityId],
+      [phaseCode]: {
+        ...prev[entityId]?.[phaseCode],
+        [hourType]: sanitized  // ✅ Safe deep update
+      }
+    }
+  }));
+};
+
 const handleVendorHourChange = (rowId: string, phaseCode: string, value: string) => {
   const sanitized = value.replace(/[^0-9.]/g, '');
 
@@ -1869,6 +2171,28 @@ setVendorHours(prev => ({
     )
   );
 };
+const handleMaterialHourChange = (entityId: string, phaseCode: string, value: string) => {
+  const sanitized = value.replace(/[^0-9.]/g, '');
+  setMaterialHours(prev => ({
+    ...prev,
+    [entityId]: {
+      ...prev[entityId],
+      [phaseCode]: sanitized
+    }
+  }));
+
+};
+const handleDumpingSiteHourChange = (entityId: string, phaseCode: string, value: string) => {
+  const sanitized = value.replace(/[^0-9.]/g, ''); // Sanitize input
+  setDumpingSiteHours(prev => ({
+    ...prev,
+    [entityId]: {
+      ...prev[entityId],
+      [phaseCode]: sanitized
+    }
+  }));
+};
+
 
 
 const handleVendorTicketsChange = (rowId: string, value: string) => {
@@ -1886,6 +2210,17 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
   entities: any[],
   type: 'equipment' | 'material' | 'vendor' | 'dumping_site'
 ) => {
+  const safeEntities = Array.isArray(entities) ? entities : [];
+
+   // 🔥 ADD DEBUG LOG HERE - FIRST LINE IN FUNCTION
+  console.log('🏗️ TABLE DEBUG:', {
+    type,
+    entitiesLength: safeEntities ?.length || 0,
+    entitiesSample: safeEntities ?.slice(0, 2),  // First 2 items
+    materialsTruckingLength: materialsTrucking?.length || 0,
+    materialHoursKeys: Object.keys(materialHours),
+    selectedPhasesLength: selectedPhases?.length || 0
+  });
   // const phaseCodes = timesheet?.data?.job?.phase_codes || [];
   const phaseCodes = jobPhaseCodes;
 
@@ -1894,10 +2229,10 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
   const hoursState: any =
     isEquipment ? equipmentHours : type === 'material' ? materialHours : type === 'vendor' ? vendorHours : dumpingSiteHours;
 
-  // totals per phase (reuse your existing calculators)
-  const phaseTotals = isEquipment
-    ? calculateComplexPhaseTotals(equipmentHours, phaseCodes)
-    : calculateSimplePhaseTotals(hoursState, phaseCodes);
+ 
+const phaseTotals = isEquipment 
+  ? calculateComplexPhaseTotals(equipmentHours, phaseCodes)
+  : calculateSimplePhaseTotalsByEntities(hoursState, safeEntities , phaseCodes);
 
   return (
     
@@ -1914,6 +2249,16 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
         {type === "vendor" && (
   <TouchableOpacity onPress={handleAddVendor}>
     <Text style={styles.addButton}>+ Add Vendor</Text>
+  </TouchableOpacity>
+)}
+{type === 'material' && (
+  <TouchableOpacity onPress={handleAddTrucking}>
+    <Text style={styles.addButton}>+ Add Trucking</Text>
+  </TouchableOpacity>
+)}
+{type === 'dumping_site' && (
+  <TouchableOpacity onPress={handleAddDumpingSite}>
+    <Text style={styles.addButton}>+ Add Dump Site</Text>
   </TouchableOpacity>
 )}
       </View>
@@ -2017,7 +2362,7 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
 
           {/* Body rows */}
           <ScrollView style={{ maxHeight: 420 }} nestedScrollEnabled>
-            {entities.map((ent: any, entIndex: number) => {
+            {safeEntities .map((ent: any, entIndex: number) => {
               const name = ent.name || `${ent.id}`;
               const total = isEquipment
                 ? calculateTotalComplexHours(equipmentHours, ent.id)
@@ -2029,31 +2374,40 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
                 <View key={ent.id} style={[rowBg]}>
                   {/* Left fixed area */}
                   <View style={tableStyles.leftRow}>
-                   <View style={[tableStyles.cellFixed, { width: 72, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
-<Text style={tableStyles.cellTextBold}>
-  {indexOfVendorRow(ent.vendor_id) === entIndex ? ent.vendor_id : ""}
-</Text>
+                  <View style={tableStyles.leftRow}>
+  <View
+    style={[
+      tableStyles.cellFixed,
+      { width: 72, flexDirection: "row", alignItems: "center", gap: 8 },
+    ]}
+  >
+    {/* Show IDs depending on type */}
+    <Text style={tableStyles.cellTextBold}>
+      {type === "vendor"
+        ? ent.vendor_id
+        : type === "equipment"
+        ? ent.id
+        : type === "material"
+        ? ent.id
+        : type === "dumping_site"
+        ? ent.id
+        : ""}
+    </Text>
 
+{/* Trash button for all rows */}
+    <TouchableOpacity
+      onPress={() => {
+        if (type === "vendor") handleRemoveVendor(ent.id);
+        else if (type === "equipment") handleRemoveEquipment(ent.id);
+        else if (type === "material") handleRemoveTrucking(ent.id);
+        else if (type === "dumping_site") handleRemoveDumpingSite(ent.id); // ADD THIS LINE
 
-  {/* Remove icon for vendor & equipment */}
-{(isEquipment || type === "vendor") && (
-<TouchableOpacity
-  onPress={() =>
-    type === "equipment"
-      ? handleRemoveEquipment(ent.id)
-      : handleRemoveVendor(ent.id)
-  }
-  style={{
-    padding: 4,
-    marginRight: 8,
-  }}
->
-  {/* The trash can icon in a neutral dark grey */}
-  <Ionicons name="trash-outline" size={18} color="#dc1414ff" />
-</TouchableOpacity>
-
-)}
-
+      }}
+      
+    >
+      <Ionicons name="trash-outline" size={16} color="#dc1414ff" />
+    </TouchableOpacity>
+  </View>
 </View>
 
 {type === "vendor" ? (
@@ -2061,7 +2415,7 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
  <View style={[tableStyles.cellFixed, { width: 180 }]}>
   <Text style={tableStyles.cellText}>
     {entIndex === 0 ||
-    entities[entIndex - 1]?.vendor_id !== ent.vendor_id
+    safeEntities [entIndex - 1]?.vendor_id !== ent.vendor_id
       ? ent.vendor_name
       : ""}
   </Text>
@@ -2150,7 +2504,7 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
             const clean = v.replace(/[^0-9]/g, "");
             setTicketsLoads(prev => ({ ...prev, [String(ent.id)]: clean }));
           }}
-          placeholder={type === "dumping_site" ? "0 loads" : "0 tickets"}
+          placeholder={type === "dumping_site" ? "0" : "0"}
         />
       </View>
     )}
@@ -2173,36 +2527,14 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
                               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                                 <InlineEditableNumber
                                   value={regVal}
-                                  onChange={(v) =>
-                                    setEquipmentHours((prev: any) => ({
-                                      ...prev,
-                                      [ent.id]: {
-                                        ...prev[ent.id],
-                                        [p]: {
-                                          ...prev[ent.id]?.[p],
-                                          REG: v,
-                                        },
-                                      },
-                                    }))
-                                  }
+                                  onChange={(v) => handleEquipmentHourChange(ent.id, p, 'REG', v)}
                                    validateHours={true} 
                                   placeholder="0.0"
                                   style={tableStyles.hourInput}
                                 />
                                 <InlineEditableNumber
                                   value={sbVal}
-                                  onChange={(v) =>
-                                    setEquipmentHours((prev: any) => ({
-                                      ...prev,
-                                      [ent.id]: {
-                                        ...prev[ent.id],
-                                        [p]: {
-                                          ...prev[ent.id]?.[p],
-                                          S_B: v,
-                                        },
-                                      },
-                                    }))
-                                  }
+                                  onChange={(v) => handleEquipmentHourChange(ent.id, p, 'S_B', v)} 
                                    validateHours={true} 
                                   placeholder="0.0"
                                   style={tableStyles.hourInput}
@@ -2215,13 +2547,26 @@ const handleVendorTicketsChange = (rowId: string, value: string) => {
                         // Non-equipment: single input per phase
                         const val = hoursState[ent.id]?.[p] ?? '';
 console.log(`📊 TABLE RENDER ent.id=${ent.id}, phase=${p}, vendorHours[ent.id]?.[p]=`, vendorHours[ent.id]?.[p]);
+// ✅ FIXED - Type-specific state and handlers
+const getHourValue = () => {
+  if (type === 'vendor') return vendorHours[ent.id]?.[p] ?? '';
+  if (type === 'material') return materialHours[ent.id]?.[p] ?? '';
+  if (type === 'dumping_site') return dumpingSiteHours[ent.id]?.[p] ?? '';
+  return hoursState[ent.id]?.[p] ?? '';
+};
 
+const getHourChangeHandler = () => {
+  if (type === 'vendor') return (v: string) => handleVendorHourChange(ent.id, p, v);
+  if (type === 'material') return (v: string) => handleMaterialHourChange(ent.id, p, v);
+  if (type === 'dumping_site') return (v: string) => handleDumpingSiteHourChange(ent.id, p, v);
+  return (v: string) => {}; // fallback
+};
                         return (
                           
                           <View key={`${ent.id}-${p}`} style={[tableStyles.cell, { width: 96 }]}>
                             <InlineEditableNumber
-        value={vendorHours[ent.id]?.[p] ?? ''}
-        onChange={v => handleVendorHourChange(ent.id, p, v)}
+       value={getHourValue()}  
+        onChange={getHourChangeHandler()}
         placeholder="0.0"
         validateHours={true}
         style={tableStyles.hourInput}
@@ -2402,12 +2747,12 @@ console.log(`📊 TABLE RENDER ent.id=${ent.id}, phase=${p}, vendorHours[ent.id]
         {/* Only render tables once a phase is selected - but we render full table anyway per request */}
         {renderEmployeeTable()}
         {renderEntityTable('Equipment', timesheet.data?.equipment || [], 'equipment')}
-        {renderEntityTable('Work Performed', workPerformed, 'vendor')}
-        {renderEntityTable('Materials and Trucking', materialsTrucking, 'material')}
-        {renderEntityTable('Dumping Site', dumpingSites, 'dumping_site')}
+        {renderEntityTable('Materials', workPerformed ?? [], 'vendor')}
+        {renderEntityTable('Trucking', materialsTrucking ?? [], 'material')}
+        {renderEntityTable('Dumping Site', dumpingSites ?? [], 'dumping_site')}
 {renderTotalQuantities()} {/* <--- INSERT THIS LINE HERE */}
 
-   
+  
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Notes</Text>
           <TextInput style={styles.notesInput} multiline value={notes} onChangeText={setNotes} placeholder="Enter notes..." />
@@ -2500,6 +2845,120 @@ console.log(`📊 TABLE RENDER ent.id=${ent.id}, phase=${p}, vendorHours[ent.id]
           </View>
         </View>
       )}
+
+{showDumpingPicker && (
+  <View style={styles.bottomSheetOverlay}>
+    <Pressable style={{ flex: 1 }} onPress={() => setShowDumpingPicker(false)} />
+     <View style={[styles.bottomSheetSmall, { flexGrow: 0.5 }]}>
+      <View style={styles.dragHandle} />
+      <View style={{ paddingHorizontal: 16 }}>
+        <TextInput
+          placeholder="Search dump site by name or ID..."
+          value={dumpingSearch}
+          onChangeText={setDumpingSearch}
+          style={styles.searchBox}
+          placeholderTextColor="#999"
+        />
+      </View>
+      <ScrollView style={{ maxHeight: 300 }} nestedScrollEnabled showsVerticalScrollIndicator>
+        {dumpingList
+          .filter((s: any) => {
+            const name = (s.name ?? "").toLowerCase();
+            const id = String(s.id ?? "").toLowerCase();
+            const q = dumpingSearch.toLowerCase();
+            return name.includes(q) || id.includes(q);
+          })
+          .map((s: any) => (
+            <Pressable
+              key={s.id}
+              style={styles.employeeRowSmall}
+              onPress={() => handleSelectDumpingSite(s)}
+            >
+              <View>
+                <Text style={styles.empNameSmall}>{s.name}</Text>
+                <Text style={styles.empIdSmall}>ID {s.id}</Text>
+              </View>
+            </Pressable>
+          ))}
+      </ScrollView>
+      <Pressable style={styles.closeButton} onPress={() => setShowDumpingPicker(false)}>
+        <Text style={styles.closeButtonText}>Cancel</Text>
+      </Pressable>
+    </View>
+  </View>
+)}
+
+      {showTruckingPicker && (
+  <View style={styles.bottomSheetOverlay}>
+    {(() => {
+      console.log("🟡 MODAL RENDERED");
+      console.log("🟡 showTruckingPicker:", showTruckingPicker);
+      console.log("🟡 truckingList.length:", truckingList?.length);
+      console.log("🟡 truckingSearch text:", truckingSearch);
+      return null;
+    })()}
+    <Pressable style={{ flex: 1 }} onPress={() => setShowTruckingPicker(false)} />
+    <View style={[styles.bottomSheetSmall, { flexGrow: 0.5 }]}>
+      <View style={styles.dragHandle} />
+      
+      <TextInput 
+        placeholder="Search trucking company..."
+        value={truckingSearch}
+        onChangeText={setTruckingSearch}
+        style={styles.searchBox}
+        placeholderTextColor="#999"
+      />
+      
+    <ScrollView 
+  style={{ flex: 1, maxHeight: 400 }} 
+  nestedScrollEnabled={true} 
+  showsVerticalScrollIndicator={true}
+>
+{(() => {
+          console.log("🔵 ScrollView is rendered");
+          console.log("🔵 truckingList inside ScrollView:", truckingList);
+          return null;
+        })()}
+{truckingList
+  .filter(t => 
+    t.name.toLowerCase().includes(truckingSearch.toLowerCase()) ||
+    t.id.toString().includes(truckingSearch)
+  )
+  .map((trucking: any) => {
+    console.log("🟢 Rendering trucking item:", trucking);
+
+    return (
+      <Pressable 
+        key={trucking.id} 
+        style={styles.employeeRowSmall} 
+        onPress={() => handleSelectTrucking(trucking)}
+      >
+        <View>
+          <Text style={styles.empNameSmall}>{trucking.name}</Text>
+          <Text style={styles.empIdSmall}>ID: {trucking.id}</Text>
+
+          {trucking.detail && (
+            <Text style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
+              {trucking.detail}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+    );
+  })
+}
+
+</ScrollView>
+
+
+      <Pressable style={styles.closeButton} onPress={() => setShowTruckingPicker(false)}>
+        <Text style={styles.closeButtonText}>Cancel</Text>
+      </Pressable>
+    </View>
+  </View>
+)}
+
+
       <View style={styles.footer}>
         <TouchableOpacity style={[styles.saveBtn, { backgroundColor: isSubmitting ? '#999' : THEME.primary }]} onPress={handleSave} disabled={isSubmitting}>
           {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Draft</Text>}

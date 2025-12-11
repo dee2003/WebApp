@@ -120,7 +120,8 @@ const ForemanTimesheetViewScreen = ({ navigation, route }: any) => {
                     entities.forEach((e) => {
                         let id;
                         if (type === 'material') {
-                            id = e.name || e.id || e.key || e.vendor_id;
+                            // Key based on name/id/key/vendor_id
+                            id = e.name || e.id || e.key || e.vendor_id; 
                         } else if (type === 'vendor') { 
                             // FIX: Create a unique composite key for vendor materials (VendorID_UniqueLineItemKey)
                             const vendorId = e.vendor_id || e.id;
@@ -137,7 +138,45 @@ const ForemanTimesheetViewScreen = ({ navigation, route }: any) => {
                         }
                         
                         state[id] = {};
-                        const data = e[field] || {};
+                        
+                        // ⭐️ NEW FIX: Handle material/trucking tickets AND vendor tickets AND DUMPING SITE TICKETS ⭐️
+                        let phaseDataToProcess: Record<string, any> = e[field] || {};
+                        
+                        // Check if it's tickets for material, vendor OR dumping_site, and the preferred tickets_per_phase is empty
+                        if ((type === 'material' || type === 'vendor' || type === 'dumping_site') && field === 'tickets_per_phase' && Object.keys(phaseDataToProcess).length === 0) {
+                            
+                            let ticketValue: number | string | undefined = 0;
+                            const rawTicketsLoads = e.tickets_loads; // Can be number, string, or object.
+
+                            // --- UNIFIED FIX: Handle object or scalar value for ticket/load count ---
+                            if (typeof rawTicketsLoads === 'object' && rawTicketsLoads !== null) {
+                                // If it's an object (e.g., {"job_code_id": 5}), extract the first value.
+                                // FIX APPLIED: Add type assertion to resolve 'unknown'
+                                ticketValue = Object.values(rawTicketsLoads)?.[0] as (string | number | undefined); 
+                            } else {
+                                // If it's a simple number or string (e.g., 5 or "5").
+                                ticketValue = rawTicketsLoads;
+                            }
+                            
+                            // Safely parse the value to a number
+                            const numericTicketValue = parseFloat(String(ticketValue || '0')) || 0;
+                            // --- END UNIFIED FIX ---
+
+                            // Use the phases from hours_per_phase to create the ticket breakdown
+                            if (e.hours_per_phase && typeof e.hours_per_phase === 'object' && numericTicketValue > 0) {
+                                
+                                Object.keys(e.hours_per_phase).forEach(phase => {
+                                    // Assign the total ticket value (e.g., 5) to all phases
+                                    // Using String() to ensure it is stored as a string.
+                                    state[id][phase] = String(numericTicketValue); 
+                                });
+                                return; // Done populating this entity
+                            }
+                        }
+                        // ⭐️ END NEW FIX ⭐️
+
+                        const data = phaseDataToProcess; // Use the determined data
+                        
                         Object.entries(data).forEach(([phase, val]) => {
                             state[id][phase] = String(val || '0');
                         });
@@ -406,6 +445,7 @@ const handleSendTimesheet = async (timesheetId: number) => {
         const isMaterial = type === 'material';
         const isVendor = type === 'vendor'; // ADDED: Variable for vendor type
         const isSimple = isMaterial || isVendor || type === 'dumping_site';
+        const isDumping = type === 'dumping_site'; // Added isDumping for clarity
 
         const phaseCodes = timesheet?.data.job.phase_codes || [];
         // Even if there are no phases, we can't render the table structure correctly
@@ -466,12 +506,25 @@ grandTotal = entities.reduce((sum, e) => {
             // Name + EQUIP #ER + Start Hours + Stop Hours + Total
             fixedWidth += COL_ID + (COL_START_STOP * 2); 
         } else {
-            // Simple tables fixed columns:
-            fixedWidth += COL_MATERIAL + COL_TICKET;
-            // NEW: Add COL_ID for Vendor table
-            if (isVendor) {
-                fixedWidth += COL_ID;
+            // Simple tables: ID + NAME + [MATERIAL] + TICKETS + TOTAL
+            
+            // Add ID column for Material and Dumping Site (REQUESTED)
+            if (isMaterial || isDumping) { // <-- MODIFIED FOR DUMPING SITE ID
+                fixedWidth += COL_ID; // NEW: Adding COL_ID for material/dumping
             }
+            
+            // Add Vendor ID column for Vendor (this is distinct from Material/Dumping ID)
+            if (isVendor) {
+                 fixedWidth += COL_ID; 
+            }
+
+            // Add Material/Description column for Vendor ONLY (REQUESTED CHANGE)
+            if (isVendor) { 
+                fixedWidth += COL_MATERIAL;
+            }
+
+            // Add Tickets column
+            fixedWidth += COL_TICKET;
         }
         
         // Calculate total content width by multiplying phase group width by the number of phases
@@ -633,6 +686,21 @@ grandTotal = entities.reduce((sum, e) => {
                         {/* -------------------- TABLE HEADER START (DYNAMIC) -------------------- */}
                         <View style={styles.tableHeader}>
                             
+                            {/* NEW ID COLUMN FOR MATERIAL/DUMPING SITE TYPE (FIRST COLUMN) */}
+                            {/* MODIFIED: Added isDumping */}
+                            {(isMaterial || isDumping) && ( 
+                                <Text
+                                    style={[
+                                        styles.headerCell,
+                                        styles.colId,
+                                        styles.borderRight,
+                                        styles.headerCellBottomBorder
+                                    ]}
+                                >
+                                    ID
+                                </Text>
+                            )}
+
                             {/* 1. VENDOR ID COLUMN (Vendor Only - NEW FIRST COLUMN) */}
                             {isVendor && (
                                 <Text 
@@ -647,7 +715,7 @@ grandTotal = entities.reduce((sum, e) => {
                                 </Text>
                             )}
                             
-                            {/* 2. NAME COLUMN (Always present - Second for Vendor, First otherwise) */}
+                            {/* 2. NAME COLUMN (Always present - Second for Vendor/Material, First otherwise) */}
                             <Text 
                                 style={[
                                     styles.headerCell, 
@@ -731,7 +799,8 @@ grandTotal = entities.reduce((sum, e) => {
                             )}
 
                             {/* 4. MATERIAL COLUMN (Simple tables only - Third column for Vendor) */}
-                            {isSimple && (
+                            {/* MODIFIED: Render ONLY for Vendor type, excluding Dumping Site */}
+                            {isSimple && type === 'vendor' && (
                                 <Text style={[
                                     styles.headerCell, 
                                     styles.colMaterial, 
@@ -742,7 +811,7 @@ grandTotal = entities.reduce((sum, e) => {
                                 </Text>
                             )}
 
-                            {/* 5. TICKETS COLUMN (Simple tables only - Fourth column for Vendor) */}
+                            {/* 5. TICKETS COLUMN (Simple tables only - Fourth column for Vendor/Dumping, Third for Material) */}
                             {isSimple && (
                                 <Text style={[
                                     styles.headerCell, 
@@ -809,7 +878,7 @@ grandTotal = entities.reduce((sum, e) => {
                             {/* Fixed column at the end - No bottom border to meet the request */}
                             <Text style={[styles.headerCell, styles.colTotal, styles.lastCell, styles.borderLeft, styles.headerCellBottomBorder]}>Total</Text>
                         </View>
-                        {/* -------------------- TABLE HEADER END -------------------- */}
+                        {/* -------------------- TABLE HEADER END (DYNAMIC) -------------------- */}
 
 
 
@@ -841,14 +910,36 @@ grandTotal = entities.reduce((sum, e) => {
                                     ? calculateTotalComplexHours(hoursState as ComplexHourState, entityId)
                                     : calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
                                     
-                                // FIX APPLIED HERE: Calculate total tickets for simple tables, falling back to tickets_loads if phase breakdown is empty.
+                                // ⭐️ TICKET FIX ⭐️
+                                // Get total from phase breakdown
                                 const totalPhaseTickets = isSimple && ticketsState 
                                     ? calculateTotalSimpleHours(ticketsState as SimpleHourState, entityId)
                                     : 0;
+                                
+                                // Get raw tickets_loads value, safely converting it to a number
+                                
+                                // --- UNIFIED FIX: Handle object or scalar value for ticket/load count (same logic as populateSimple) ---
+                                let rawTicketsLoadsValue: number = 0;
+                                const rawTicketsLoads = entity.tickets_loads; 
+                                let ticketValue: number | string | undefined = 0;
 
+                                if (typeof rawTicketsLoads === 'object' && rawTicketsLoads !== null) {
+                                    // FIX APPLIED: Add type assertion to resolve 'unknown'
+                                    ticketValue = Object.values(rawTicketsLoads)?.[0] as (string | number | undefined); 
+                                } else {
+                                    ticketValue = rawTicketsLoads;
+                                }
+                                rawTicketsLoadsValue = parseFloat(String(ticketValue || '0')) || 0;
+                                // --- END UNIFIED FIX ---
+
+                                // totalTickets is:
+                                // 1. The sum of all phase tickets (if > 0)
+                                // 2. The raw tickets_loads value (if totalPhaseTickets is 0 or less, and rawTicketsLoads > 0)
+                                // 3. 0 otherwise
                                 const totalTickets = totalPhaseTickets > 0 
                                     ? totalPhaseTickets 
-                                    : (isSimple && entity.tickets_loads) ? entity.tickets_loads : 0; // Use raw tickets_loads if phase breakdown is empty or missing
+                                    : (isSimple && rawTicketsLoadsValue > 0) ? rawTicketsLoadsValue : 0;
+                                // ⭐️ END TICKET FIX ⭐️
 
 
                                 // --- UPDATE lastEntityName for the next iteration ---
@@ -860,25 +951,42 @@ grandTotal = entities.reduce((sum, e) => {
                                             ? `${entity.first_name} ${entity.middle_name || ''} ${entity.last_name}`.trim()
                                             : entity.name;
                                 
-                                const isNewGroup = isSimple && entityName !== lastEntityName;
+                                // For Material and Vendor, group by the main name (material name or vendor name). 
+                                // Dumping Site should show all line items (no grouping).
+                                const shouldGroup = isMaterial || isVendor; // ADDED ISVENDOR HERE
+                                
+                                const isNewGroup = shouldGroup
+                                    ? entityName !== lastEntityName
+                                    : true; // Always show name for Dumping Site (since each entity is a line item)
+                                    
+                                // Equipment always shows its name/details
                                 const shouldShowName = isNewGroup || isEquipment; 
                                 
-                                if (isSimple) {
-                                    lastEntityName = entityName;
+                                if (shouldGroup) { // Update lastEntityName for both Material and Vendor
+                                    lastEntityName = entityName; 
                                 }
-
 
                                 return (
                                     <View key={entityId} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
                                         
-                                        {/* NEW VENDOR ID COLUMN (Vendor only - RENDERED FIRST) */}
+                                        {/* NEW ID COLUMN FOR MATERIAL/DUMPING SITE TYPE (FIRST COLUMN) */}
+                                        {/* MODIFIED: Added isDumping */}
+                                        {(isMaterial || isDumping) && (
+                                            <Text style={[styles.dataCell, styles.colId, styles.borderRight, shouldShowName ? null : styles.transparentCell]}>
+                                                {/* entity.id is the Material/Dumping Site ID (fallback to key) */}
+                                                {shouldShowName ? entity.id || entity.key : ''}
+                                            </Text>
+                                        )}
+
+                                        
+                                        {/* NEW VENDOR ID COLUMN (Vendor only - RENDERED FIRST for Vendor) */}
                                         {isVendor && (
                                             <Text style={[styles.dataCell, styles.colId, styles.borderRight, shouldShowName ? null : styles.transparentCell]}>
                                                 {shouldShowName ? entity.vendor_id : ''}
                                             </Text>
                                         )}
                                         
-                                        {/* NAME CELL (CONDITIONAL RENDER for Simple Tables - RENDERED SECOND for Vendor) */}
+                                        {/* NAME CELL (CONDITIONAL RENDER for Simple Tables - RENDERED SECOND for Material/Vendor) */}
                                         <View 
                                             style={[
                                                 styles.dataCell, 
@@ -914,17 +1022,19 @@ grandTotal = entities.reduce((sum, e) => {
                                             </Text>
                                         )}
                                         
-                                        {/* NEW MATERIAL NAME COLUMN (Simple tables only) - RENDERED THIRD for Vendor (Always rendered) */}
-                                        {isSimple && (
+                                        {/* NEW MATERIAL NAME COLUMN (Simple tables only) - RENDERED THIRD for Vendor ONLY */}
+                                        {/* MODIFIED: Render ONLY for Vendor type, excluding Dumping Site */}
+                                        {isSimple && type === 'vendor' && (
                                             <Text style={[styles.dataCell, styles.colMaterial, styles.borderRight]} numberOfLines={2}>
                                                 {entity.material_name || entity.name || ''} 
                                             </Text>
                                         )}
                                         
-                                        {/* TICKETS COLUMN (Simple tables only) - RENDERED FOURTH for Vendor */}
+                                        {/* TICKETS COLUMN (Simple tables only) - RENDERED FOURTH for Vendor/Dumping, THIRD for Material */}
                                         {isSimple && (
                                             <Text style={[styles.dataCell, styles.colTickets, styles.borderRight]}>
-                                                {totalTickets > 0 ? totalTickets : ''}
+                                                {/* Use toFixed(0) for integer display */}
+                                                {totalTickets > 0 ? totalTickets.toFixed(0) : ''}
                                             </Text>
                                         )}
 
@@ -969,11 +1079,17 @@ grandTotal = entities.reduce((sum, e) => {
                                 );
                             })
                         )}
-                        {/* -------------------- TABLE BODY END -------------------- */}
+                        {/* -------------------- TABLE BODY END (DYNAMIC) -------------------- */}
 
 
                         {/* -------------------- PHASE TOTALS ROW (DYNAMIC) -------------------- */}
                         <View style={[styles.tableRow, styles.phaseTotalRow]}>
+                            
+                            {/* NEW MATERIAL/DUMPING ID PLACEHOLDER (Material/Dumping only - FIRST COLUMN) */}
+                            {/* MODIFIED: Added isDumping */}
+                            {(isMaterial || isDumping) && (
+                                <View style={[styles.dataCell, styles.colId, styles.borderRight]} />
+                            )}
                             
                             {/* VENDOR ID PLACEHOLDER (Vendor only - FIRST COLUMN) */}
                             {isVendor && (
@@ -1011,12 +1127,13 @@ grandTotal = entities.reduce((sum, e) => {
                                 <View style={[styles.dataCell, styles.colClassCode, styles.borderRight]} /> 
                             )}
 
-                            {/* MATERIAL COLUMN PLACEHOLDER (Simple tables only - Third column for Vendor) */}
-                            {isSimple && (
+                            {/* MATERIAL COLUMN PLACEHOLDER (Simple tables only - Third column for Vendor ONLY) */}
+                            {/* MODIFIED: Render ONLY for Vendor type, excluding Dumping Site */}
+                            {isSimple && type === 'vendor' && (
                                 <View style={[styles.dataCell, styles.colMaterial, styles.borderRight]} />
                             )}
                            
-                            {/* TICKETS COLUMN PLACEHOLDER (Simple tables only - Fourth column for Vendor) */}
+                            {/* TICKETS COLUMN PLACEHOLDER (Simple tables only - Fourth column for Vendor/Dumping, Third for Material) */}
                             {isSimple && (
                                 <View style={[styles.dataCell, styles.colTickets, styles.borderRight]} />
                             )}
@@ -1460,4 +1577,4 @@ phaseTotalLabelAlignment: {
 });
 
 
-export default ForemanTimesheetViewScreen ;
+export default ForemanTimesheetViewScreen;

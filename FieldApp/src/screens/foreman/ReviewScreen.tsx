@@ -1021,7 +1021,7 @@ const { width } = Dimensions.get("window");
 const THUMBNAIL_HEIGHT = 150;
 
 // ✅ Replace with your backend ngrok or production URL
-const API_BASE_URL = "https://0ab5b028fc2c.ngrok-free.app";
+const API_BASE_URL = "https://e79d2a4b885a.ngrok-free.app";
 
 // --- TYPE DEFINITIONS ---
 interface TicketImage {
