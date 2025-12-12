@@ -592,54 +592,70 @@ class SupervisorSubmitPayload(BaseModel):
 @router.post("/submit-all-for-date", status_code=200)
 def submit_all_for_date(payload: SupervisorSubmitPayload, db: Session = Depends(get_db)):
     """
-    Finalizes supervisor approval for all timesheets on a specific date 
-    by changing the status from REVIEWED_BY_SUPERVISOR to APPROVED_BY_SUPERVISOR.
-    """
-    # If payload.date is already a date, just use it
-    if isinstance(payload.date, datetime):
-        target_date = payload.date.date()
-    elif isinstance(payload.date, str):
-        try:
-            target_date = datetime.strptime(payload.date, "%Y-%m-%d").date()
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD.")
-    elif isinstance(payload.date, date):
-        target_date = payload.date
-    else:
-        raise HTTPException(status_code=400, detail="payload.date must be a date or string in YYYY-MM-DD format.")
+    Finalizes supervisor approval for all Timesheets & Tickets on a given date.
 
-    # Define the final status
+    Timesheets:
+        REVIEWED_BY_SUPERVISOR → APPROVED_BY_SUPERVISOR
+    Tickets:
+        SUBMITTED → APPROVED_BY_SUPERVISOR
+    """
+    # Convert incoming date
+    try:
+        target_date = payload.date if isinstance(payload.date, date) \
+            else datetime.strptime(payload.date, "%Y-%m-%d").date()
+    except:
+        raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD.")
+
     FINAL_STATUS = models.SubmissionStatus.APPROVED_BY_SUPERVISOR
 
-    # 1. Record the overall submission event
+    # -------------------------------------------------------
+    # 1. Create submission record
+    # -------------------------------------------------------
     submission = models.SupervisorSubmission(
         supervisor_id=payload.supervisor_id,
         date=target_date,
-        status="SubmittedToEngineer" 
+        status="SubmittedToEngineer"
     )
     db.add(submission)
 
-    # 2. Fetch all timesheets READY FOR FINAL APPROVAL
+    # -------------------------------------------------------
+    # 2. TIMESHEETS: review → approve
+    # -------------------------------------------------------
     timesheets_to_finalize = (
         db.query(models.Timesheet)
-        .join(models.JobPhase, models.Timesheet.job_phase_id == models.JobPhase.id) 
+        .join(models.JobPhase, models.Timesheet.job_phase_id == models.JobPhase.id)
         .filter(
             models.Timesheet.date == target_date,
             models.Timesheet.status == models.SubmissionStatus.REVIEWED_BY_SUPERVISOR,
-            models.JobPhase.project_engineer_id.isnot(None) 
+            models.JobPhase.project_engineer_id.isnot(None)
         )
         .all()
     )
 
-    if not timesheets_to_finalize:
-        db.rollback() 
-        raise HTTPException(status_code=400, detail="No timesheets found in 'Reviewed by Supervisor' status for this date.")
+    # -------------------------------------------------------
+    # 3. TICKETS: submitted → approve
+    # -------------------------------------------------------
+    tickets_to_finalize = (
+        db.query(models.Ticket)
+        .filter(
+            cast(models.Ticket.created_at, Date) == target_date,
+            models.Ticket.status == models.SubmissionStatus.SUBMITTED
+        )
+        .all()
+    )
 
-    finalized_count = 0
+    if not timesheets_to_finalize and not tickets_to_finalize:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="No timesheets or tickets found to finalize.")
+
+    finalized_ts_count = 0
+    finalized_ticket_count = 0
+
+    # ---- Approve Timesheets ----
     for ts in timesheets_to_finalize:
         pe_id = ts.job_phase.project_engineer_id
         ts.status = FINAL_STATUS
-        finalized_count += 1
+        finalized_ts_count += 1
 
         workflow = models.TimesheetWorkflow(
             timesheet_id=ts.id,
@@ -648,14 +664,34 @@ def submit_all_for_date(payload: SupervisorSubmitPayload, db: Session = Depends(
             by_role="Supervisor",
             action="Approved",
             timestamp=datetime.utcnow(),
-            comments=f"Timesheet finally approved and forwarded to Project Engineer (User ID: {pe_id})"
+            comments=f"Timesheet approved and forwarded to Project Engineer (User ID: {pe_id})"
+        )
+        db.add(workflow)
+
+    # ---- Approve Tickets ----
+    for tk in tickets_to_finalize:
+        tk.status = FINAL_STATUS
+        tk.supervisor_id = payload.supervisor_id
+        finalized_ticket_count += 1
+
+        workflow = models.TicketWorkflow(
+            ticket_id=tk.id,
+            supervisor_id=payload.supervisor_id,
+            action="Approved",
+            by_role="Supervisor",
+            timestamp=datetime.utcnow(),
+            comments="Ticket approved by Supervisor and included in final submission."
         )
         db.add(workflow)
 
     db.commit()
 
-    return {"message": f"Successfully finalized and approved {finalized_count} timesheet(s) for submission to Project Engineers."}
-
+    return {
+        "message": (
+            f"Successfully approved {finalized_ts_count} timesheet(s) "
+            f"and {finalized_ticket_count} ticket(s) for submission to Project Engineers."
+        )
+    }
 
 
 
@@ -822,13 +858,11 @@ def get_pe_timesheets(foreman_id: int, date: str, db: Session = Depends(database
         db.query(models.Timesheet)
         .filter(
             models.Timesheet.foreman_id == foreman_id,
-            models.Timesheet.date == target_date
+            models.Timesheet.date == target_date,
+            models.Timesheet.status == "APPROVED_BY_SUPERVISOR"
         )
         .all()
     )
-
-    if not timesheets:
-        raise HTTPException(status_code=404, detail="Timesheets not found for given date and foreman.")
 
     return [
         {
@@ -841,13 +875,10 @@ def get_pe_timesheets(foreman_id: int, date: str, db: Session = Depends(database
         for t in timesheets
     ]
 
-
 # ---------------- PE Tickets ----------------
 
-@router.get("/pe/tickets", response_model=List[schemas.Ticket]) 
+@router.get("/pe/tickets", response_model=List[schemas.Ticket])
 def get_pe_tickets(foreman_id: int, date: str, db: Session = Depends(database.get_db)):
-    from datetime import date as date_type
-    
     try:
         target_date = date_type.fromisoformat(date)
     except ValueError:
@@ -858,12 +889,11 @@ def get_pe_tickets(foreman_id: int, date: str, db: Session = Depends(database.ge
         .filter(
             models.Ticket.foreman_id == foreman_id,
             cast(models.Ticket.created_at, Date) == target_date,
-            models.Ticket.status == models.SubmissionStatus.SUBMITTED
+            models.Ticket.status == models.SubmissionStatus.APPROVED_BY_SUPERVISOR
         )
         .all()
     )
     
-    # Return raw objects; Pydantic response_model will handle serialization
     return tickets
 
 

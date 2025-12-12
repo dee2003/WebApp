@@ -5786,6 +5786,16 @@ const phaseTotals = isEquipment
     <Text style={styles.addButton}>+ Add Dump Site</Text>
   </TouchableOpacity>
 )}
+{type === 'material' && (
+  <TouchableOpacity onPress={handleAddTrucking}>
+    <Text style={styles.addButton}>+ Add Trucking</Text>
+  </TouchableOpacity>
+)}
+{type === 'dumping_site' && (
+  <TouchableOpacity onPress={handleAddDumpingSite}>
+    <Text style={styles.addButton}>+ Add Dump Site</Text>
+  </TouchableOpacity>
+)}
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={[tableStyles.tableWrap, { minWidth: '100%' }]}>

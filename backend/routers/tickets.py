@@ -18,6 +18,18 @@ router = APIRouter(
 # ==========================================================
 # 🔹 1. Supervisor View: Get Submitted Tickets
 # ==========================================================
+# (You can keep your commented block here if needed)
+
+
+# ==========================================================
+# 🔹 2️⃣ Supervisor View: Only Submitted Tickets
+# ==========================================================
+from datetime import date
+from sqlalchemy import func
+
+
+from datetime import datetime, date as date_type
+
 @router.get("/for-supervisor", response_model=List[schemas.TicketSummary])
 def get_tickets_for_supervisor(
     foreman_id: int = Query(...),
@@ -88,7 +100,7 @@ def get_tickets_for_project_engineer(
 ):
     target_date = date_type.fromisoformat(date)
 
-    # Get job codes for PE
+    # Get job codes assigned to PE
     job_codes = (
         db.query(models.JobPhase.job_code)
         .filter(models.JobPhase.project_engineer_id == project_engineer_id)
@@ -99,30 +111,34 @@ def get_tickets_for_project_engineer(
     if not job_codes:
         raise HTTPException(status_code=404, detail="No jobs assigned to this Project Engineer")
 
-    # Get foremen for this supervisor/date/status
+    # 🔍 Only foremen with approved daily submission
     foremen = (
         db.query(models.DailySubmission.foreman_id)
         .filter(
             models.DailySubmission.supervisor_id == supervisor_id,
             models.DailySubmission.date == target_date,
-            models.DailySubmission.status == "APPROVED",
+            models.DailySubmission.status == "APPROVED_BY_SUPERVISOR",
         )
         .distinct()
         .subquery()
     )
 
+    # -------------------------
+    # 🎫 Tickets (must be APPROVED_BY_SUPERVISOR)
+    # -------------------------
     tickets = (
         db.query(models.Ticket)
         .filter(
             models.Ticket.foreman_id.in_(foremen),
             cast(models.Ticket.created_at, Date) == target_date,
-            models.Ticket.sent == True,
-            models.Ticket.job_code.in_(job_codes)
+            models.Ticket.status == "APPROVED_BY_SUPERVISOR",
+            models.Ticket.job_code.in_(job_codes),
         )
         .all()
     )
 
     return tickets
+
 
 # ==========================================================
 # 🔹 4. Submit Tickets (Status Change)

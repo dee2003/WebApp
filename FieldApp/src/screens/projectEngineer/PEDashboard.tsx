@@ -56,64 +56,87 @@ const PEDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadDashboard = useCallback(async () => {
-    // 🛑 Don’t call API if user is not logged in
-    if (!user?.id) return;
+const loadDashboard = useCallback(async () => {
+  if (!user?.id) return;
 
-    try {
-      setLoading(true);
-const res = await apiClient.get('/api/project-engineer/dashboard', {
-  params: { 
-    project_engineer_id: user.id,
-    status: 'APPROVED_BY_SUPERVISOR', // <- add this
-  },
-});
+  try {
+    setLoading(true);
 
+    console.log("🔄 Fetching PE dashboard...");
+    const res = await apiClient.get("/api/project-engineer/dashboard", {
+      params: { project_engineer_id: user.id }
+    });
 
-      const { timesheets = [], tickets = [] } = res.data;
-      const combinedMap: Record<string, ItemType> = {};
+    const timesheets = res.data?.timesheets || [];
+    const tickets = res.data?.tickets || [];
 
-      timesheets.forEach((t: any) => {
-        const key = `${t.date}-${t.foreman_name}-${t.job_code}`;
-        if (!combinedMap[key]) {
-          combinedMap[key] = {
-            date: t.date,
-            foreman_id: t.foreman_id || 0,
-            foreman_name: t.foreman_name || '',
-            job_code: t.job_code || '',
-            timesheet_count: 0,
-            ticket_count: 0,
-          };
-        }
-        combinedMap[key].timesheet_count += 1;
-      });
+    console.log("📌 Raw Timesheets from API:", timesheets);
+    console.log("📌 Raw Tickets from API:", tickets);
 
-      tickets.forEach((tk: any) => {
-        const key = `${tk.date}-${tk.foreman_name}-${tk.job_code}`;
-        if (!combinedMap[key]) {
-          combinedMap[key] = {
-            date: tk.date,
-            foreman_id: tk.foreman_id || 0,
-            foreman_name: tk.foreman_name || '',
-            job_code: tk.job_code || '',
-            timesheet_count: 0,
-            ticket_count: 0,
-          };
-        }
-        combinedMap[key].ticket_count += 1;
-      });
+    // ⭐ COMBINED MAP (foreman + date)
+    const combinedMap: Record<string, ItemType> = {};
 
-      setData(Object.values(combinedMap));
-    } catch (err: any) {
-      console.error('Load PE dashboard error', err);
-      // Ignore error after logout (401 or canceled)
-      if (err.response?.status !== 401) {
-        Alert.alert('Error', err.response?.data?.detail || 'Failed to load dashboard data');
+    // ----- TIMESHEETS -----
+    timesheets.forEach((t: any) => {
+      const key = `${t.date}-${t.foreman_id}`;
+
+      if (!combinedMap[key]) {
+        combinedMap[key] = {
+          date: t.date,
+          foreman_id: t.foreman_id,
+          foreman_name: t.foreman_name || "",
+          job_code: t.job_code || "",
+          timesheet_count: 0,
+          ticket_count: 0,
+        };
+        console.log("🆕 Created entry:", combinedMap[key]);
       }
-    } finally {
-      setLoading(false);
+
+      combinedMap[key].timesheet_count += t.timesheet_count ?? 0;
+      console.log(
+        `➕ Added timesheets: key=${key}, added=${t.timesheet_count}, total=${combinedMap[key].timesheet_count}`
+      );
+    });
+
+    // ----- TICKETS -----
+    tickets.forEach((tk: any) => {
+      const key = `${tk.date}-${tk.foreman_id}`;
+
+      if (!combinedMap[key]) {
+        combinedMap[key] = {
+          date: tk.date,
+          foreman_id: tk.foreman_id,
+          foreman_name: tk.foreman_name || "",
+          job_code: tk.job_code || "",
+          timesheet_count: 0,
+          ticket_count: 0,
+        };
+        console.log("🆕 Created entry (ticket):", combinedMap[key]);
+      }
+
+      combinedMap[key].ticket_count += tk.ticket_count ?? 0;
+      console.log(
+        `➕ Added tickets: key=${key}, added=${tk.ticket_count}, total=${combinedMap[key].ticket_count}`
+      );
+    });
+
+    // FINAL MERGED LIST
+    const finalData = Object.values(combinedMap);
+
+    console.log("✅ Final Combined Dashboard Data:", finalData);
+
+    setData(finalData);
+  } catch (err: any) {
+    console.error("❌ Load PE dashboard error", err);
+
+    if (err.response?.status !== 401) {
+      Alert.alert("Error", err.response?.data?.detail || "Failed to load dashboard data");
     }
-  }, [user?.id]);
+  } finally {
+    setLoading(false);
+  }
+}, [user?.id]);
+
 
   useEffect(() => {
     let active = true;
@@ -191,12 +214,12 @@ const res = await apiClient.get('/api/project-engineer/dashboard', {
           renderSectionHeader={({ section }) => (
             <View style={styles.dateGroupContainer}>
               <Text style={styles.dateHeader}>
-                {new Date(section.title + 'T00:00:00').toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                })}
+{new Date(section.title + 'T00:00:00').toLocaleDateString('en-US', { 
+  month: '2-digit', 
+  day: '2-digit', 
+  year: 'numeric' 
+})}
+
               </Text>
             </View>
           )}

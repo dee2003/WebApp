@@ -9,6 +9,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from .database import Base
+from sqlalchemy.dialects.postgresql import JSON
+# or
+from sqlalchemy.dialects.postgresql import JSONB
 
 # ============================================================================== #
 # 1. ENUMS (FOR STATUS AND ROLE FLAGS)
@@ -459,6 +462,7 @@ class Ticket(Base):
             "job_code": self.job_phase.job_code if self.job_phase else None,
             "phase_name": self.job_phase.phase_name if self.job_phase else None
         }
+
 class TimesheetFile(Base):
     __tablename__ = "timesheet_files"
     id = Column(Integer, primary_key=True, index=True)

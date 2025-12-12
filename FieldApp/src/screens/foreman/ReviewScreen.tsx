@@ -1969,8 +1969,9 @@ const THUMBNAIL_HEIGHT = 130;
 const THUMBNAIL_WIDTH = 100;
 
 // ✅ Replace with your backend URL
-const API_BASE_URL = "https://coated-nonattributive-babara.ngrok-free.dev";
+import API_URL from "../../config";
 
+const API_BASE_URL = API_URL;
 
 // --- TYPE DEFINITIONS ---
 interface TicketImage {

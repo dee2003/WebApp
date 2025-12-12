@@ -4,6 +4,8 @@ import axios from "axios";
 import Select from "react-select";
 import "./VendorForm.css";
 import { useLocation } from "react-router-dom";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 const API_URL = "http://127.0.0.1:8000/api";
 
@@ -25,7 +27,7 @@ const TimesheetForm = ({ onClose, existingTimesheet, isResend }) => {
     const [locations, setLocations] = useState([]);   // list of all locations
 const [ location,setLocation] = useState(""); 
     const [projectEngineer, setProjectEngineer] = useState("");
-    const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+const [date, setDate] = useState(new Date()); // Changed from ISO string
     const [loading, setLoading] = useState(false);
     const [selectedJobPhaseId, setSelectedJobPhaseId] = useState(null);
     const [unit, setUnit] = useState('C');
@@ -626,17 +628,26 @@ if (recipientEmail) {
                         <label htmlFor="jobName">Job Name</label>
                         <input id="jobName" type="text" value={jobName} onChange={(e) => setJobName(e.target.value)} placeholder="Job name is auto-filled" required disabled className="form-input" />
                     </div>
-                     <div className="form-group">
-                            <label htmlFor="date">Date</label>
-                            <input
-                                id="date" type="date" value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                                className="form-input" disabled={loading}
-                                max={new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
-                                min={new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]} // optional: allow 30 days in past
-                                // max={new Date().toISOString().split("T")[0]}
-                            />
-                        </div>
+<div className="form-group">
+  <label htmlFor="date">Date</label>
+  <DatePicker
+    id="date"
+    selected={date}
+    onChange={(selectedDate) => setDate(selectedDate)}
+    dateFormat="MM/dd/yyyy"
+    className="form-input"
+    disabled={loading}
+    maxDate={new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)}
+    minDate={new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}
+    placeholderText="MM/DD/YYYY"
+    
+    // 🔒 Disable manual typing
+    onChangeRaw={(e) => e.preventDefault()}
+    // Optional: this prevents focusing the input from opening keyboard on mobile
+    showPopperArrow={false}
+  />
+</div>
+
                 </div>
 
                 

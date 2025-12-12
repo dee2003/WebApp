@@ -83,3 +83,30 @@
   display: flex;
   justify-content: flex-end;
 }
+.page-header {
+    display: flex; /* Aligns the text container and the button */
+    justify-content: space-between;
+    align-items: flex-start; /* Aligns items to the top */
+    padding-bottom: 10px; /* Optional: adds space below the header */
+}
+
+/* Ensure the module name stacks above the title */
+.header-text-container {
+    display: flex;
+    flex-direction: column; /* This is key: it forces children to stack vertically */
+}
+
+/* Style the module name */
+.module-context-label {
+    font-size: 0.9em;
+    color: #6c757d; /* Muted color */
+    text-transform: uppercase;
+    margin-bottom: 2px; /* Small gap above the H2 */
+}
+
+/* Style the main title */
+.main-form-title {
+    font-size: 1.5em; /* Example size */
+    margin: 0; /* Remove default margin to keep it tight to the label */
+    padding: 0;
+}

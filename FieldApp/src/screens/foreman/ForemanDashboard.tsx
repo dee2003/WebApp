@@ -20,8 +20,9 @@ import DocumentScanner from 'react-native-document-scanner-plugin';
 import RNFS from 'react-native-fs';
 import Icon from 'react-native-vector-icons/Feather';
 
-const API_BASE_URL = 'https://coated-nonattributive-babara.ngrok-free.dev';
+import API_URL from "../../config";
 
+const API_BASE_URL = API_URL;
 const theme = {
   colors: {
     primary: '#070807ff',
@@ -37,7 +38,7 @@ const theme = {
 
 const ForemanDashboard = ({ navigation }: { navigation: any }) => {
   const { user, logout } = useAuth();
-  console.log("USER DATA:", user);
+  
   const [selectedCategory, setSelectedCategory] = useState<string>('Materials');
   const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -419,7 +420,6 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
     ? user.first_name.charAt(0).toUpperCase() + user.first_name.slice(1).toLowerCase()
     : "Foreman"}
 </Text>
-
               <Text style={styles.welcomeSubtitle}>What would you like to do today?</Text>
             </View>
             
