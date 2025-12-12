@@ -15,7 +15,7 @@ import axios from "axios";
 import "./ApplicationAdmin.css";
 import { useLocation } from 'react-router-dom'; // Import useLocation
 
-const TIMESHEETS_PER_PAGE = 2;
+const TIMESHEETS_PER_PAGE = 10;
 const API_URL = "http://127.0.0.1:8000/api";
 
 export default function ApplicationAdmin({ user, onLogout }) {  // ✅ Add props

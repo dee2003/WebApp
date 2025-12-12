@@ -613,7 +613,16 @@ def login(
     access_token = token.create_access_token(
         data={"sub": user.username, "role": str(user.role.value)}
     )
+    user_data = {
+    "id": user.id,
+    "username": user.username,
+    "email": user.email,
+    "first_name": user.first_name,
+    "middle_name": user.middle_name,
+    "last_name": user.last_name
+    }
 
+    print("LOGIN USER DATA →", user_data)
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -621,7 +630,10 @@ def login(
         "user": {
             "id": user.id,
             "username": user.username,
-            "email": user.email
+            "email": user.email,
+            "first_name": user.first_name,
+            "middle_name": user.middle_name,
+            "last_name": user.last_name
         }
     }
 
@@ -647,7 +659,7 @@ def get_current_user(token: str = Depends(token.oauth2_scheme), db: Session = De
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-
+    print("TOKEN RECEIVED:", token)
     user = db.query(models.User).filter(models.User.username == username).first()
     if user is None:
         raise credentials_exception

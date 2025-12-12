@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   FaArrowLeft,
   FaRegEdit,
   FaClipboardList,
-  // ADDED MISSING ICONS
   FaChevronRight,
   FaChevronLeft,
 } from "react-icons/fa";
@@ -13,142 +12,105 @@ import "./ApplicationAdmin.css";
 
 const API_URL = "http://127.0.0.1:8000/api";
 
-// Helper function to render list items for Employees and Equipment (using names from enrichment)
-// (renderComplexListItems remains unchanged)
+// --- Helper Functions ---
+
 const renderComplexListItems = (items, key) => {
-  if (!Array.isArray(items) || items.length === 0) {
-    return <li>N/A</li>;
-  }
+  if (!Array.isArray(items) || items.length === 0) return <li>N/A</li>;
+
   return items.map((item, i) => {
-    // 1. Employee: Show name and status
     if (key === "employees") {
       const name = `${item.first_name || ""} ${item.last_name || ""}`.trim();
-      return (
-        <li key={i}>
-          {name || `ID: ${item.id}`}
-        </li>
-      );
+      return <li key={i}>{name || `ID: ${item.id}`}</li>;
     }
-    // 2. Equipment: Show name, VIN, and Category
     if (key === "equipment") {
-      return (
-        <li key={i}>
-          {item.name}
-        </li>
-      );
+      return <li key={i}>{item.name}</li>;
     }
-    // 3. Enriched Entities (Vendors, Materials, Dumping Sites): Show name/ID
     return <li key={i}>{item.name || `ID: ${item.id}` || "Unnamed Entity"}</li>;
   });
 };
 
-// Helper for displaying categories with their selected IDs/Names
-// (renderCategoryDisplay remains unchanged)
-const renderCategoryDisplay = (categories, label) => {
-    if (!Array.isArray(categories) || categories.length === 0) {
-        return <span className="text-muted">N/A</span>;
-    }
-    return categories.map((cat, i) => <span key={i} className="badge">{cat}</span>);
+const renderCategoryDisplay = (categories) => {
+  if (!Array.isArray(categories) || categories.length === 0)
+    return <span className="text-muted">N/A</span>;
+  return categories.map((cat, i) => (
+    <span key={i} className="badge">
+      {cat}
+    </span>
+  ));
 };
 
-
-// --- Helper to render the ENTIRE vertical logistics box with enhanced styling ---
-// (renderLogisticsBox remains unchanged)
-const renderLogisticsBox = (
-    title,
-    entities,
-    categories,
-    itemMap,
-    entityLabel
-) => {
-    // Helper to render the associated item details (nested list using DL for structure)
-    const renderNestedItemsList = () => {
-        if (entities.length === 0) return <p className="text-muted">N/A (No associated items)</p>;
-
-        return (
-            <dl className="logistics-item-details-list">
-                {entities.map((entity, i) => {
-                    const entityId = entity.id;
-                    const entityName = entity.name || `ID: ${entityId}`;
-                    const itemDetails = itemMap[entityId];
-                    const selectedMaterials = 
-  itemDetails?.selectedMaterials || itemDetails?.materials || [];
-
-
-                    return (
-                        <div key={i}>
-                            <dt className="logistics-item-name">{entityName}</dt>
-                            <dd className="logistics-item-materials">
-                                {selectedMaterials.length > 0 ? (
-                                    <ul className="list-unstyled">
-                                       {selectedMaterials.map((material, j) => {
-  // Try to find unit from the full materials list if missing
-  const fullMaterial =
-    itemDetails?.materials?.find(m => m.id === material.id);
-  const unit = material.unit || fullMaterial?.unit || "N/A Unit";
-
-  return (
-    <li key={j}>
-      {material.name} ({unit})
-    </li>
-  );
-})}
-
-                                    </ul>
-                                ) : (
-                                    <span className="text-muted">No associated items.</span>
-                                )}
-                            </dd>
-                        </div>
-                    );
-                })}
-            </dl>
-        );
-    };
+const renderLogisticsBox = (title, entities, categories, itemMap, entityLabel) => {
+  const renderNestedItemsList = () => {
+    if (entities.length === 0)
+      return <p className="text-muted">N/A (No associated items)</p>;
 
     return (
-      // Removing 'logistics-box' class and just using 'structured-box' for a cleaner look that 
-      // is similar to the other section tables. Adding a top margin for spacing.
-      <div className="structured-box mt-4"> 
-        {/* Changed from h4 to h3 to act as the section title */}
-        <h3 className="section-title">{title} ({entities.length})</h3> 
-        
-        <table className="details-table compact-table">
-            <tbody>
-                {/* 1. Categories */}
-                <tr>
-                    <th className="w-40">Categories</th>
-                    <td>
-                        {renderCategoryDisplay(categories, entityLabel)}
-                    </td>
-                </tr>
+      <dl className="logistics-item-details-list">
+        {entities.map((entity, i) => {
+          const entityId = entity.id;
+          const entityName = entity.name || `ID: ${entityId}`;
+          const itemDetails = itemMap[entityId];
+          const selectedMaterials = itemDetails?.selectedMaterials || itemDetails?.materials || [];
 
-                {/* 2. Main List of Selected Entities */}
-                <tr>
-                    <th>Selected {entityLabel}s</th>
-                    <td>
-                        <ul className="list-unstyled list-compact">
-                            {renderComplexListItems(entities, entityLabel.toLowerCase().replace(/[^a-z]/g, ''))}
-                        </ul>
-                    </td>
-                </tr>
-
-                {/* 3. Nested Items (Associated Item Details) - Integrated into the table */}
-                <tr>
-                    <th className="border-bottom-0">Selected Materials</th>
-                    <td className="border-bottom-0">
-                        {renderNestedItemsList()}
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-        {/* Add a horizontal rule for separation between logistics boxes */}
-        <hr />
-      </div>
+          return (
+            <div key={i}>
+              <dt className="logistics-item-name">{entityName}</dt>
+              <dd className="logistics-item-materials">
+                {selectedMaterials.length > 0 ? (
+                  <ul className="list-unstyled">
+                    {selectedMaterials.map((material, j) => {
+                      const fullMaterial = itemDetails?.materials?.find((m) => m.id === material.id);
+                      const unit = material.unit || fullMaterial?.unit || "N/A Unit";
+                      return (
+                        <li key={j}>
+                          {material.name} ({unit})
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <span className="text-muted">No associated items.</span>
+                )}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
     );
-};
-// --- END renderLogisticsBox ---
+  };
 
+  return (
+    <div className="structured-box mt-4">
+      <h3 className="section-title">
+        {title} ({entities.length})
+      </h3>
+
+      <table className="details-table compact-table">
+        <tbody>
+          <tr>
+            <th className="w-40">Categories</th>
+            <td>{renderCategoryDisplay(categories)}</td>
+          </tr>
+          <tr>
+            <th>Selected {entityLabel}s</th>
+            <td>
+              <ul className="list-unstyled list-compact">
+                {renderComplexListItems(entities, entityLabel.toLowerCase().replace(/[^a-z]/g, ""))}
+              </ul>
+            </td>
+          </tr>
+          <tr>
+            <th className="border-bottom-0">Selected Materials</th>
+            <td className="border-bottom-0">{renderNestedItemsList()}</td>
+          </tr>
+        </tbody>
+      </table>
+      <hr />
+    </div>
+  );
+};
+
+// --- TimesheetDetails Component ---
 
 const TimesheetDetails = () => {
   const { id } = useParams();
@@ -156,33 +118,25 @@ const TimesheetDetails = () => {
 
   const [ts, setTs] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  
-  // START: DEFINITIONS ADDED TO RESOLVE ERRORS
 
-  // 1. Placeholder for current date
-  const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const currentDate = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 
-  // 2. Placeholder for logout function
   const handleLogout = () => {
     console.log("Logout triggered");
-    // navigate('/login'); 
   };
-  
-  // 3. Placeholder sections and activeSection state
+
   const sections = ["createTimesheet", "viewTimesheets"];
-  // Note: activeSection is usually managed by a parent component or global state. 
-  // For compilation, we'll default it to 'viewTimesheets'.
-  const [activeSection, setActiveSection] = useState("viewTimesheets"); 
+  const [activeSection, setActiveSection] = useState("viewTimesheets");
 
-  // 4. Placeholder for icon helper function
   const getIconForSection = (sectionName) => {
-      // Use the imported icons or placeholders
-      if (sectionName === "createTimesheet") return <FaRegEdit />;
-      if (sectionName === "viewTimesheets") return <FaClipboardList />;
-      return null;
+    if (sectionName === "createTimesheet") return <FaRegEdit />;
+    if (sectionName === "viewTimesheets") return <FaClipboardList />;
+    return null;
   };
-  // END: DEFINITIONS ADDED TO RESOLVE ERRORS
-
 
   // Fetch single timesheet
   useEffect(() => {
@@ -197,66 +151,44 @@ const TimesheetDetails = () => {
     }
   }, [id]);
 
-  if (!ts) {
-    return <p>Loading...</p>;
-  }
+  if (!ts) return <p>Loading...</p>;
 
   const data = ts.data || {};
 
-// In the destructuring section (around line 140), update these keys:
-const {
-  job = {},
-  supervisor = null, 
-  contract_no,
-  project_engineer,
-  time_of_day,
-  weather,
-  temperature,
-  location,
-  work_description,
-
-  // Crew Data
-  employees = [],
-  equipment = [],
-
-  // Logistics Data
-  vendors = [],
-  materials = [],
-  dumping_sites = [],
-
-  // Category lists (raw strings/IDs)
-  vendor_categories = [],
-  material_categories = [],
-  dumping_categories = [],
-
-  // FIXED: Use exact API key names from your data
-  selectedvendormaterials = {},  // <- CHANGED: no underscore
-  selected_material_items = {},
-  selecteddumpingmaterials = {}, // <- CHANGED: no underscore
-} = data;
-
+  const {
+    job = {},
+    supervisor = null,
+    contract_no,
+    project_engineer,
+    time_of_day,
+    location,
+    work_description,
+    employees = [],
+    equipment = [],
+    vendors = [],
+    materials = [],
+    dumping_sites = [],
+    vendor_categories = [],
+    material_categories = [],
+    dumping_categories = [],
+    selected_vendor_materials: selectedvendormaterials = {},
+    selected_material_items = {},
+  } = data;
 
   const jobCode = job.job_code || "N/A";
   const jobPhaseCodes = job.phase_codes?.join(", ") || "N/A";
   const supervisorName = supervisor?.name || "N/A";
 
-
   return (
-    // The sidebar structure is highly decoupled here. In a real app, this sidebar 
-    // would likely be a separate component wrapping the main content.
     <div className="admin-layout">
-      {/* Sidebar Section */}
-      <nav
-        className={`admin-sidebar ${sidebarCollapsed ? "collapsed" : ""}`}
-        style={{ width: sidebarCollapsed ? 60 : 250 }}
-      >
+      {/* Sidebar */}
+      <nav className={`admin-sidebar ${sidebarCollapsed ? "collapsed" : ""}`} style={{ width: sidebarCollapsed ? 60 : 250 }}>
         <div className="sidebar-top">
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             className="btn btn-outline btn-sm toggle-sidebar"
             title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
           >
-            {/* Icons are now defined/imported */}
             {sidebarCollapsed ? <FaChevronRight /> : <FaChevronLeft />}
           </button>
         </div>
@@ -264,9 +196,7 @@ const {
           {!sidebarCollapsed && <h3 className="sidebar-title">APPLICATION ADMIN</h3>}
           {!sidebarCollapsed && (
             <>
-              {/* currentDate is now defined */}
               <div className="current-date">{currentDate}</div>
-              {/* handleLogout is now defined */}
               <button onClick={handleLogout} className="btn btn-outline btn-sm logout-btn">
                 Logout
               </button>
@@ -274,27 +204,23 @@ const {
           )}
         </div>
         <ul className="sidebar-nav">
-          {/* sections is now defined */}
           {sections.map((sec) => (
             <li key={sec}>
               <button
                 onClick={() => navigate("/", { state: { section: sec, refresh: Date.now() } })}
-                // activeSection is now defined
                 className={activeSection === sec ? "active" : ""}
               >
-                {/* getIconForSection is now defined */}
                 {getIconForSection(sec)}
                 {!sidebarCollapsed && (
-                  <span className="label">
-                    {sec === "createTimesheet" ? "Create Timesheet" : "View Timesheets"}
-                  </span>
+                  <span className="label">{sec === "createTimesheet" ? "Create Timesheet" : "View Timesheets"}</span>
                 )}
               </button>
             </li>
           ))}
         </ul>
       </nav>
-      {/* Main Content */}
+
+ {/* Main Content */}
       <div
         className="main-content"
         style={{ marginLeft: sidebarCollapsed ? 60 : 300 }}
@@ -317,7 +243,8 @@ const {
 </div>
 
 
-        {/* 1. ⚙️ Job & Contract Information */}
+
+        {/* 1. Job & Contract Info */}
         <div className="section">
           <h3 className="section-title">Job & Contract Information</h3>
           <table className="details-table">
@@ -341,27 +268,28 @@ const {
             </tbody>
           </table>
           <table className="details-table mt-4">
-              <thead>
+            <thead>
               <tr>
-                <th>Phase Codes</th>
+               
                 <th>Project Engineer</th>
                 <th>Supervisor</th>
                 <th>Location</th>
               </tr>
-              </thead>
-              <tbody>
+            </thead>
+            <tbody>
               <tr>
-                <td>{jobPhaseCodes}</td>
+                
                 <td>{project_engineer || "N/A"}</td>
                 <td>{supervisorName}</td>
                 <td>{location || "N/A"}</td>
               </tr>
-              </tbody>
+            </tbody>
           </table>
         </div>
+
         <hr />
 
-        {/* 2. 👷 Crew & Equipment */}
+        {/* 2. Crew & Equipment */}
         <div className="section">
           <h3 className="section-title">Crew & Equipment</h3>
           <table className="details-table">
@@ -373,15 +301,20 @@ const {
             </thead>
             <tbody>
               <tr>
-                <td><ul className="list-compact">{renderComplexListItems(employees, "employees")}</ul></td>
-                <td><ul className="list-compact">{renderComplexListItems(equipment, "equipment")}</ul></td>
+                <td>
+                  <ul className="list-compact">{renderComplexListItems(employees, "employees")}</ul>
+                </td>
+                <td>
+                  <ul className="list-compact">{renderComplexListItems(equipment, "equipment")}</ul>
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
+
         <hr />
-        
-        {/* 3. 🌡️ Work & Conditions */}
+
+        {/* 3. Work & Conditions */}
         <div className="section">
           <h3 className="section-title">Work & Conditions</h3>
           <table className="details-table">
@@ -389,124 +322,94 @@ const {
               <tr>
                 <th>Work Description</th>
                 <th>Time of Day</th>
-                {/* <th>Weather</th>
-                <th>Temperature</th> */}
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>{work_description || "N/A"}</td>
                 <td>{time_of_day || "N/A"}</td>
-                {/* <td>{weather || "N/A"}</td>
-                <td>{temperature || "N/A"}</td> */}
               </tr>
             </tbody>
           </table>
         </div>
+
         <hr />
-{/* 4. 🚚 Logistics: Vendors by Category (Concrete, Asphalt, Top Soil) */}
-<div className="section">
-  <h3 className="section-title">Vendor Details by Category</h3>
-  <div>
-    {/* CATEGORY TABLES: one table per category */}
-    {["Concrete", "Asphalt", "Top Soil"].map((category, catIndex) => {
-      const categoryVendors = Object.values(selectedvendormaterials || {}).filter(vendor => {
-        const vendorCat = (vendor.vendor_category || "").toLowerCase().trim();
-        const targetCat = category.toLowerCase().trim();
-        return (
-          vendorCat === targetCat ||
-          vendorCat.includes(targetCat) ||
-          targetCat.includes(vendorCat)
-        );
-      });
 
-      if (categoryVendors.length === 0) return null;
+        {/* 4. Logistics: Vendors by Category */}
+        <div className="section">
+          <h3 className="section-title">Vendor Details by Category</h3>
+          <div>
+            {["Concrete", "Asphalt", "Top Soil"].map((category, catIndex) => {
+              const categoryVendors = Object.values(selectedvendormaterials || {}).filter((vendor) => {
+                const vendorCat = (vendor.vendor_category || "").toLowerCase().trim();
+                const targetCat = category.toLowerCase().trim();
+                return vendorCat === targetCat || vendorCat.includes(targetCat) || targetCat.includes(vendorCat);
+              });
 
-      return (
-        <div key={catIndex} className="structured-box mt-4 mb-4">
-<h4 className="section-subtitle">
-  {category}
-</h4>
+              if (categoryVendors.length === 0) return null;
 
-          
-          {/* SINGLE TABLE: Supplier | Material | Unit | Details */}
-          <table className="details-table compact-table">
-            <thead>
-              <tr>
-                <th>Supplier</th>
-                <th>Material</th>
-                <th>Unit</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {categoryVendors.map((vendor, vIndex) => 
-                vendor.selectedMaterials?.map((material, mIndex) => (
-                  <tr key={`${vIndex}-${mIndex}`}>
-                    <td>{vendor.name}</td>
-                    <td>{material.material}</td>
-                    <td>{material.unit}</td>
-                    <td>{material.detail || "N/A"}</td>
+              return (
+                <div key={catIndex} className="structured-box mt-4 mb-4">
+                  <h4 className="section-subtitle">{category}</h4>
+                  <table className="details-table compact-table">
+                    <thead>
+                      <tr>
+                        <th>Supplier</th>
+                        <th>Material</th>
+                        <th>Unit</th>
+                        <th>Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {categoryVendors.map((vendor, vIndex) =>
+                        vendor.selectedMaterials?.map((material, mIndex) => (
+                          <tr key={`${vIndex}-${mIndex}`}>
+                            <td>{vendor.name}</td>
+                            <td>{material.material}</td>
+                            <td>{material.unit}</td>
+                            <td>{material.detail || "N/A"}</td>
+                          </tr>
+                        ))
+                      )}
+                      {categoryVendors.every((v) => !v.selectedMaterials?.length) && (
+                        <tr>
+                          <td colSpan="4" className="text-muted text-center">
+                            No materials selected
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 🚚 Trucking Details */}
+          <div className="structured-box mt-4 mb-4">
+            <h4 className="section-subtitle">Trucking </h4>
+            {Object.keys(selected_material_items || {}).length === 0 ? (
+              <p className="text-muted">No trucking data available</p>
+            ) : (
+              <table className="details-table compact-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Details</th>
                   </tr>
-                ))
-              )}
-              {categoryVendors.every(v => !v.selectedMaterials?.length) && (
-                <tr>
-                  <td colSpan="4" className="text-muted text-center">No materials selected</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {Object.values(selected_material_items).map((item, i) => (
+                    <tr key={i}>
+                      <td>{item.name || `ID: ${item.id}`}</td>
+                      <td>{item.notes || item.detail || item.details || item.description || "N/A"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
-      );
-    })}
-
-{/* 🚚 Trucking Details (styled like vendor category tables) */}
-<div className="section">
-
-  <div className="structured-box mt-4 mb-4">
-    <h4 className="section-subtitle">
-      Trucking Items 
-    </h4>
-
-    {Object.keys(selected_material_items || {}).length === 0 ? (
-      <p className="text-muted">No trucking data available</p>
-    ) : (
-      <table className="details-table compact-table">
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {Object.values(selected_material_items).map((item, i) => (
-            <tr key={i}>
-              <td>{item.name || `ID: ${item.id}`}</td>
-
-              {/* FIX: use item.notes for trucking */}
-              <td>
-                {item.notes ||
-                 item.detail ||
-                 item.details ||
-                 item.description ||
-                 "N/A"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    )}
-  </div>
-</div>
-
-  </div>
-</div>
-
-
-
-        
       </div>
     </div>
   );

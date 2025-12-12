@@ -601,7 +601,7 @@ if (recipientEmail) {
 <header className="page-header">
                 <div className="header-text-container"> 
                     <div className="module-context-label-h2">
-                        Dispatch Module
+                        Dispatcher Module
                     </div>
                     <h2 className="main-form-title">
                         {isResend ? 'Resend Timesheet' : 'Create Timesheet'}

@@ -59,6 +59,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setToken(newToken);
         await AsyncStorage.setItem('user', JSON.stringify(userData));
         await AsyncStorage.setItem('token', newToken);
+        console.log("🔑 AuthContext.login userData:", userData);
     } catch (e) {
         console.error("Login Error saving to storage:", e);
     } finally {

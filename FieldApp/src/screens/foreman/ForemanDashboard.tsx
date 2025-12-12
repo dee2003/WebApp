@@ -37,7 +37,7 @@ const theme = {
 
 const ForemanDashboard = ({ navigation }: { navigation: any }) => {
   const { user, logout } = useAuth();
-  
+  console.log("USER DATA:", user);
   const [selectedCategory, setSelectedCategory] = useState<string>('Materials');
   const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -415,12 +415,11 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
           <View style={styles.mainContent}>
             <View style={styles.welcomeHeader}>
               <Text style={styles.welcomeTitle}>
-                Welcome, {[
-                  user?.first_name,
-                  user?.middle_name,
-                  user?.last_name,
-                ].filter(Boolean).join(' ') || 'Foreman'}
-              </Text>
+  Welcome, {user?.first_name
+    ? user.first_name.charAt(0).toUpperCase() + user.first_name.slice(1).toLowerCase()
+    : "Foreman"}
+</Text>
+
               <Text style={styles.welcomeSubtitle}>What would you like to do today?</Text>
             </View>
             

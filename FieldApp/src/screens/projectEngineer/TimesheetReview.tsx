@@ -1,3 +1,4 @@
+
 // import React, { useEffect, useState, useCallback } from 'react';
 // import {
 //     View,
@@ -37,6 +38,48 @@
 // type EditingTablePhase = { table: TableCategory; phase: string } | null;
 
 
+// // --- ADDED TYPE DEFINITIONS TO FIX TS2339 ---
+
+// // 1. Define the missing Supervisor structure from the JSONB
+// interface Supervisor {
+//     id: number;
+//     name: string;
+// }
+
+// // 2. Define a structure for the JSONB data that includes the supervisor 
+// // and other critical properties the component relies on.
+// interface ExtendedTimesheetData {
+//     supervisor?: Supervisor;
+//     notes?: string;
+//     weather?: string;
+//     time_of_day?: string;
+//     temperature?: string;
+//     project_engineer?: string;
+//     location?: string;
+//     job_name?: string; // <--- ADDED: Fixes Property 'job_name' does not exist error
+//     job: {
+//         job_code: string;
+//         phase_codes?: any[];
+//     };
+//     employees?: any[];
+//     equipment?: any[];
+//     materials_trucking?: any[];
+//     vendors?: any[];
+//     dumping_sites?: any[];
+//     total_quantities?: Record<string, string | number>;
+//     selected_material_items?: Record<string, any>;
+//     selected_vendor_materials?: Record<string, any>;
+//     selected_dumping_materials?: Record<string, any>;
+// }
+
+// // 3. Create an extended Timesheet type by merging the imported Timesheet 
+// // with our extended data structure.
+// type ExtendedTimesheet = Omit<Timesheet, 'data'> & {
+//     data: ExtendedTimesheetData;
+// };
+// // --------------------------------------------------------------------------
+
+
 // // --- Theme Constants ---
 // const THEME = {
 //     primary: '#007AFF',
@@ -65,17 +108,18 @@
 // const getPhaseGroupWidth = (type: TableCategory): number => {
 //   if (type === "equipment") return COL_EQUIP * 2;
 //   if (type === "employee") return COL_EMPLOYEE_HOUR;
-//   return COL_SIMPLE_HOUR + COL_TICKET;
+//   return COL_SIMPLE_HOUR;
 // };
 
 
 // const PETimesheetReviewScreen = () => {
-//     const route = useRoute<ReviewRouteProp>();
+//  const route = useRoute<ReviewRouteProp>();
 //     const { timesheetId } = route.params;
 
-//     const [timesheet, setTimesheet] = useState<Timesheet | null>(null);
+//     // USE THE EXTENDED TYPE HERE
+//     const [timesheet, setTimesheet] = useState<ExtendedTimesheet | null>(null); 
 //     const [foremanName, setForemanName] = useState<string>('');
-//     const [supervisorName, setSupervisorName] = useState<string>(''); // 💡 ADDED: State for Supervisor Name
+//     const [supervisorName, setSupervisorName] = useState<string>(''); 
 //     const [loading, setLoading] = useState(true);
 //     const [isEditing, setIsEditing] = useState(false);
 
@@ -106,7 +150,13 @@
 
 //     // Total list of phase codes for validation (original list from job)
 //     const allJobPhaseCodes = timesheet?.data.job.phase_codes?.map((p: any) => (p?.code ?? p)) || [];
-
+// const [overEmployees, setOverEmployees] = useState<string[]>([]);
+// const [showWarnings, setShowWarnings] = useState(false);
+// const [hoursState, setHoursState] = useState<SimpleHourState>({});
+// const [ticketsState, setTicketsState] = useState<SimpleHourState>({});
+// // NEW: holds simple one-value tickets per entity (no phase key)
+// const [ticketsLoadsState, setTicketsLoadsState] =
+//     useState<Record<string, string>>({});
 
 //     // --- Helper function to clean numeric input and strip leading zeros (New) ---
 //     const cleanNumericInput = (value: string): string => {
@@ -129,23 +179,35 @@
 //         return numericText;
 //     };
 
+// // Round numeric input to nearest quarter hour (0.25 increments)
+// const validateQuarterHour = (input: string) => {
+//     if (!input) return "";
+//     let num = parseFloat(input);
+//     if (isNaN(num)) return "";
+
+//     const rounded = Math.round(num * 4) / 4;
+//     return rounded.toFixed(2);
+// };
 
 //     const fetchData = useCallback(async () => {
 //         setLoading(true);
 //         try {
-//             const response = await apiClient.get<Timesheet>(`/api/timesheets/${timesheetId}`);
+//             // USE THE EXTENDED TYPE HERE
+//             const response = await apiClient.get<ExtendedTimesheet>(`/api/timesheets/${timesheetId}`);
 //             const tsData = response.data;
 //             setTimesheet(tsData);
             
 //             // Fetch all phase codes for this job_code
 //             try {
+//                 // This line now correctly accesses tsData.data.job
 //                 const jobCode = tsData.data.job.job_code;
 //                 const resp = await apiClient.get(`/api/job-phases/${jobCode}/phase-codes-list`);
 //                 setFullJobPhaseCodes(resp.data.map((p: any) => p.code));
 //             } catch (e) {
 //                 console.error("Failed to fetch full phase codes list", e);
 //             }
-// setNotes(tsData.data.notes || '');
+//             // Populate simple fields from tsData.data (JSONB)
+//             setNotes(tsData.data.notes || '');
 
 
 //             // --- Data Population Logic (Keys adjusted for Material/Vendor/DumpingSite) ---
@@ -253,54 +315,19 @@
 //                 setTotalQuantities(q);
 //             }
 
-//             // Fetch Foreman Name
+//             // Fetch Foreman Name (Existing Logic)
 //             const userRes = await apiClient.get(`/api/users/${tsData.foreman_id}`);
 //             setForemanName(`${userRes.data.first_name} ${userRes.data.last_name}`.trim());
 
-// let supervisorName = "N/A";
-
-// console.log("Supervisor raw:", tsData.data.supervisor);
-
-// if (typeof tsData.data.supervisor === "string" && tsData.data.supervisor.trim() !== "") {
-//   supervisorName = tsData.data.supervisor;
-// } 
-// else if (typeof tsData.data.supervisor === "object" && tsData.data.supervisor?.name) {
-//   supervisorName = tsData.data.supervisor.name;
-// }
-
-// console.log("Supervisor Name Final:", supervisorName);
-
-// setSupervisorName(supervisorName);
-
-          
-//             // 💡 NEW LOGIC TO FETCH SUPERVISOR NAME FROM WORKFLOW
-//             try {
-// console.log("timesheetId sent to API:", timesheetId);
-// const workflowRes = await apiClient.get(
-//   `/api/timesheets/workflows`,
-//   { params: { timesheet_id: timesheetId } }
-// );
-//                 // Define a minimal type for the workflow entry to ensure type safety
-//                 type WorkflowEntry = { supervisor_id: number | null, timestamp: string };
-
-//                 // Sort by timestamp descending to find the latest action, then find the first entry with a supervisor_id
-//                 const workflowEntries: WorkflowEntry[] = (workflowRes.data as WorkflowEntry[])
-//                     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-//                 const supervisorEntry = workflowEntries.find((entry) => entry.supervisor_id !== null);
-
-//                 if (supervisorEntry && supervisorEntry.supervisor_id) {
-//                      const supervisorRes = await apiClient.get(`/api/users/${supervisorEntry.supervisor_id}`);
-//                      setSupervisorName(`${supervisorRes.data.first_name} ${supervisorRes.data.last_name}`.trim());
-//                 } else {
-//                      setSupervisorName('N/A');
-//                 }
-                
-//             } catch (e) {
-//                 console.error("Failed to fetch supervisor name from workflow", e);
-//                 setSupervisorName('N/A');
+//             // --- CORRECTED LOGIC: Direct Access to Supervisor Name from JSONB (data) ---
+//             // This is now type-safe due to the ExtendedTimesheet type.
+//             const supervisorData = tsData.data.supervisor;
+//             if (supervisorData && supervisorData.name) {
+//                  setSupervisorName(supervisorData.name.trim());
+//             } else {
+//                  setSupervisorName('N/A');
 //             }
-//             // ---------------------------------------------------------
+//             // --------------------------------------------------------------------------
 
 
 //         } catch (error) {
@@ -315,9 +342,33 @@
 //         fetchData();
 //     }, [fetchData]);
 
+// useEffect(() => {
+//   const over: string[] = [];
+
+//   Object.keys(employeeHours).forEach(empKey => {
+//     const total = calculateTotalEmployeeHours(employeeHours, empKey);
+//     if (total > 9) {
+//       const emp = timesheet?.data?.employees?.find(
+//         e => String(e.id) === empKey
+//       );
+
+//       if (emp) {
+//         const first = (emp.first_name ?? '').trim();
+//         const last = (emp.last_name ?? '').trim();
+//         const name = `${first} ${last}`.trim();
+//         over.push(name || `EMP ${empKey}`);
+//       } else {
+//         over.push(`EMP ${empKey}`);
+//       }
+//     }
+//   });
+
+//   setOverEmployees(over);
+// }, [employeeHours, timesheet]);
+
+
 
 //     // --- DERIVE ALL ACTIVE PHASE CODES FOR DYNAMIC COLUMN RENDERING ---
-// // ... (getAllActivePhaseCodes function remains unchanged) ...
 //     const getAllActivePhaseCodes = useCallback((): string[] => {
 //         const uniquePhases = new Set<string>(); 
 
@@ -357,9 +408,7 @@
 //                 // Case 1: Original phase is still active and has data. Use it.
 //                 orderedPhases.push(originalPhase);
 //             } else {
-//                 // Case 2: Original phase is missing. It was either renamed or deleted.
-//                 // We assume it was renamed and try to replace it with the next unused 'new' phase.
-//                 // This assumes a 1:1 rename for a missing phase in the original list.
+                
 //                 if (newPhaseIndex < newPhases.length) {
 //                     orderedPhases.push(newPhases[newPhaseIndex]);
 //                     newPhaseIndex++; // Consume the 'new' phase
@@ -382,13 +431,13 @@
 //     // --- State Update Handlers (Updated to use cleanNumericInput) ---
 
 //     const updateSimpleState = (
-// // ... (updateSimpleState function remains unchanged) ...
 //         setState: React.Dispatch<React.SetStateAction<SimpleHourState>>, 
 //         entityId: string,
 //         phase: string,
 //         newValue: string
 //     ) => {
 //         const cleanedValue = cleanNumericInput(newValue);
+        
 //         setState(prev => ({
 //             ...prev,
 //             [entityId]: {
@@ -397,29 +446,65 @@
 //             },
 //         }));
 //     };
+// const updateEmployeeState = (
+//   entityId: string,
+//   phase: string,
+//   classCode: string,
+//   newValue: string
+// ) => {
+//   const cleanedValue = cleanNumericInput(newValue);
 
-//     const updateEmployeeState = (
-// // ... (updateEmployeeState function remains unchanged) ...
-//         entityId: string,
-//         phase: string,
-//         classCode: string,
-//         newValue: string
-//     ) => {
-//         const cleanedValue = cleanNumericInput(newValue);
-//         setEmployeeHours(prev => ({
-//             ...prev,
-//             [entityId]: {
-//                 ...prev[entityId],
-//                 [phase]: {
-//                     ...prev[entityId]?.[phase],
-//                     [classCode]: cleanedValue,
-//                 },
-//             },
-//         }));
+//   setEmployeeHours(prev => {
+//     // 1️⃣ Build updated state first
+//     const updated: EmployeeHourState = {
+//       ...prev,
+//       [entityId]: {
+//         ...(prev[entityId] || {}),
+//         [phase]: {
+//           ...((prev[entityId] || {})[phase] || {}),
+//           [classCode]: cleanedValue,
+//         },
+//       },
 //     };
 
+//     // 2️⃣ Calculate total hours for this employee across ALL phases
+//     let total = 0;
+//     const employeePhases = updated[entityId] || {};
+//     Object.values(employeePhases).forEach((classHours: Record<string, string>) => {
+//       Object.values(classHours).forEach((val: string) => {
+//         const num = parseFloat(val || '0');
+//         if (!isNaN(num)) total += num;
+//       });
+//     });
+// if (total > 24) {
+//   // Get employee name from timesheet
+//   const emp = timesheet?.data?.employees?.find(e => String(e.id) === entityId);
+//   const employeeName = emp
+//     ? `${(emp.first_name ?? '').trim()} ${(emp.last_name ?? '').trim()}`.trim() || `EMP ${entityId}`
+//     : `EMP ${entityId}`;
+
+//   Alert.alert(
+//     '⚠️ TOTAL HOURS EXCEEDED ⚠️', // Uppercase + emojis for urgency
+//     `🚫 Employee: ${employeeName}\n⏱ Total: ${total.toFixed(1)} hours\n\nCannot exceed 24 hours!`,
+//     [
+//       {
+//         text: 'Dismiss',
+//         onPress: () => console.log('Alert dismissed'),
+//         style: 'destructive', // red-style button
+//       },
+//     ],
+//     { cancelable: false }
+//   );
+//   return prev; // Revert - don't apply the change
+// }
+
+//     // 4️⃣ Valid - accept the change
+//     return updated;
+//   });
+// };
+
+
 //     const updateEquipmentState = (
-// // ... (updateEquipmentState function remains unchanged) ...
 //         entityId: string,
 //         phase: string,
 //         type: 'REG' | 'S.B',
@@ -439,7 +524,6 @@
 //     };
 
 //     const updateTotalQuantity = (
-// // ... (updateTotalQuantity function remains unchanged) ...
 //         phase: string,
 //         newValue: string
 //     ) => {
@@ -453,7 +537,6 @@
 //     // --- Phase Code Renaming Handler (Generalized for Tables and Total Quantities) ---
 
 //     const renamePhaseKeyInSimpleState = (
-// // ... (renamePhaseKeyInSimpleState function remains unchanged) ...
 //         state: SimpleHourState,
 //         oldPhase: string,
 //         newPhase: string
@@ -478,7 +561,6 @@
 //     };
 
 //     const handlePhaseCodeRename = (oldPhase: string, newPhase: string, isFromQuantityBlock: boolean = false) => {
-// // ... (handlePhaseCodeRename function remains unchanged) ...
 //         const cleanedNewPhase = newPhase.trim().toUpperCase();
 
 //         if (oldPhase === cleanedNewPhase) {
@@ -515,6 +597,7 @@
 //             });
 //             return newState;
 //         });
+        
 
 //         // 2. Equipment Hours (Complex Hour Sub State)
 //         setEquipmentHours(prev => {
@@ -572,12 +655,10 @@
 //     // --- Edit/Save/Cancel Handlers ---
 
 //     const handleEditPress = () => {
-// // ... (handleEditPress function remains unchanged) ...
 //         setIsEditing(true);
 //     };
 
 //     const handleCancelPress = () => {
-// // ... (handleCancelPress function remains unchanged) ...
 //         setIsEditing(false);
 //         setEditingQuantityPhase(null);
 //         setTempNewPhaseCode('');
@@ -587,7 +668,6 @@
 //     };
 
 //     const handleSavePress = async () => {
-// // ... (handleSavePress function remains unchanged) ...
 //         setLoading(true);
 //         // Ensure any pending phase code edit is cancelled before saving
 //         setEditingQuantityPhase(null); 
@@ -614,16 +694,12 @@
 //                 vendors: vendorsPayload,
 //                 dumping_sites: dumpingSitesPayload,
 
-//                 // material_tickets, vendor_tickets, dumping_site_tickets are now nested in the entities above
-//                 // We only need to send total_quantities_per_phase and notes outside the main entity arrays.
-
 //                 // Filter and convert total quantities to number/string as appropriate
-//                 total_quantities_per_phase: Object.entries(totalQuantities)
+//                 total_quantities: Object.entries(totalQuantities)
 //                     .reduce((acc, [phase, quantity]) => {
 //                         const q = parseFloat(quantity);
 //                         if (!isNaN(q) && q > 0) {
-//                             // Ensure the quantity is a number or a string representation of a number
-//                             // I'll send it as a string here since the state stores it as a string
+//                             // Ensure the quantity is a string representation of a number
 //                             acc[phase] = quantity; 
 //                         }
 //                         return acc;
@@ -636,27 +712,26 @@
 //             Alert.alert('Success', 'Timesheet saved successfully.');
 //             setIsEditing(false);
 //             await fetchData(); 
-// } catch (error: unknown) {
-//     console.error('Failed to save timesheet:', error);
+//         } catch (error: unknown) {
+//             console.error('Failed to save timesheet:', error);
 
-//     let errorMessage = 'Check your network and ensure the data format is correct.';
+//             let errorMessage = 'Check your network and ensure the data format is correct.';
 
-//     const err = error as { response?: { data?: { message?: string } } };
-//     errorMessage = err.response?.data?.message || errorMessage;
+//             const err = error as { response?: { data?: { message?: string } } };
+//             errorMessage = err.response?.data?.message || errorMessage;
 
-//     Alert.alert('Error', `Failed to save timesheet data: ${errorMessage}`);
-// } finally {
+//             Alert.alert('Error', `Failed to save timesheet data: ${errorMessage}`);
+//         } finally {
 
 //             setLoading(false);
 //         }
 //     };
 
 
-//     // --- CRITICAL FIX: Data Reformatting Functions (Unchanged) ---
+//     // --- CRITICAL FIX: Data Reformatting Functions (New) ---
 
 //     // 1. Rebuild Employee Data
 //     const rebuildEmployeeData = () => {
-// // ... (rebuildEmployeeData function remains unchanged) ...
 //         if (!timesheet || !timesheet.data.employees) return [];
 //         return timesheet.data.employees.map(employee => {
 //             const updatedEmployee = { ...employee };
@@ -685,7 +760,6 @@
 
 //     // 2. Rebuild Equipment Data
 //     const rebuildEquipmentData = () => {
-// // ... (rebuildEquipmentData function remains unchanged) ...
 //         if (!timesheet || !timesheet.data.equipment) return [];
 //         return timesheet.data.equipment.map(equipment => {
 //             const updatedEquipment = { ...equipment };
@@ -710,7 +784,6 @@
 
 //     // 3. Rebuild Simple Entity Data (Materials, Vendors, Dumping Sites)
 //     const rebuildSimpleEntityData = (
-// // ... (rebuildSimpleEntityData function remains unchanged) ...
 //         entities: any[],
 //         hoursState: SimpleHourState, 
 //         ticketsState: SimpleHourState, 
@@ -728,7 +801,7 @@
 //             }
 
 //             const hData = hoursState[entityId];
-//             const tData = ticketsState[entityId];
+//             // const tData = ticketsState[entityId];
 
 //             if (hData) {
 //                 const hoursPerPhase: Record<string, number> = {};
@@ -741,23 +814,27 @@
 //                  updatedEntity.hours_per_phase = {};
 //             }
 
-//             if (tData) {
-//                 const ticketsPerPhase: Record<string, number> = {};
-//                 Object.entries(tData).forEach(([phase, value]) => {
-//                     const num = parseFloat(value) || 0;
-//                     if (num > 0) ticketsPerPhase[phase] = num;
-//                 });
-//                 updatedEntity.tickets_per_phase = ticketsPerPhase;
-//             } else {
-//                 updatedEntity.tickets_per_phase = {};
-//             }
-
+//             // if (tData) {
+//             //     const ticketsPerPhase: Record<string, number> = {};
+//             //     Object.entries(tData).forEach(([phase, value]) => {
+//             //         const num = parseFloat(value) || 0;
+//             //         if (num > 0) ticketsPerPhase[phase] = num;
+//             //     });
+//             //     updatedEntity.tickets_per_phase = ticketsPerPhase;
+//             // } else {
+//             //     updatedEntity.tickets_per_phase = {};
+//             // }
+//             if (ticketsLoadsState[entityId] !== undefined) {
+//       const num = parseFloat(ticketsLoadsState[entityId] || '0') || 0;
+//       updatedEntity.tickets_loads = { [entity.id]: num };
+//       // optionally clear tickets_per_phase if you do not want it at all:
+//       delete updatedEntity.tickets_per_phase;
+//     }
 //             return updatedEntity;
 //         });
 //     };
 
 //     // --- Calculation Functions (Unchanged) ---
-// // ... (All calculation functions remain unchanged) ...
 
 //     const calculateTotalSimpleHours = (hoursState: SimpleHourState, entityId: string): number => {
 //         const m = hoursState[entityId];
@@ -828,10 +905,9 @@
 //     };
 
 
-//     // --- Helper for Editable Cells (Unchanged) ---
+//     // --- Helper for Editable Cells (Updated for '0' hiding) ---
 
 //     const renderCellContent = (
-// // ... (renderCellContent function remains unchanged) ...
 //         value: string, 
 //         updateFunction: (text: string) => void | undefined,
 //         isNumeric: boolean = true
@@ -846,19 +922,23 @@
 //             const inputValue = isZeroOrNearZero ? '' : value; 
 
 //             return (
-//                 <TextInput
-//                     style={[styles.editableInput, { flex: 1 }]}
-//                     keyboardType={isNumeric ? "numeric" : "default"}
-//                     value={inputValue}
-//                     onChangeText={updateFunction}
-//                 />
+// <TextInput
+//     style={[styles.editableInput, { flex: 1 }]}
+//     keyboardType="numeric"
+//     value={inputValue}
+//     onChangeText={updateFunction}
+//     onBlur={() => {
+//         const rounded = validateQuarterHour(inputValue);
+//         updateFunction(rounded);
+//     }}
+// />
+
 //             );
 //         }
 //         return <Text style={{ flex: 1, textAlign: 'center' }}>{displayValue}</Text>;
 //     };
 
 //     const renderTicketCellContent = (
-// // ... (renderTicketCellContent function remains unchanged) ...
 //         value: string, 
 //         updateFunction: (text: string) => void | undefined
 //     ) => {
@@ -880,10 +960,18 @@
 //         return <Text style={{ flex: 1, textAlign: 'center' }}>{displayValue}</Text>;
 //     };
 
+// const getTicketsFromEntity = (entity: any) => {
+//     if (!entity?.tickets_loads) return "0";
+
+//     const keys = Object.keys(entity.tickets_loads);
+//     if (keys.length === 0) return "0";
+
+//     return entity.tickets_loads[keys[0]]?.toString() ?? "0";
+// };
+
 
 //     // --- Table Renderer Component (Unchanged structure, relies on updated helpers) ---
 //     const renderTableBlock = (
-// // ... (renderTableBlock function remains unchanged) ...
 //         title: string,
 //         entities: any[],
 //         hoursState: SimpleHourState | ComplexHourState | EmployeeHourState,
@@ -891,6 +979,7 @@
 //         type: TableCategory,
 //         unitState: UnitState | undefined,
 //     ) => {
+//         // Now entities is guaranteed to be an array due to fix below
 //         if (!entities || entities.length === 0) return null;
 
 //         const isEmployee = type === 'employee';
@@ -899,7 +988,12 @@
 //         const isSimple = isMaterial || type === 'vendor' || type === 'dumping_site';
 
 //         // USE THE NEW DERIVED LIST OF PHASE CODES
-//         const phaseCodes = allActivePhaseCodes; 
+//        // USE THE NEW DERIVED LIST OF PHASE CODES
+// const phaseCodes = allActivePhaseCodes.filter(
+//   (p) => p !== 'start_hours' && p !== 'stop_hours' && p !== 'total'
+// );
+
+
 //         if (phaseCodes.length === 0) return null; 
 
 //         // --- Totals Calculation ---
@@ -930,16 +1024,25 @@
 //         }
 //         // -------------------------------------------------------------------------
 
-//         const phaseGroupWidth = getPhaseGroupWidth(type);
+//        const phaseGroupWidth = getPhaseGroupWidth(type);
 
-//         let fixedWidth = COL_NAME + COL_TOTAL;
-//         if (isEmployee) {
-//             fixedWidth += COL_ID + COL_CLASS;
-//         } else if (isEquipment) {
-//             fixedWidth += COL_ID + (COL_START_STOP * 2);
-//         }
+// let fixedWidth = COL_NAME + COL_TOTAL;
 
-//         const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
+// // EMPLOYEE: Name + EMP# + Class + Total
+// if (isEmployee) {
+//   fixedWidth += COL_ID + COL_CLASS;
+// } 
+// // EQUIPMENT: Name + EQUIP + Start + Stop + Total
+// else if (isEquipment) {
+//   fixedWidth += COL_ID + (COL_START_STOP * 2);
+// } 
+// // SIMPLE TABLES: Name + Tickets + Total
+// else if (isSimple) {
+//   fixedWidth += COL_TICKET;  // only tickets added here
+// }
+
+// // Final content width
+// const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
 
 //         // Helper to determine the correct state setter for Simple types
 //         const getSimpleStateSetter = (targetType: 'hours' | 'tickets'): React.Dispatch<React.SetStateAction<SimpleHourState>> => {
@@ -964,7 +1067,7 @@
 //                 const entityId = entity.id;
 //                 const entityName = `${entity.first_name} ${entity.last_name}`.trim();
 //                 const grandTotal = calculateTotalEmployeeHours(hoursState as EmployeeHourState, entityId);
-
+//                 const showReason = grandTotal === 0 && entity.reason
 //                 const classCodesUsed: Set<string> = new Set();
 
 //                 // Collect all class codes that have data for any phase
@@ -992,9 +1095,42 @@
 //                     return (
 //                         <View key={`${entityId}-${classCode}`} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
 //                             {/* Fixed Columns */}
-//                             <Text style={[styles.dataCell, styles.colName, styles.borderRight, isFirstClassRow ? null : styles.transparentCell]} numberOfLines={2}>
-//                                 {isFirstClassRow ? entityName : ''}
-//                             </Text>
+// <View
+//   style={[
+//     styles.dataCell,
+//     styles.colName,
+//     styles.borderRight,                     // always keep border to maintain grid
+//   ]}
+// >
+//   {isFirstClassRow ? (
+//     <>
+//       <Text style={[styles.dataCell, { fontWeight: '500' }]} numberOfLines={2}>
+//         {entityName}
+//       </Text>
+
+//       {showReason && (
+//         <Text
+//           style={{
+//             fontSize: 12,
+//             color: '#8a3434ff',
+//             fontStyle: 'italic',
+//             marginTop: 2,
+//             paddingHorizontal: 2,
+//             borderRadius: 4,
+//           }}
+//         >
+//           Reason: {entity.reason}
+//         </Text>
+//       )}
+//     </>
+//   ) : (
+//     <Text style={{ opacity: 0 }}>placeholder</Text>  
+//     // invisible so height stays but name does NOT repeat
+//   )}
+// </View>
+
+
+
 //                             <Text style={[styles.dataCell, styles.colId, styles.borderRight, isFirstClassRow ? null : styles.transparentCell]}>
 //                                 {isFirstClassRow ? entityId : ''}
 //                             </Text>
@@ -1068,6 +1204,19 @@
 //                                     Class Code
 //                                 </Text>
 //                             )}
+//                     {/* SINGLE TICKETS COLUMN (before phases) */}
+// {isSimple && (
+//     <Text 
+//         style={[
+//             styles.headerCell,
+//             styles.colTickets,
+//             styles.borderRight,
+//             styles.headerCellBottomBorder
+//         ]}
+//     >
+//         {type === 'dumping_site' ? '# Loads' : '# Tickets'}
+//     </Text>
+// )}
 
 //                             {/* DYNAMIC PHASE COLUMNS - NOW EDITABLE */}
 //                             {phaseCodes.map((phase, phaseIndex) => {
@@ -1143,21 +1292,19 @@
 //                                         ) : (
 //                                             <>
 //                                                 <Text 
-//                                                     style={[
-//                                                         styles.headerCell, 
-//                                                         isEmployee ? { flex: 1 } : styles.colHoursSimple, 
-//                                                         (isSimple && !isEmployee) ? styles.borderRight : styles.lastCell,
-//                                                         styles.headerCellBottomBorder
-//                                                     ]}
-//                                                 >
-//                                                     {isEmployee ? 'Hours' : (type === 'material' ? 'Hours/Qty' : 'Quantity')}
-//                                                 </Text>
+//                     style={[
+//                         styles.headerCell,
+//                         isEmployee ? { flex: 1 } : styles.colHoursSimple,
+//                         styles.lastCell,  // ← Single cell spans full phase width
+//                         styles.headerCellBottomBorder
+//                     ]}
+//                 >
+//                     {isEmployee ? 'Hours' : 
+//                      type === 'material' ? 'Hours/Qty' : 
+//                      type === 'dumping_site' ? 'Quantity' : 'Hours'}
+//                 </Text>
 
-//                                                 {(isSimple && !isEmployee) && (
-//                                                     <Text style={[styles.headerCell, styles.colTickets, styles.lastCell, styles.headerCellBottomBorder]}>
-//                                                         {type === 'dumping_site' ? '# Loads' : '# Tickets'}
-//                                                     </Text>
-//                                                 )}
+                                               
 //                                             </>
 //                                         )}
 //                                     </View>
@@ -1189,6 +1336,15 @@
 //                                 const totalHours = isEquipment 
 //                                     ? calculateTotalComplexHours(hoursState as ComplexHourState, entityId)
 //                                     : calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
+// // const apiTickets = getTicketsFromEntity(entity);
+// // const currentTickets =
+// //     ticketsState?.[entityId]?.total?.toString() ?? apiTickets;
+// const apiTickets = getTicketsFromEntity(entity);
+
+// const currentTickets =
+//     ticketsLoadsState?.[entityId] ??
+//     apiTickets?.toString() ??
+//     "0";
 
 //                                 return (
 //                                     <View key={entityId} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
@@ -1213,6 +1369,34 @@
 //                                                 </Text>
 //                                             </>
 //                                         )}
+// {/* SINGLE TICKETS COLUMN */}
+
+// {/* {isSimple && (
+//     <View style={[styles.dataCell, styles.colTickets, styles.borderRight]}>
+//     {renderTicketCellContent(
+//         currentTickets,
+//         (text) => {
+//             const setter = getSimpleStateSetter('tickets');
+//             updateSimpleState(setter, entityId, 'total', text);
+//         }
+//     )}
+// </View>
+// )} */}
+
+// {isSimple && (
+//   <View style={[styles.dataCell, styles.colTickets, styles.borderRight]}>
+//     {renderTicketCellContent(
+//       currentTickets, // string
+//       (text) => {
+//         setTicketsLoadsState(prev => ({
+//           ...prev,
+//           [entityId]: text,   // store per-entity tickets, no phase key
+//         }));
+//       }
+//     )}
+//   </View>
+// )}
+
 
 //                                         {/* Dynamic Phase Columns */}
 //                                         {phaseCodes.map((phase, phaseIndex) => {
@@ -1242,20 +1426,12 @@
 //                                                         </>
 //                                                     ) : (
 //                                                         // Simple Logic (Material/Vendor/Dumping)
-//                                                         <>
-//                                                             <View style={[styles.dataCell, styles.colHoursSimple, styles.borderRight]}>
-//                                                                 {renderCellContent(
-//                                                                     ((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toString(),
-//                                                                     (text) => updateSimpleState(simpleHoursSetter, entityId, phase, text)
-//                                                                 )}
-//                                                             </View>
-//                                                             <View style={[styles.dataCell, styles.colTickets, styles.lastCell]}>
-//                                                                 {renderTicketCellContent(
-//                                                                     (ticketsState ? (ticketsState[entityId]?.[phase] ?? '0') : '0'),
-//                                                                     (text) => updateSimpleState(simpleTicketsSetter, entityId, phase, text)
-//                                                                 )}
-//                                                             </View>
-//                                                         </>
+//                                                         <View style={[styles.dataCell, styles.colHoursSimple, styles.lastCell]}>
+//                     {renderCellContent(
+//                         ((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toString(),
+//                         (text) => updateSimpleState(simpleHoursSetter, entityId, phase, text)
+//                     )}
+//                 </View>
 //                                                     )}
 //                                                 </View>
 //                                             )
@@ -1287,11 +1463,19 @@
 //                             {isEmployee && (
 //                                 <View style={[styles.dataCell, styles.colClassCode]} /> 
 //                             )}
-
+//                               {isSimple && (
+//                                 <View style={[styles.dataCell, styles.colTickets]} />
+//                             )}
 //                             {phaseCodes.map((phase, phaseIndex) => {
 //                                 const isLastPhase = phaseIndex === phaseCodes.length - 1;
-//                                 const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
-
+//                                 // const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
+//                                  const isEmployeeSecondPhase = isEmployee && phaseIndex === 1; 
+//                                 const phaseBorder =
+//         isEmployeeSecondPhase
+//             ? styles.phaseGroupBorderRight      // border after 2nd phase
+//             : isLastPhase
+//                 ? {}                             // no extra border on last
+//                 : styles.phaseGroupBorderRight;
 //                                 const dynamicPhaseStyle = isEquipment 
 //                                     ? styles.dynamicPhaseColEquipment 
 //                                     : isEmployee 
@@ -1314,7 +1498,7 @@
 //                                                 <Text style={[styles.dataCell, styles.colHoursEquipment, styles.phaseTotalText, styles.borderRight]}>
 //                                                     {(equipmentPhaseTotals[phase]?.REG || 0).toFixed(1)}
 //                                                 </Text>
-//                                                 <Text style={[styles.dataCell, styles.colHoursEquipment, styles.phaseTotalText, styles.lastCell]}>
+//                                                 <Text style={[styles.dataCell, styles.colHoursEquipment, styles.phaseTotalText,styles.lastCell]}>
 //                                                     {(equipmentPhaseTotals[phase]?.['S.B'] || 0).toFixed(1)}
 //                                                 </Text>
 //                                             </View>
@@ -1323,16 +1507,14 @@
 //                                                 <Text style={[styles.dataCell, styles.colHoursSimple, styles.phaseTotalText, styles.borderRight]}>
 //                                                     {(simplePhaseTotals[phase] || 0).toFixed(1)}
 //                                                 </Text>
-//                                                 <View style={[styles.dataCell, styles.colTickets]} />
+                                               
 //                                             </View>
 //                                         ) : null}
 //                                     </View>
 //                                 );
 //                             })}
 
-//                             <Text style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft, styles.phaseTotalText]}>
-//                                 {grandTotal.toFixed(1)}
-//                             </Text>
+                            
 //                         </View>
 //                         {/* -------------------- PHASE TOTALS ROW END -------------------- */}
 
@@ -1350,9 +1532,17 @@
 
 //     const { data, date } = timesheet;
 
+//     // --- START: FIX for TS2345 (Argument is not assignable to parameter of type 'any[]') ---
+//     // Ensure all optional array properties are defaulted to an empty array for use in renderTableBlock
+//     const formattedEmployees = data.employees || [];
+//     const formattedEquipment = data.equipment || [];
 //     const formattedMaterials = data.materials_trucking || [];
 //     const formattedVendors = data.vendors || [];
 //     const formattedDumpingSites = data.dumping_sites || [];
+//     // --- END: FIX for TS2345 ---
+
+// const count = overEmployees.length;
+// const label = count === 1 ? "employee" : "employees";
 
 //     return (
 //         <SafeAreaView style={styles.safeArea}>
@@ -1362,24 +1552,20 @@
 //                 <View style={styles.headerContainer}>
 //                     {/* Info Card (UNCHANGED) */}
 //                     <View style={styles.infoCard}>
+//                         {/* data.job_name is now available on ExtendedTimesheetData */}
 //                         <Text style={styles.jobTitle}>{data.job_name}</Text>
 //                         <Text style={styles.jobCode}>Job Code: {data.job.job_code}</Text>
 //                         <View style={styles.infoGrid}>
 //                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Date</Text><Text style={styles.infoValue}>{new Date(date).toLocaleDateString()}</Text></View>
 //                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Foreman</Text><Text style={styles.infoValue}>{foremanName}</Text></View>
+                            
+//                             {/* Supervisor Field, which uses the directly accessed supervisorName */}
+//                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Supervisor</Text><Text style={styles.infoValue}>{supervisorName}</Text></View>
+                            
 //                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Project Engineer</Text><Text style={styles.infoValue}>{data.project_engineer || 'N/A'}</Text></View>
-//                             <View style={styles.infoItem}>
-//                                 <Text style={styles.infoLabel}>Supervisor</Text>
-//                                 <Text style={styles.infoValue}>{supervisorName}</Text>
-//                             </View>
 //                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Day/Night</Text><Text style={styles.infoValue}>{data.time_of_day || 'N/A'}</Text></View>
 //                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Location</Text><Text style={styles.infoValue}>{data.location || 'N/A'}</Text></View>
 //                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Weather</Text><Text style={styles.infoValue}>{data.weather || 'N/A'}</Text></View>
-//                             {/* 💡 MODIFIED: Use supervisorName as the fallback for Approved By */}
-//                             <View style={styles.infoItem}>
-//                               <Text style={styles.infoLabel}>Approved By</Text>
-//                               <Text style={styles.infoValue}>{data.approved_by || supervisorName || 'N/A'}</Text>
-//                             </View>
 //                             <View style={styles.infoItemFull}><Text style={styles.infoLabel}>Temperature</Text><Text style={styles.infoValue}>{data.temperature || 'N/A'}</Text></View>
 //                         </View>
 //                     </View>
@@ -1415,10 +1601,66 @@
 //                     </View>
 //                 </View>
 
-//                 {/* Data Tables */}
+// {overEmployees.length > 0 && (
+//   <TouchableOpacity
+//     activeOpacity={0.9}
+//     onPress={() => setShowWarnings(!showWarnings)}
+//     style={{
+//       backgroundColor: "#FFF7EB",
+//       paddingVertical: 14,
+//       paddingHorizontal: 16,
+//       borderRadius: 10,
+//       marginVertical: 16,
+//       borderWidth: 1,
+//       borderColor: "#F7C77D",
+//       shadowColor: "#000",
+//       shadowOpacity: 0.05,
+//       shadowRadius: 4,
+//       shadowOffset: { width: 0, height: 2 },
+//     }}
+//   >
+//     {/* Header Row */}
+//     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+//       <Text style={{ fontSize: 17, fontWeight: "700", color: "#B45309" }}>
+//          ⚠ {count} {label} have more than 9 hours
+//       </Text>
+
+//       <Text style={{ fontSize: 16, color: "#B45309", fontWeight: "600" }}>
+//         {showWarnings ? "▴ Hide" : "▾ Expand"}
+//       </Text>
+//     </View>
+
+//     {/* Expanded List */}
+//     {showWarnings && (
+//       <View
+//         style={{
+//           marginTop: 12,
+//           paddingLeft: 6,
+//           borderTopWidth: 1,
+//           borderTopColor: "#F5D7A4",
+//           paddingTop: 10,
+//         }}
+//       >
+//         {overEmployees.map((name, idx) => (
+//           <View key={idx} style={{ flexDirection: "row", alignItems: "center", marginVertical: 4 }}>
+//             <Text style={{ color: "#B45309", fontSize: 15 }}>• {name}</Text>
+//           </View>
+//         ))}
+//       </View>
+//     )}
+//   </TouchableOpacity>
+// )}
+
+
+
+//                 {/* Data Tables - Using formatted variables */}
 //                 <View>
-//                     {renderTableBlock('Employees', data.employees, employeeHours, undefined, 'employee', undefined)}
-//                     {renderTableBlock('Equipment', data.equipment, equipmentHours, undefined, 'equipment', undefined)}
+//                     {/* Using formattedEmployees to pass an array to renderTableBlock */}
+//                     {renderTableBlock('Employees', formattedEmployees, employeeHours, undefined, 'employee', undefined)}
+                    
+//                     {/* Using formattedEquipment to pass an array to renderTableBlock */}
+//                     {renderTableBlock('Equipment', formattedEquipment, equipmentHours, undefined, 'equipment', undefined)}
+                    
 //                     {renderTableBlock('Materials and Trucking', formattedMaterials, materialHours, materialTickets, 'material', materialUnits)}
 //                     {renderTableBlock('Vendors', formattedVendors, vendorHours, vendorTickets, 'vendor', vendorUnits)}
 //                     {renderTableBlock('Dumping Sites', formattedDumpingSites, dumpingSiteHours, dumpingSiteTickets, 'dumping_site', undefined)}
@@ -1617,7 +1859,7 @@
 //   dynamicPhaseColSimple: {
 //     flexDirection: 'row',
 //     alignItems: 'stretch',
-//     width: COL_SIMPLE_HOUR + COL_TICKET, 
+//     width: COL_SIMPLE_HOUR, 
 //   },
 
 //   dynamicPhaseColEquipment: {
@@ -1650,7 +1892,6 @@
 //     color: THEME.text,
 //     fontSize: 12,
 //     textAlign: 'center',
-//     borderRightWidth: 1,
 //     borderRightColor: THEME.border,
 //     minHeight: 40,
 //     justifyContent: 'center',
@@ -1962,696 +2203,7 @@
 // },
 
 // });
-
-
 // export default PETimesheetReviewScreen;
-
-
-
-
-
-
-// // import React, { useEffect, useState } from 'react';
-// // import {
-// //     View,
-// //     Text,
-// //     StyleSheet,
-// //     ScrollView,
-// //     ActivityIndicator,
-// //     SafeAreaView,
-// //     TouchableOpacity,
-// //     Alert,
-// // } from 'react-native';
-// // import { RouteProp, useRoute } from '@react-navigation/native';
-// // import apiClient from '../../api/apiClient';
-// // import type { SupervisorStackParamList } from '../../navigation/AppNavigator';
-// // import type { Timesheet } from '../../types';
-
-
-// // // --- Type Definitions ---
-// // type SimpleHourState = Record<string, Record<string, string>>;
-// // // EmployeeHourState is complex: { empId: { phaseCode: { classCode: '5' } } }
-// // type EmployeeHourState = Record<string, Record<string, Record<string, string>>>;
-// // type ComplexHourSubState = { REG?: string; 'S.B'?: string };
-// // // ComplexHourState is for Equipment: { equipmentId: { phaseCode: { REG: '5', 'S.B': '1' } } }
-// // type ComplexHourState = Record<string, Record<string, ComplexHourSubState>>;
-// // type QuantityState = Record<string, string>;
-// // type UnitState = Record<string, string | null>;
-// // type ReviewRouteProp = RouteProp<SupervisorStackParamList, 'TimesheetReview'>;
-
-
-// // // --- Theme Constants ---
-// // const THEME = {
-// //     primary: '#007AFF',
-// //     background: '#F0F0F7',
-// //     card: '#FFFFFF',
-// //     text: '#1C1C1E',
-// //     textSecondary: '#6A6A6A',
-// //     border: '#E0E0E5',
-// //     tableHeaderBg: '#F8F8F8',
-// //     rowAlternateBg: '#FCFCFC',
-// //     SPACING: 16,
-// // };
-
-
-// // const PETimesheetReviewScreen = () => {
-// //     const route = useRoute<ReviewRouteProp>();
-// //     const { timesheetId } = route.params;
-
-
-// //     const [timesheet, setTimesheet] = useState<Timesheet | null>(null);
-// //     const [foremanName, setForemanName] = useState<string>('');
-// //     const [selectedPhase, setSelectedPhase] = useState<string | null>(null);
-// //     const [loading, setLoading] = useState(true);
-
-
-// //     // States to hold processed data for display
-// //     const [employeeHours, setEmployeeHours] = useState<EmployeeHourState>({});
-// //     const [equipmentHours, setEquipmentHours] = useState<ComplexHourState>({});
-// //     const [materialHours, setMaterialHours] = useState<SimpleHourState>({});
-// //     const [vendorHours, setVendorHours] = useState<SimpleHourState>({});
-// //     const [materialTickets, setMaterialTickets] = useState<SimpleHourState>({});
-// //     const [vendorTickets, setVendorTickets] = useState<SimpleHourState>({});
-// //     const [totalQuantities, setTotalQuantities] = useState<QuantityState>({});
-// //     const [notes, setNotes] = useState<string>('');
-// //     const [materialUnits, setMaterialUnits] = useState<UnitState>({});
-// //     const [vendorUnits, setVendorUnits] = useState<UnitState>({});
-// //     const [dumpingSiteHours, setDumpingSiteHours] = useState<SimpleHourState>({});
-// //     const [dumpingSiteTickets, setDumpingSiteTickets] = useState<SimpleHourState>({});
-
-
-// //     useEffect(() => {
-// //         const fetchData = async () => {
-// //             try {
-// //                 const response = await apiClient.get<Timesheet>(`/api/timesheets/${timesheetId}`);
-// //                 const tsData = response.data;
-// //                 setTimesheet(tsData);
-// //                 console.log('Fetched timesheet:', tsData);
-
-// //                 if (tsData.data.job.phase_codes?.length > 0) {
-// //                     setSelectedPhase(tsData.data.job.phase_codes[0]);
-// //                 }
-                
-// //                 setNotes(tsData.data.notes || '');
-
-
-// //                 const populateSimple = (entities: any[] = [], field: 'hours_per_phase' | 'tickets_per_phase'): SimpleHourState => {
-// //                     const state: SimpleHourState = {};
-// //                     entities.forEach((e) => {
-// //                         const id = e.id || e.key || e.name || e.vendor_id;
-// //                         state[id] = {};
-// //                         const data = e[field] || {};
-// //                         Object.entries(data).forEach(([phase, val]) => {
-// //                             state[id][phase] = String(val || '0');
-// //                         });
-// //                     });
-// //                     return state;
-// //                 };
-
-
-// //                 const populateUnits = (entities: any[] = []): UnitState => {
-// //                     const state: UnitState = {};
-// //                     entities.forEach(e => {
-// //                         const id = e.id || e.key || e.name;
-// //                         state[id] = e.unit || null;
-// //                     });
-// //                     return state;
-// //                 };
-
-// //                  const populateEmployeeComplex = (entities: any[] = []): EmployeeHourState => {
-// //                     const state: EmployeeHourState = {};
-// //                     entities.forEach((e) => {
-// //                         state[e.id] = {};
-// //                         if (e.hours_per_phase) {
-// //                             Object.entries(e.hours_per_phase).forEach(([phase, phaseHours]) => {
-// //                                 state[e.id][phase] = {};
-// //                                 if (phaseHours && typeof phaseHours === 'object') {
-// //                                     Object.entries(phaseHours).forEach(([classCode, val]) => {
-// //                                         state[e.id][phase][classCode] = String(val || '0');
-// //                                     });
-// //                                 } else {
-// //                                     if (e.class_1) state[e.id][phase][e.class_1] = String(phaseHours || '0');
-// //                                 }
-// //                             });
-// //                         }
-// //                     });
-// //                     return state;
-// //                 };
-
-
-// //                 const populateEquipmentComplex = (entities: any[] = []): ComplexHourState => {
-// //                     const state: ComplexHourState = {};
-// //                     entities.forEach((e) => {
-// //                         state[e.id] = {};
-// //                         if (e.hours_per_phase) {
-// //                             for (const phase in e.hours_per_phase) {
-// //                                 const v = e.hours_per_phase[phase];
-// //                                 if (v && typeof v === 'object') {
-// //                                     state[e.id][phase] = {
-// //                                         REG: v.REG?.toString() || '0',
-// //                                         'S.B': v['S.B']?.toString() || '0',
-// //                                     };
-// //                                 } else {
-// //                                     const num = parseFloat((v ?? '0').toString());
-// //                                     state[e.id][phase] = { REG: !isNaN(num) ? num.toString() : '0', 'S.B': '0' };
-// //                                 }
-// //                             }
-// //                         }
-// //                     });
-// //                     return state;
-// //                 };
-
-
-// //                 setEmployeeHours(populateEmployeeComplex(tsData.data.employees));
-// //                 setEquipmentHours(populateEquipmentComplex(tsData.data.equipment));
-// //                 const formattedMaterials = Object.values(tsData.data.materials_trucking  || {});
-// //                 const formattedVendors = Object.values(tsData.data.vendors || {});
-// //                 const formattedDumpingSites = Object.values(tsData.data.dumping_sites || {});
-// //                 console.log('Materials:', formattedMaterials);
-// //     console.log('Vendors:', formattedVendors);
-// //     console.log('Dumping Sites:', formattedDumpingSites);
-// //                 setMaterialHours(populateSimple(formattedMaterials, 'hours_per_phase'));
-// //                 setVendorHours(populateSimple(formattedVendors, 'hours_per_phase'));
-// //                 setMaterialTickets(populateSimple(formattedMaterials, 'tickets_per_phase'));
-// //                 setVendorTickets(populateSimple(formattedVendors, 'tickets_per_phase'));
-// //                 setMaterialUnits(populateUnits(formattedMaterials));
-// //                 setVendorUnits(populateUnits(formattedVendors));
-// //                 setDumpingSiteHours(populateSimple(formattedDumpingSites, 'hours_per_phase'));
-// //                 setDumpingSiteTickets(populateSimple(formattedDumpingSites, 'tickets_per_phase'));
-
-// //                 if (tsData.data.total_quantities_per_phase) {
-// //                     const q: QuantityState = {};
-// //                     for (const phase in tsData.data.total_quantities_per_phase) {
-// //                         q[phase] = tsData.data.total_quantities_per_phase[phase].toString();
-// //                     }
-// //                     setTotalQuantities(q);
-// //                 }
-
-
-// //                 const userRes = await apiClient.get(`/api/users/${tsData.foreman_id}`);
-// //                 setForemanName(`${userRes.data.first_name} ${userRes.data.last_name}`.trim());
-
-
-// //             } catch (error) {
-// //                 console.error('Failed to load timesheet:', error);
-// //                 Alert.alert('Error', 'Failed to load timesheet data.');
-// //             } finally {
-// //                 setLoading(false);
-// //             }
-// //         };
-// //         fetchData();
-// //     }, [timesheetId]);
-
-
-// //     // --- Calculation Functions ---
-
-
-// //     const calculateTotalSimpleHours = (hoursState: SimpleHourState, entityId: string): number => {
-// //         const m = hoursState[entityId];
-// //         if (!m) return 0;
-// //         return Object.values(m).reduce((t, v) => t + (parseFloat(v) || 0), 0);
-// //     };
-
-
-// //     const calculateTotalEmployeeHours = (hoursState: EmployeeHourState, entityId: string): number => {
-// //         const m = hoursState[entityId];
-// //         if (!m) return 0;
-// //         return Object.values(m).reduce((phaseTotal, classHours) => {
-// //             return phaseTotal + Object.values(classHours).reduce((classTotal, hoursStr) => {
-// //                 return classTotal + (parseFloat(hoursStr) || 0);
-// //             }, 0);
-// //         }, 0);
-// //     };
-
-
-// //     const calculateTotalComplexHours = (hoursState: ComplexHourState, entityId: string): number => {
-// //         const m = hoursState[entityId];
-// //         if (!m) return 0;
-// //         return Object.values(m).reduce((t, v) => {
-// //             const reg = parseFloat(v?.REG || '0');
-// //             const sb = parseFloat(v?.['S.B'] || '0');
-// //             return t + (isNaN(reg) ? 0 : reg) + (isNaN(sb) ? 0 : sb);
-// //         }, 0);
-// //     };
-
-
-// //     const calculateSimplePhaseTotals = (state: SimpleHourState, phaseCodes: string[]): Record<string, number> => {
-// //         const totals: Record<string, number> = {};
-// //         phaseCodes.forEach(p => { totals[p] = 0 });
-// //         Object.values(state).forEach((perEntity) => {
-// //             Object.entries(perEntity).forEach(([phase, value]) => {
-// //                 if (totals[phase] !== undefined) {
-// //                     totals[phase] += parseFloat(value) || 0;
-// //                 }
-// //             });
-// //         });
-// //         return totals;
-// //     };
-    
-// //     // ComplexPhaseTotals (for Equipment)
-// //     const calculateComplexPhaseTotals = (state: ComplexHourState, phaseCodes: string[]): Record<string, { REG: number, 'S.B': number }> => {
-// //         const totals: Record<string, { REG: number, 'S.B': number }> = {};
-// //         phaseCodes.forEach(p => { totals[p] = { REG: 0, 'S.B': 0 } });
-// //         Object.values(state).forEach((perEntity) => {
-// //             Object.entries(perEntity).forEach(([phase, value]) => {
-// //                 if (totals[phase]) {
-// //                     totals[phase].REG += parseFloat(value.REG || '0');
-// //                     totals[phase]['S.B'] += parseFloat(value['S.B'] || '0');
-// //                 }
-// //             });
-// //         });
-// //         return totals;
-// //     };
-
-
-// //     // Employee Phase Total
-// //     const calculateEmployeePhaseTotal = (state: EmployeeHourState, phase: string): number => {
-// //         let total = 0;
-// //         Object.values(state).forEach((perEntity) => {
-// //             const phaseData = perEntity[phase];
-// //             if (phaseData) {
-// //                 Object.values(phaseData).forEach((hoursStr) => {
-// //                     total += parseFloat(hoursStr) || 0;
-// //                 });
-// //             }
-// //         });
-// //         return total;
-// //     };
-
-
-// //     // --- Table Renderer Component ---
-
-
-// //     const renderTableBlock = (
-// //         title: string,
-// //         entities: any[],
-// //         hoursState: SimpleHourState | ComplexHourState | EmployeeHourState,
-// //         ticketsState: SimpleHourState | undefined,
-// //         type: 'employee' | 'equipment' | 'material' | 'vendor' | 'dumping_site',
-// //         unitState: UnitState | undefined,
-// //     ) => {
-// //         if (!entities || entities.length === 0 || !selectedPhase) return null;
-
-
-// //         const isEmployee = type === 'employee';
-// //         const isEquipment = type === 'equipment';
-// //         const isMaterial = type === 'material';
-// //         const isSimple = isMaterial || type === 'vendor' || type === 'dumping_site';
-
-
-// //         const phaseCodes = timesheet?.data.job.phase_codes || [];
-
-
-// //         // Calculate phase totals for the footer within the component scope
-// //         let phaseTotalHours = 0;
-// //         let equipmentPhaseTotals: Record<string, { REG: number, 'S.B': number }> = {};
-// //         let simplePhaseTotals: Record<string, number> = {};
-
-
-// //         if (isEmployee) {
-// //             phaseTotalHours = calculateEmployeePhaseTotal(hoursState as EmployeeHourState, selectedPhase);
-// //         } else if (isEquipment) {
-// //             equipmentPhaseTotals = calculateComplexPhaseTotals(hoursState as ComplexHourState, phaseCodes);
-// //             phaseTotalHours = equipmentPhaseTotals[selectedPhase!]?.REG + equipmentPhaseTotals[selectedPhase!]?.['S.B'] || 0;
-// //         } else if (isSimple) {
-// //             simplePhaseTotals = calculateSimplePhaseTotals(hoursState as SimpleHourState, phaseCodes);
-// //             phaseTotalHours = simplePhaseTotals[selectedPhase!] || 0;
-// //         }
-
-
-
-// //         return (
-// //             <View style={styles.card}>
-// //                 <Text style={styles.tableTitle}>{title}</Text>
-// //                 <View style={styles.tableContainer}>
-                    
-// //                     {/* -------------------- TABLE HEADER START -------------------- */}
-// //                     <View style={styles.tableHeader}>
-// //                         <Text style={[styles.headerCell, styles.colName]}>Name</Text>
-                        
-// //                         {isEmployee && (
-// //                             <>
-// //                                 <Text style={[styles.headerCell, styles.colClassCode]}>Class Code</Text>
-// //                                 <Text style={[styles.headerCell, styles.colHours]}>Hours</Text>
-// //                             </>
-// //                         )}
-                        
-// //                         {isEquipment ? (
-// //                             <>
-// //                                 <Text style={[styles.headerCell, styles.colHours]}>REG</Text>
-// //                                 <Text style={[styles.headerCell, styles.colHours]}>S.B</Text>
-// //                             </>
-// //                         ) : (
-// //                             (!isEmployee && !isEquipment) && (
-// //                                 <Text style={[styles.headerCell, styles.colHours]}>
-// //                                     {/* Header for Materials/Vendors - consistent name for column */}
-// //                                     {isMaterial ? 'Hours/Qty' : 'Quantity'} 
-// //                                 </Text>
-// //                             )
-// //                         )}
-                        
-// //                         {/* {isSimple && <Text style={[styles.headerCell, styles.colTickets]}># of Tickets</Text>} */}
-// //                         {isSimple && (
-// //     <Text style={[styles.headerCell, styles.colTickets]}>
-// //         {type === 'dumping_site' ? '# of Loads' : '# of Tickets'}
-// //     </Text>
-// // )}
-
-// //                         <Text style={[styles.headerCell, styles.colTotal, styles.lastCell]}>Total</Text>
-// //                     </View>
-// //                     {/* -------------------- TABLE HEADER END -------------------- */}
-
-
-
-// //                     {/* -------------------- TABLE BODY START -------------------- */}
-// //                     {isEmployee ? (
-// //                         entities.flatMap((entity, index) => {
-// //                             const totalHours = calculateTotalEmployeeHours(hoursState as EmployeeHourState, entity.id);
-// //                             const employeePhaseHours = (hoursState as EmployeeHourState)[entity.id]?.[selectedPhase!];
-// //                             const entityName = `${entity.first_name} ${entity.last_name}`.trim();
-
-// //                             // Collect all class codes assigned to the employee
-// //                             const classCodesToDisplay = [];
-// //                             if (entity.class_1) {
-// //                                 classCodesToDisplay.push({
-// //                                     code: entity.class_1,
-// //                                     hours: parseFloat(employeePhaseHours?.[entity.class_1] || '0'),
-// //                                 });
-// //                             }
-// //                             if (entity.class_2) {
-// //                                 classCodesToDisplay.push({
-// //                                     code: entity.class_2,
-// //                                     hours: parseFloat(employeePhaseHours?.[entity.class_2] || '0'),
-// //                                 });
-// //                             }
-                            
-// //                             // If no class codes are assigned, show a default row
-// //                             if (classCodesToDisplay.length === 0) {
-// //                                 return (
-// //                                     <View key={`${entity.id}-default`} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
-// //                                         <Text style={[styles.dataCell, styles.colName]}>{entityName}</Text>
-// //                                         <Text style={[styles.dataCell, styles.colClassCode]}>N/A</Text>
-// //                                         <Text style={[styles.dataCell, styles.colHours]}>0.0</Text>
-// //                                         <Text style={[styles.dataCell, styles.colTotal, styles.lastCell]}>{totalHours.toFixed(1)}</Text>
-// //                                     </View>
-// //                                 );
-// //                             }
-
-// //                             // Render a row for each assigned class code
-// //                             return classCodesToDisplay.map((classData, classIndex) => {
-// //                                 const isFirstClassRow = classIndex === 0;
-
-// //                                 return (
-// //                                     <View key={`${entity.id}-${classData.code}`} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
-// //                                         {/* Show name only in the first row for this employee */}
-// //                                         {isFirstClassRow ? (
-// //                                             <Text style={[styles.dataCell, styles.colName]} numberOfLines={2}>
-// //                                                 {entityName}
-// //                                             </Text>
-// //                                         ) : (
-// //                                             <View style={[styles.dataCell, styles.colName]} />
-// //                                         )}
-                                        
-// //                                         <Text style={[styles.dataCell, styles.colClassCode]}>{classData.code}</Text>
-// //                                         <Text style={[styles.dataCell, styles.colHours]}>{classData.hours.toFixed(1)}</Text>
-                                        
-// //                                         {/* Show total hours only in the first row for this employee */}
-// //                                         {isFirstClassRow ? (
-// //                                             <Text style={[styles.dataCell, styles.colTotal, styles.lastCell]}>
-// //                                                 {totalHours.toFixed(1)}
-// //                                             </Text>
-// //                                         ) : (
-// //                                             <View style={[styles.dataCell, styles.colTotal, styles.lastCell]} />
-// //                                         )}
-// //                                     </View>
-// //                                 );
-// //                             });
-// //                         })
-// //                     ) : (
-// //                     // --- LOGIC FOR EQUIPMENT/MATERIAL/VENDOR ---
-// //                         entities.map((entity, index) => {
-// //                             const entityName = entity.first_name
-// //                                 ? `${entity.first_name} ${entity.middle_name || ''} ${entity.last_name}`.trim()
-// //                                 : entity.name;
-                            
-// //                             const totalHours = isEquipment 
-// //                                 ? calculateTotalComplexHours(hoursState as ComplexHourState, entity.id)
-// //                                 : calculateTotalSimpleHours(hoursState as SimpleHourState, entity.id);
-
-
-// //                             return (
-// //                                 <View key={entity.id} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
-// //                                     <Text style={[styles.dataCell, styles.colName]}>{entityName}</Text>
-                                    
-// //                                     {isEquipment ? (
-// //                                         <>
-// //                                             <Text style={[styles.dataCell, styles.colHours]}>
-// //                                                 {parseFloat((hoursState as ComplexHourState)[entity.id]?.[selectedPhase!]?.REG ?? '0').toFixed(1)}
-// //                                             </Text>
-// //                                             <Text style={[styles.dataCell, styles.colHours]}>
-// //                                                 {parseFloat((hoursState as ComplexHourState)[entity.id]?.[selectedPhase!]?.['S.B'] ?? '0').toFixed(1)}
-// //                                             </Text>
-// //                                         </>
-// //                                     ) : (
-// //                                         // Simple Logic (Material/Vendor) - COMBINING UNIT AND HOURS
-// //                                         (() => {
-// //                                             const hoursValue = parseFloat((hoursState as SimpleHourState)[entity.id]?.[selectedPhase!] ?? '0').toFixed(1);
-// //                                             const unitValue = unitState?.[entity.id] || '';
-                                            
-// //                                             const displayValue = hoursValue;
-
-
-// //                                             return (
-// //                                                 <Text style={[styles.dataCell, styles.colHours]}>
-// //                                                     {displayValue}
-// //                                                 </Text>
-// //                                             );
-// //                                         })()
-// //                                     )}
-                                    
-// //                                     {isSimple && (
-// //                                         <>
-// //                                             <Text style={[styles.dataCell, styles.colTickets]}>
-// //                                                 {ticketsState ? (ticketsState[entity.id]?.[selectedPhase!] ?? '0') : '0'}
-// //                                             </Text>
-// //                                         </>
-// //                                     )}
-// //                                     <Text style={[styles.dataCell, styles.colTotal, styles.lastCell]}>{totalHours.toFixed(1)}</Text>
-// //                                 </View>
-// //                             );
-// //                         })
-// //                     )}
-// //                     {/* -------------------- TABLE BODY END -------------------- */}
-
-
-// //                     {/* -------------------- VERTICAL TOTALS ROW -------------------- */}
-// //                     {selectedPhase && (isEmployee || isEquipment || isSimple) && (
-// //                         <View style={[styles.tableRow, styles.phaseTotalRow]}>
-// //                             <Text style={[styles.dataCell, styles.colName, styles.phaseTotalText]}>Phase Total</Text>
-                            
-// //                             {isEmployee && (
-// //                                 <Text
-// //                                     style={[
-// //                                         styles.dataCell,
-// //                                         styles.phaseTotalText,
-// //                                         { flex: 3, textAlign: 'center' } 
-// //                                     ]}
-// //                                 >
-// //                                     {phaseTotalHours.toFixed(1)}
-// //                                 </Text>
-// //                             )}
-                            
-// //                             {isEquipment ? (
-// //                                 <>
-// //                                     <Text style={[styles.dataCell, styles.colHours, styles.phaseTotalText]}>
-// //                                         {(equipmentPhaseTotals[selectedPhase!]?.REG || 0).toFixed(1)}
-// //                                     </Text>
-// //                                     <Text style={[styles.dataCell, styles.colHours, styles.phaseTotalText]}>
-// //                                         {(equipmentPhaseTotals[selectedPhase!]?.['S.B'] || 0).toFixed(1)}
-// //                                     </Text>
-// //                                 </>
-// //                             ) : (isSimple &&
-// //                                 <Text style={[styles.dataCell, styles.colHours, styles.phaseTotalText]}>
-// //                                     {(simplePhaseTotals[selectedPhase!] || 0).toFixed(1)}
-// //                                 </Text>
-// //                             )}
-                            
-// //                             {isSimple && (
-// //                                 <>
-// //                                     {/* Placeholder for Tickets column */}
-// //                                     <View style={[styles.dataCell, styles.colTickets]} /> 
-// //                                 </>
-// //                             )}
-                            
-// //                             {/* Final empty cell under the Total column */}
-// //                             <View style={[styles.dataCell, styles.colTotal, styles.lastCell]} />
-// //                         </View>
-// //                     )}
-// //                     {/* -------------------- VERTICAL TOTALS ROW END -------------------- */}
-
-
-// //                 </View>
-// //             </View>
-// //         );
-// //     };
-
-
-// //     if (loading) return <ActivityIndicator size="large" style={styles.centered} />;
-// //     if (!timesheet) return <View style={styles.centered}><Text>Timesheet not found.</Text></View>;
-
-
-// //     const { data, date } = timesheet;
-
-// //  const formattedMaterials = Object.values(data.selected_material_items || {});
-// //     const formattedVendors = Object.values(data.vendors || {});
-// //     const formattedDumpingSites = Object.values(data.dumping_sites || {});
-// // console.log('Rendering Materials and Trucking table', materialHours, materialTickets);
-// // console.log('Rendering vendors', vendorHours, vendorTickets);
-// // console.log('Rendering Materials and Trucking table', dumpingSiteHours, dumpingSiteTickets);
-// //     return (
-// //         <SafeAreaView style={styles.safeArea}>
-// //             <ScrollView contentContainerStyle={{ padding: THEME.SPACING, paddingBottom: 50 }}>
-// //                 {/* Info Card */}
-// //                 <View style={styles.infoCard}>
-// //                     <Text style={styles.jobTitle}>{data.job_name}</Text>
-// //                     <Text style={styles.jobCode}>Job Code: {data.job.job_code}</Text>
-// //                     <View style={styles.infoGrid}>
-// //                         <View style={styles.infoItem}><Text style={styles.infoLabel}>Date</Text><Text style={styles.infoValue}>{new Date(date).toLocaleDateString()}</Text></View>
-// //                         <View style={styles.infoItem}><Text style={styles.infoLabel}>Foreman</Text><Text style={styles.infoValue}>{foremanName}</Text></View>
-// //                         <View style={styles.infoItem}><Text style={styles.infoLabel}>Project Engineer</Text><Text style={styles.infoValue}>{data.project_engineer || 'N/A'}</Text></View>
-// //                         <View style={styles.infoItem}><Text style={styles.infoLabel}>Day/Night</Text><Text style={styles.infoValue}>{data.time_of_day || 'N/A'}</Text></View>
-// //                         <View style={styles.infoItem}><Text style={styles.infoLabel}>Location</Text><Text style={styles.infoValue}>{data.location || 'N/A'}</Text></View>
-// //                         <View style={styles.infoItem}><Text style={styles.infoLabel}>Weather</Text><Text style={styles.infoValue}>{data.weather || 'N/A'}</Text></View>
-// //                         <View style={styles.infoItemFull}><Text style={styles.infoLabel}>Temperature</Text><Text style={styles.infoValue}>{data.temperature || 'N/A'}</Text></View>
-// //                     </View>
-// //                 </View>
-
-
-// //                 {/* Phase Selector */}
-// //                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.phaseSelectorContainer}>
-// //                     {data.job.phase_codes.map((phase) => (
-// //                         <TouchableOpacity
-// //                             key={phase}
-// //                             style={[styles.phaseButton, selectedPhase === phase && styles.selectedPhaseButton]}
-// //                             onPress={() => setSelectedPhase(phase)}
-// //                         >
-// //                             <Text style={[styles.phaseButtonText, selectedPhase === phase && styles.selectedPhaseButtonText]}>{phase}</Text>
-// //                         </TouchableOpacity>
-// //                     ))}
-// //                 </ScrollView>
-
-
-// //                 {/* Data Tables */}
-// //                 {selectedPhase && (
-// //                      <View>
-                        
-// //                         {renderTableBlock('Employees', data.employees, employeeHours, undefined, 'employee', undefined)}
-// //                         {renderTableBlock('Equipment', data.equipment, equipmentHours, undefined, 'equipment', undefined)}
-// //                         {renderTableBlock('Materials and Trucking', formattedMaterials, materialHours, materialTickets, 'material', materialUnits)}
-// //                         {renderTableBlock('Work Performed', formattedVendors, vendorHours, vendorTickets, 'vendor', vendorUnits)}
-// //                         {renderTableBlock('Dumping Sites', formattedDumpingSites, dumpingSiteHours, dumpingSiteTickets, 'dumping_site', undefined)}
-// //                     </View>
-// //                 )}
-               
-// //                 {/* Total Quantity */}
-// //                 {selectedPhase && totalQuantities[selectedPhase] && (
-// //                     <View style={styles.card}>
-// //                         <Text style={styles.tableTitle}>Total Quantity</Text>
-// //                         <View style={styles.quantityRow}>
-// //                             <Text style={styles.quantityLabel}>Phase {selectedPhase}:</Text>
-// //                             <View style={styles.totalBox}>
-// //                                 <Text style={styles.totalText}>{totalQuantities[selectedPhase]}</Text>
-// //                             </View>
-// //                         </View>
-// //                     </View>
-// //                 )}
-
-
-// //                 {/* Notes */}
-// //                 {notes ? (
-// //                     <View style={styles.card}>
-// //                         <Text style={styles.tableTitle}>Notes</Text>
-// //                         <Text style={styles.notesText}>{notes}</Text>
-// //                     </View>
-// //                 ) : null}
-// //             </ScrollView>
-// //         </SafeAreaView>
-// //     );
-// // };
-
-
-// // // --- Styles ---
-// // const styles = StyleSheet.create({
-// //     safeArea: { flex: 1, backgroundColor: THEME.background },
-// //     centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-// //     infoCard: {
-// //         padding: THEME.SPACING, backgroundColor: THEME.card, borderRadius: 14, marginBottom: THEME.SPACING,
-// //         shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 3,
-// //     },
-// //     jobTitle: { fontSize: 24, fontWeight: 'bold', color: THEME.text },
-// //     jobCode: { fontSize: 16, color: THEME.textSecondary, marginTop: 4 },
-// //     infoGrid: { marginTop: THEME.SPACING, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-// //     infoItem: { width: '48%', marginBottom: 12 },
-// //     infoItemFull: { width: '100%', marginBottom: 12 },
-// //     infoLabel: { fontSize: 14, color: THEME.textSecondary, marginBottom: 2 },
-// //     infoValue: { fontSize: 16, fontWeight: '500', color: THEME.text },
-// //     phaseSelectorContainer: { marginVertical: THEME.SPACING / 2 },
-// //     phaseButton: {
-// //         paddingHorizontal: 20, paddingVertical: 10, marginRight: 10, borderRadius: 20,
-// //         backgroundColor: THEME.card, borderWidth: 1, borderColor: THEME.border,
-// //     },
-// //     selectedPhaseButton: { backgroundColor: THEME.primary, borderColor: THEME.primary },
-// //     phaseButtonText: { color: THEME.text, fontWeight: '600', fontSize: 16 },
-// //     selectedPhaseButtonText: { color: '#FFF' },
-// //     card: {
-// //         backgroundColor: THEME.card, borderRadius: 14, padding: THEME.SPACING, marginBottom: THEME.SPACING,
-// //         shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-// //     },
-// //     tableTitle: { fontSize: 20, fontWeight: 'bold', color: THEME.text, marginBottom: 12 },
-// //     tableContainer: { borderWidth: 1, borderColor: THEME.border, borderRadius: 8, overflow: 'hidden' },
-// //     tableHeader: { flexDirection: 'row', backgroundColor: THEME.tableHeaderBg },
-// //     tableRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: THEME.border },
-// //     tableRowAlternate: { backgroundColor: THEME.rowAlternateBg },
-// //     headerCell: {
-// //         paddingVertical: 10, paddingHorizontal: 5, fontWeight: '700', color: THEME.text, fontSize: 12,
-// //         textAlign: 'center', borderRightWidth: 1, borderRightColor: THEME.border,
-// //     },
-// //     dataCell: {
-// //         paddingVertical: 8, paddingHorizontal: 5, color: THEME.text, fontSize: 14,
-// //         textAlign: 'center', borderRightWidth: 1, borderRightColor: THEME.border,
-// //         minHeight: 40, justifyContent: 'center', 
-// //         alignItems: 'center', display: 'flex',
-// //     },
-// //     lastCell: { borderRightWidth: 0 },
-    
-// //     // Column Widths (Adjust as needed for layout)
-// //     colName: { flex: 3 }, 
-// //     colClassCode: { flex: 1.5 },
-// //     colHours: { flex: 1.5 }, 
-// //     colTickets: { flex: 1.2 },
-// //     colTotal: { flex: 1.5 },
-
-
-// //     // Phase Total Row Styles
-// //     phaseTotalRow: { backgroundColor: THEME.tableHeaderBg, borderTopWidth: 2, borderTopColor: THEME.textSecondary },
-// //     phaseTotalText: { fontWeight: 'bold', fontSize: 14, color: THEME.text, paddingVertical: 10 },
-    
-// //     // Total Quantity Styles
-// //     quantityRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-// //     quantityLabel: { fontSize: 16, color: THEME.textSecondary, fontWeight: '500' },
-// //     totalBox: { 
-// //         paddingHorizontal: 15, paddingVertical: 8, backgroundColor: THEME.primary, 
-// //         borderRadius: 8, minWidth: 80, alignItems: 'center' 
-// //     },
-// //     totalText: { fontSize: 18, fontWeight: 'bold', color: THEME.card },
-
-
-// //     // Notes Styles
-// //     notesText: { fontSize: 15, color: THEME.text, lineHeight: 22, marginTop: 5 },
-// // });
-
-
-// // export default PETimesheetReviewScreen;
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
@@ -2669,8 +2221,6 @@ import { RouteProp, useRoute } from '@react-navigation/native';
 import apiClient from '../../api/apiClient';
 import type { SupervisorStackParamList } from '../../navigation/AppNavigator';
 import type { Timesheet } from '../../types';
-
-
 // --- Type Definitions ---
 type SimpleHourState = Record<string, Record<string, string>>;
 // EmployeeHourState is complex: { empId: { phaseCode: { classCode: '5' } } }
@@ -2690,17 +2240,10 @@ type TableCategory =
 
 type EditingTablePhase = { table: TableCategory; phase: string } | null;
 
-
-// --- ADDED TYPE DEFINITIONS TO FIX TS2339 ---
-
-// 1. Define the missing Supervisor structure from the JSONB
 interface Supervisor {
     id: number;
     name: string;
 }
-
-// 2. Define a structure for the JSONB data that includes the supervisor 
-// and other critical properties the component relies on.
 interface ExtendedTimesheetData {
     supervisor?: Supervisor;
     notes?: string;
@@ -2725,14 +2268,9 @@ interface ExtendedTimesheetData {
     selected_dumping_materials?: Record<string, any>;
 }
 
-// 3. Create an extended Timesheet type by merging the imported Timesheet 
-// with our extended data structure.
 type ExtendedTimesheet = Omit<Timesheet, 'data'> & {
     data: ExtendedTimesheetData;
 };
-// --------------------------------------------------------------------------
-
-
 // --- Theme Constants ---
 const THEME = {
     primary: '#007AFF',
@@ -2757,16 +2295,26 @@ const COL_EQUIP = 110;
 const COL_TICKET = 110;
 const COL_TOTAL = 100;
 const COL_START_STOP = 70;
+const COL_UNIT = 80; // <--- ADDED: New constant for unit/material column
+const COL_MATERIAL_NAME = 120; // <--- ADDED: New constant for Material Name column
+
+// --- NEW HELPER FUNCTION TO GET UNIQUE KEY FOR VENDOR LINE ITEMS ---
+const getVendorUniqueKey = (entity: any): string => {
+    // If it's a vendor line item from the 'vendors' array, the unique identifier is the combination.
+    if (entity.vendor_id && entity.material_id) {
+        return `${entity.vendor_id}_${entity.material_id}`;
+    }
+    // Fallback to existing logic if it's somehow not a line item
+    return entity.id || entity.name || entity.key || String(entity.vendor_id || '');
+};
 
 const getPhaseGroupWidth = (type: TableCategory): number => {
   if (type === "equipment") return COL_EQUIP * 2;
   if (type === "employee") return COL_EMPLOYEE_HOUR;
   return COL_SIMPLE_HOUR;
 };
-
-
 const PETimesheetReviewScreen = () => {
- const route = useRoute<ReviewRouteProp>();
+    const route = useRoute<ReviewRouteProp>();
     const { timesheetId } = route.params;
 
     // USE THE EXTENDED TYPE HERE
@@ -2784,9 +2332,6 @@ const PETimesheetReviewScreen = () => {
     const [editingTablePhase, setEditingTablePhase] = useState<EditingTablePhase>(null);
     const [tempNewPhaseCodeForTable, setTempNewPhaseCodeForTable] = useState('');
     const [fullJobPhaseCodes, setFullJobPhaseCodes] = useState<string[]>([]);
-
-    // ------------------------------------------
-
     // States to hold processed data for display
     const [employeeHours, setEmployeeHours] = useState<EmployeeHourState>({});
     const [equipmentHours, setEquipmentHours] = useState<ComplexHourState>({});
@@ -2798,6 +2343,8 @@ const PETimesheetReviewScreen = () => {
     const [notes, setNotes] = useState<string>('');
     const [materialUnits, setMaterialUnits] = useState<UnitState>({});
     const [vendorUnits, setVendorUnits] = useState<UnitState>({});
+    // NEW STATE: For Material Name associated with a Vendor
+    const [vendorMaterialNames, setVendorMaterialNames] = useState<UnitState>({}); 
     const [dumpingSiteHours, setDumpingSiteHours] = useState<SimpleHourState>({});
     const [dumpingSiteTickets, setDumpingSiteTickets] = useState<SimpleHourState>({});
 
@@ -2842,6 +2389,36 @@ const validateQuarterHour = (input: string) => {
     return rounded.toFixed(2);
 };
 
+// --- Helper function to get the display name for any entity type ---
+const getEntityDisplayName = (entity: any, type: TableCategory): string => {
+    const entityId = entity.id || entity.key || entity.vendor_id;
+
+    if (type === 'employee') {
+        const firstName = (entity.first_name ?? '').trim();
+        const middleName = (entity.middle_name ?? '').trim();
+        const lastName = (entity.last_name ?? '').trim();
+        const fullName = `${firstName} ${middleName} ${lastName}`.trim();
+        return fullName || `EMP: ${entityId}`;
+    }
+    
+    // For simple entities (material, vendor, dumping_site), and equipment
+    // Prioritize specific fields for vendors
+    if (type === 'vendor') {
+        return entity.vendor_name // CRITICAL: Use vendor_name from the line item
+            || entity.name 
+            || entity.description 
+            || `ID: ${getVendorUniqueKey(entity)}` // Fallback to unique key
+            || `Unknown Vendor`;
+    }
+
+    // Generic fallbacks for other types
+    return entity.name 
+           || entity.description
+           || `ID: ${entityId}`
+           || `Unknown ${type.toUpperCase()}`;
+};
+// -------------------------------------------------------------------
+
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
@@ -2864,37 +2441,77 @@ const validateQuarterHour = (input: string) => {
 
 
             // --- Data Population Logic (Keys adjusted for Material/Vendor/DumpingSite) ---
-            const populateSimple = (entities: any[] = [], field: 'hours_per_phase' | 'tickets_per_phase', type?: TableCategory): SimpleHourState => {
-                const state: SimpleHourState = {};
-                entities.forEach((e) => {
-                    let id;
-                    // Determine the correct ID/Key for the entity
-                    if (type === 'material') {
-                        // Use name or key for materials, as they are not standard entities in the original timesheet type
-                        id = e.name || e.id || e.key || e.vendor_id;
-                    } else {
-                        id = e.id || e.name || e.key || e.vendor_id;
-                    }
+           const populateSimple = (
+    entities: any[] = [],
+    field: 'hours_per_phase' | 'tickets_per_phase',
+    type?: TableCategory
+): SimpleHourState => {
+    const state: SimpleHourState = {};
 
-                    state[id] = {};
-                    const data = e[field] || {};
-                    Object.entries(data).forEach(([phase, val]) => {
-                        // Ensure all values are stored as strings for TextInput
-                        state[id][phase] = String(val || '0');
-                    });
-                });
-                return state;
-            };
+    entities.forEach((e) => {
+        let id;
 
+        if (type === 'material') {
+            // FIX: Always use the true ID
+            id = String(e.id);
+        } 
+        else if (type === 'vendor') {
+            // Vendors must use vendor_id + material_id combined
+            id = getVendorUniqueKey(e);
+        } 
+        else {
+            // Dumping sites, equipment, normal ID behavior
+            id = String(e.id);
+        }
+
+        state[id] = {};
+
+        const data = e[field] || {};
+
+        Object.entries(data).forEach(([phase, val]) => {
+            state[id][phase] = String(val || '0');
+        });
+    });
+
+    return state;
+};
+
+
+            // Original populateUnits (for materials from metadata)
             const populateUnits = (entities: any[] = []): UnitState => {
                 const state: UnitState = {};
                 entities.forEach(e => {
+                    // e here is a metadata object from selected_material_items 
                     const id = e.id || e.name || e.key; 
                     const unit = e.selectedMaterials?.[0]?.unit || e.unit || null; 
                     state[id] = unit;
                 });
                 return state;
             };
+            
+            // NEW: Helper to extract units from the 'vendors' array line items (using unique key)
+            const populateVendorUnits = (entities: any[] = []): UnitState => {
+                const state: UnitState = {};
+                entities.forEach(e => {
+                    const id = getVendorUniqueKey(e); 
+                    const unit = e.unit || null; 
+                    state[id] = unit;
+                });
+                return state;
+            };
+
+            // NEW: Helper to extract material name from the 'vendors' array line items (using unique key)
+            const populateVendorMaterialNames = (entities: any[] = []): UnitState => {
+                const state: UnitState = {};
+                entities.forEach(e => {
+                    // e here is an item from tsData.data.vendors, which contains material_name directly
+                    const id = getVendorUniqueKey(e); 
+                    const materialName = e.material_name || null; 
+                    state[id] = materialName;
+                });
+                return state;
+            };
+
 
             const populateEmployeeComplex = (entities: any[] = []): EmployeeHourState => {
                 const state: EmployeeHourState = {};
@@ -2939,27 +2556,26 @@ const validateQuarterHour = (input: string) => {
                 });
                 return state;
             };
-
             const formattedMaterials = tsData.data.materials_trucking || [];
             const formattedVendors = tsData.data.vendors || [];
             const formattedDumpingSites = tsData.data.dumping_sites || [];
-
             setEmployeeHours(populateEmployeeComplex(tsData.data.employees));
             setEquipmentHours(populateEquipmentComplex(tsData.data.equipment));
-
             setMaterialHours(populateSimple(formattedMaterials, 'hours_per_phase', 'material')); 
             setVendorHours(populateSimple(formattedVendors, 'hours_per_phase', 'vendor'));
             setMaterialTickets(populateSimple(formattedMaterials, 'tickets_per_phase', 'material')); 
-            setVendorTickets(populateSimple(formattedVendors, 'tickets_per_phase', 'vendor'));
-
+            setVendorTickets(populateSimple(formattedVendors, 'tickets_per_phase', 'vendor')); // Uses unique key now
+            
             const materialUnitsMetadata = Object.values(tsData.data.selected_material_items || {});
-            const vendorUnitsMetadata = Object.values(tsData.data.selected_vendor_materials || {});
+            
             setMaterialUnits(populateUnits(materialUnitsMetadata));
-            setVendorUnits(populateUnits(vendorUnitsMetadata));
+            // UPDATED: Use the line item array for correct unit mapping for vendors
+            setVendorUnits(populateVendorUnits(formattedVendors));
+            // NEW: Populate Vendor Material Names (corrected logic)
+            setVendorMaterialNames(populateVendorMaterialNames(formattedVendors));
 
             setDumpingSiteHours(populateSimple(formattedDumpingSites, 'hours_per_phase', 'dumping_site'));
             setDumpingSiteTickets(populateSimple(formattedDumpingSites, 'tickets_per_phase', 'dumping_site'));
-
             if (tsData.data.total_quantities) {
                 const q: QuantityState = {};
                 for (const phase in tsData.data.total_quantities) {
@@ -2967,22 +2583,15 @@ const validateQuarterHour = (input: string) => {
                 }
                 setTotalQuantities(q);
             }
-
             // Fetch Foreman Name (Existing Logic)
             const userRes = await apiClient.get(`/api/users/${tsData.foreman_id}`);
             setForemanName(`${userRes.data.first_name} ${userRes.data.last_name}`.trim());
-
-            // --- CORRECTED LOGIC: Direct Access to Supervisor Name from JSONB (data) ---
-            // This is now type-safe due to the ExtendedTimesheet type.
             const supervisorData = tsData.data.supervisor;
             if (supervisorData && supervisorData.name) {
                  setSupervisorName(supervisorData.name.trim());
             } else {
                  setSupervisorName('N/A');
             }
-            // --------------------------------------------------------------------------
-
-
         } catch (error) {
             console.error('Failed to load timesheet:', error);
             Alert.alert('Error', 'Failed to load timesheet data.');
@@ -3018,14 +2627,8 @@ useEffect(() => {
 
   setOverEmployees(over);
 }, [employeeHours, timesheet]);
-
-
-
-    // --- DERIVE ALL ACTIVE PHASE CODES FOR DYNAMIC COLUMN RENDERING ---
     const getAllActivePhaseCodes = useCallback((): string[] => {
         const uniquePhases = new Set<string>(); 
-
-        // 1. Collect all active phases from current state data
         Object.values(employeeHours).forEach(phases => {
             Object.keys(phases).forEach(p => uniquePhases.add(p));
         });
@@ -3446,15 +3049,18 @@ if (total > 24) {
             const updatedEntity = { ...entity };
             let entityId;
 
-            // Determine the key used in the state maps
-            if (type === 'material') {
-                entityId = entity.name || entity.id || entity.key || entity.vendor_id;
+            // Determine the key used in the state maps (using unique key for vendors)
+     if (type === 'material') {
+    entityId = String(entity.id);   // ALWAYS use numeric ID
+}
+ else if (type === 'vendor') {
+                entityId = getVendorUniqueKey(entity); // <--- USE THE UNIQUE KEY
             } else {
                 entityId = entity.id || entity.name || entity.key || entity.vendor_id;
             }
 
             const hData = hoursState[entityId];
-            // const tData = ticketsState[entityId];
+            // const tData = ticketsState[entityId]; // Logic for phase-based tickets removed
 
             if (hData) {
                 const hoursPerPhase: Record<string, number> = {};
@@ -3467,21 +3073,27 @@ if (total > 24) {
                  updatedEntity.hours_per_phase = {};
             }
 
-            // if (tData) {
-            //     const ticketsPerPhase: Record<string, number> = {};
-            //     Object.entries(tData).forEach(([phase, value]) => {
-            //         const num = parseFloat(value) || 0;
-            //         if (num > 0) ticketsPerPhase[phase] = num;
-            //     });
-            //     updatedEntity.tickets_per_phase = ticketsPerPhase;
-            // } else {
-            //     updatedEntity.tickets_per_phase = {};
-            // }
+            // Simple tickets/loads logic
             if (ticketsLoadsState[entityId] !== undefined) {
       const num = parseFloat(ticketsLoadsState[entityId] || '0') || 0;
-      updatedEntity.tickets_loads = { [entity.id]: num };
-      // optionally clear tickets_per_phase if you do not want it at all:
-      delete updatedEntity.tickets_per_phase;
+      // Note: Assuming API expects 'tickets_loads' to be an object/map if multiple exist, 
+      // but here we are simplifying to a single value if found in state. 
+      // Revert to original entity structure where possible, but use state data if edited.
+      // For now, we will assume setting it back to the original entity structure works.
+      updatedEntity.tickets_loads = num; 
+      // The original entity had 'tickets_loads': 4. If ticketsLoadsState is used, it should override.
+      // Since the frontend only supports editing a single total ticket number now, 
+      // and the backend might expect a specific structure like { [some_id]: num }, 
+      // we'll stick to a simpler structure if the state is tracking a single number.
+      
+      // Based on the user's JSON: "tickets_loads": 4 (number) is on the vendor line item.
+      // Let's ensure we return the updated single number if it was edited.
+      updatedEntity.tickets_loads = num; 
+      delete updatedEntity.tickets_per_phase; // Ensure old format is cleared if loads are used
+
+    } else if (entity.tickets_loads) {
+        // If not in state, preserve the original value from the entity
+        updatedEntity.tickets_loads = entity.tickets_loads;
     }
             return updatedEntity;
         });
@@ -3529,19 +3141,26 @@ if (total > 24) {
         return totals;
     };
 
-    const calculateComplexPhaseTotals = (state: ComplexHourState, phaseCodes: string[]): Record<string, { REG: number, 'S.B': number }> => {
-        const totals: Record<string, { REG: number, 'S.B': number }> = {};
-        phaseCodes.forEach(p => { totals[p] = { REG: 0, 'S.B': 0 } });
-        Object.values(state).forEach((perEntity) => {
-            Object.entries(perEntity).forEach(([phase, value]) => {
-                if (totals[phase]) {
-                    totals[phase].REG += parseFloat(value.REG || '0');
-                    totals[phase]['S.B'] += parseFloat(value['S.B'] || '0');
-                }
-            });
-        });
-        return totals;
-    };
+const calculateComplexPhaseTotalsCombined = (
+  state: ComplexHourState,
+  phaseCodes: string[]
+): Record<string, number> => {
+  const totals: Record<string, number> = {};
+  phaseCodes.forEach(p => { totals[p] = 0; });
+
+  Object.values(state).forEach(perEntity => {
+    Object.entries(perEntity).forEach(([phase, value]) => {
+      if (totals[phase] !== undefined) {
+        const reg = parseFloat(value?.REG ?? "0") || 0;
+        const sb  = parseFloat(value?.["S.B"] ?? "0") || 0;
+        totals[phase] += reg + sb;
+      }
+    });
+  });
+
+  return totals;
+};
+
 
 
     const calculateEmployeePhaseTotal = (state: EmployeeHourState, phase: string): number => {
@@ -3613,13 +3232,18 @@ if (total > 24) {
         return <Text style={{ flex: 1, textAlign: 'center' }}>{displayValue}</Text>;
     };
 
+// UPDATED: Simple way to get single tickets/loads number from entity
 const getTicketsFromEntity = (entity: any) => {
-    if (!entity?.tickets_loads) return "0";
+    // Check if tickets_loads is a number (preferred structure)
+    if (typeof entity.tickets_loads === 'number') return entity.tickets_loads.toString();
 
-    const keys = Object.keys(entity.tickets_loads);
-    if (keys.length === 0) return "0";
+    // Check if tickets_loads is an object (old or complex structure)
+    if (entity?.tickets_loads && typeof entity.tickets_loads === 'object') {
+        const keys = Object.keys(entity.tickets_loads);
+        if (keys.length === 1) return entity.tickets_loads[keys[0]]?.toString() ?? "0";
+    }
 
-    return entity.tickets_loads[keys[0]]?.toString() ?? "0";
+    return "0";
 };
 
 
@@ -3631,6 +3255,8 @@ const getTicketsFromEntity = (entity: any) => {
         ticketsState: SimpleHourState | undefined,
         type: TableCategory,
         unitState: UnitState | undefined,
+        // NEW PARAMETER: Added state for Vendor Material Name
+        materialNameState: UnitState | undefined, 
     ) => {
         // Now entities is guaranteed to be an array due to fix below
         if (!entities || entities.length === 0) return null;
@@ -3638,7 +3264,8 @@ const getTicketsFromEntity = (entity: any) => {
         const isEmployee = type === 'employee';
         const isEquipment = type === 'equipment';
         const isMaterial = type === 'material';
-        const isSimple = isMaterial || type === 'vendor' || type === 'dumping_site';
+        const isVendor = type === 'vendor'; // NEW constant
+        const isSimple = isMaterial || isVendor || type === 'dumping_site'; // Updated isSimple
 
         // USE THE NEW DERIVED LIST OF PHASE CODES
        // USE THE NEW DERIVED LIST OF PHASE CODES
@@ -3651,7 +3278,7 @@ const phaseCodes = allActivePhaseCodes.filter(
 
         // --- Totals Calculation ---
         let employeePhaseTotals: Record<string, number> = {};
-        let equipmentPhaseTotals: Record<string, { REG: number, 'S.B': number }> = {};
+let equipmentPhaseTotals: Record<string, number>;
         let simplePhaseTotals: Record<string, number> = {};
         let grandTotal = 0;
 
@@ -3661,14 +3288,25 @@ const phaseCodes = allActivePhaseCodes.filter(
             });
             grandTotal = entities.reduce((sum, e) => sum + calculateTotalEmployeeHours(hoursState as EmployeeHourState, e.id), 0);
         } else if (isEquipment) {
-            equipmentPhaseTotals = calculateComplexPhaseTotals(hoursState as ComplexHourState, phaseCodes);
-            grandTotal = entities.reduce((sum, e) => sum + calculateTotalComplexHours(hoursState as ComplexHourState, e.id), 0);
-        } else if (isSimple) {
+  equipmentPhaseTotals = calculateComplexPhaseTotalsCombined(
+    hoursState as ComplexHourState,
+    phaseCodes
+  );
+  grandTotal = entities.reduce(
+    (sum, e) =>
+      sum + calculateTotalComplexHours(hoursState as ComplexHourState, e.id),
+    0
+  );
+}
+ else if (isSimple) {
             simplePhaseTotals = calculateSimplePhaseTotals(hoursState as SimpleHourState, phaseCodes);
             grandTotal = entities.reduce((sum, e) => {
                 let entityId;
                 if (type === 'material') {
-                    entityId = e.name || e.id || e.key || e.vendor_id;
+    entityId = String(e.id);   // ALWAYS numeric ID
+}
+ else if (type === 'vendor') { // <--- USE THE UNIQUE KEY FOR TOTALS CALCULATION
+                    entityId = getVendorUniqueKey(e);
                 } else {
                     entityId = e.id || e.name || e.key || e.vendor_id;
                 }
@@ -3689,9 +3327,18 @@ if (isEmployee) {
 else if (isEquipment) {
   fixedWidth += COL_ID + (COL_START_STOP * 2);
 } 
-// SIMPLE TABLES: Name + Tickets + Total
+// SIMPLE TABLES: ID + Name + (Material Name) + Unit + Tickets + Total
 else if (isSimple) {
-  fixedWidth += COL_TICKET;  // only tickets added here
+  fixedWidth += COL_ID; 
+
+  if (isVendor) { // <--- NEW: Add Material Name width for Vendors
+      fixedWidth += COL_MATERIAL_NAME;
+  }
+
+  if (isMaterial || isVendor) { // <--- Include Unit width for Materials and Vendors
+      fixedWidth += COL_UNIT;
+  }
+  fixedWidth += COL_TICKET;
 }
 
 // Final content width
@@ -3718,7 +3365,9 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
         const renderEmployeeTableBody = () => {
             return entities.flatMap((entity, index) => {
                 const entityId = entity.id;
-                const entityName = `${entity.first_name} ${entity.last_name}`.trim();
+                // Use the new helper here
+                const entityName = getEntityDisplayName(entity, type);
+
                 const grandTotal = calculateTotalEmployeeHours(hoursState as EmployeeHourState, entityId);
                 const showReason = grandTotal === 0 && entity.reason
                 const classCodesUsed: Set<string> = new Set();
@@ -3783,7 +3432,6 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
 </View>
 
 
-
                             <Text style={[styles.dataCell, styles.colId, styles.borderRight, isFirstClassRow ? null : styles.transparentCell]}>
                                 {isFirstClassRow ? entityId : ''}
                             </Text>
@@ -3835,13 +3483,23 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
 
                         {/* -------------------- TABLE HEADER START (DYNAMIC) -------------------- */}
                         <View style={styles.tableHeader}>
+                            
+                            {/* ID Column for Simple Tables (FIRST COLUMN) */}
+                            {isSimple && ( 
+                                <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>
+                                    {isVendor ? 'Vendor ID' : 'ID'}
+                                </Text>
+                            )}
+
+                            {/* Name Column */}
                             <Text style={[styles.headerCell, styles.colName, styles.borderRight, !isEmployee && styles.headerCellBottomBorder]}>
                                 Name
                             </Text>
 
-                            {(isEmployee || isEquipment) && (
+                            {/* ID/EQUIP# Column for Employee/Equipment (SECOND/THIRD COLUMN) */}
+                            {(isEmployee || isEquipment) && ( 
                                 <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>
-                                    {isEmployee ? 'EMP#' : 'EQUIP #ER'}
+                                    {isEmployee ? 'EMP#' : isEquipment ? 'EQUIP #ER' : 'ID'}
                                 </Text>
                             )}
 
@@ -3857,6 +3515,24 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
                                     Class Code
                                 </Text>
                             )}
+
+                    {/* <--- NEW: Add Material Name Column for Vendors ---> */}
+                    {isVendor && (
+                        <Text 
+                            style={[
+                                styles.headerCell,
+                                { width: COL_MATERIAL_NAME },
+                                styles.borderRight,
+                                styles.headerCellBottomBorder
+                            ]}
+                        >
+                            Material Name
+                        </Text>
+                    )}
+
+
+                   
+
                     {/* SINGLE TICKETS COLUMN (before phases) */}
 {isSimple && (
     <Text 
@@ -3974,68 +3650,116 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
                         {isEmployee ? (
                             renderEmployeeTableBody()
                         ) : (
-                            entities.map((entity, index) => {
-                                let entityId;
-                                if (type === 'material') {
-                                    entityId = entity.name || entity.id || entity.key || entity.vendor_id;
-                                } else {
-                                    entityId = entity.id || entity.name || entity.key || entity.vendor_id;
+                            (() => {
+                                let sortedEntities = entities;
+                                let lastVendorId: string | number | null = null;
+
+                                // 1. Sort entities by vendor_id for correct grouping
+                                if (isVendor) {
+                                    sortedEntities = [...entities].sort((a, b) => {
+                                        const idA = a.vendor_id || '';
+                                        const idB = b.vendor_id || '';
+                                        return idA.toString().localeCompare(idB.toString());
+                                    });
                                 }
 
-                                const entityName = entity.first_name
-                                    ? `${entity.first_name} ${entity.middle_name || ''} ${entity.last_name}`.trim()
-                                    : entity.name;
+                                return sortedEntities.map((entity, index) => {
+                                    let entityId;
+                            if (type === 'material') {
+    entityId = String(entity.id);   // ALWAYS use numeric ID
+}
+ else if (type === 'vendor') { 
+                                        entityId = getVendorUniqueKey(entity);
+                                    } else {
+                                        entityId = entity.id || entity.name || entity.key || entity.vendor_id;
+                                    }
 
-                                const totalHours = isEquipment 
-                                    ? calculateTotalComplexHours(hoursState as ComplexHourState, entityId)
-                                    : calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
-// const apiTickets = getTicketsFromEntity(entity);
-// const currentTickets =
-//     ticketsState?.[entityId]?.total?.toString() ?? apiTickets;
-const apiTickets = getTicketsFromEntity(entity);
+                                    // Vendor Grouping Logic
+                                    let isFirstRowForVendor = true;
+                                    if (isVendor) {
+                                        const currentVendorId = entity.vendor_id;
+                                        if (currentVendorId === lastVendorId) {
+                                            isFirstRowForVendor = false;
+                                        }
+                                        lastVendorId = currentVendorId; // Update for the next iteration
+                                    }
 
-const currentTickets =
-    ticketsLoadsState?.[entityId] ??
-    apiTickets?.toString() ??
-    "0";
+                                    // 💡 CRITICAL FIX: Use the new helper function for robust name retrieval
+                                    const entityName = getEntityDisplayName(entity, type);
+                                    
+                                    const totalHours = isEquipment 
+                                        ? calculateTotalComplexHours(hoursState as ComplexHourState, entityId)
+                                        : calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
 
-                                return (
-                                    <View key={entityId} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
-                                        <Text style={[styles.dataCell, styles.colName, styles.borderRight]} numberOfLines={2}>
-                                            {entityName}
-                                        </Text>
+                                    const currentTickets =
+                                        ticketsLoadsState?.[entityId] ??
+                                        getTicketsFromEntity(entity);
 
-                                        {isEquipment && (
-                                            <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{entityId}</Text>
-                                        )}
-                                        {isEmployee && (
-                                            <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{entityId}</Text>
-                                        )}
-
-                                        {isEquipment && (
-                                            <>
-                                                <Text style={[styles.dataCell, styles.colStartStop, styles.borderRight]}>
-                                                    {entity.start_hours || ''} 
+                                    return (
+                                        <View key={entityId} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
+                                            
+                                            {/* ID Column for Simple Tables (FIRST COLUMN) */}
+                                            {isSimple && (
+                                                <Text 
+                                                    style={[
+                                                        styles.dataCell, 
+                                                        styles.colId, 
+                                                        styles.borderRight, 
+                                                        isVendor && !isFirstRowForVendor ? styles.transparentCell : null
+                                                    ]}
+                                                >
+                                                    {isVendor ? (isFirstRowForVendor ? entity.vendor_id : '') : entityId}
                                                 </Text>
-                                                <Text style={[styles.dataCell, styles.colStartStop, styles.borderRight]}>
-                                                    {entity.stop_hours || ''}
-                                                </Text>
-                                            </>
-                                        )}
+                                            )}
+                                            
+                                            {/* Name Column */}
+                                            <Text 
+                                                style={[
+                                                    styles.dataCell, 
+                                                    styles.colName, 
+                                                    styles.borderRight,
+                                                    isVendor && !isFirstRowForVendor ? styles.transparentCell : null
+                                                ]} 
+                                                numberOfLines={2}
+                                            >
+                                                {isVendor ? (isFirstRowForVendor ? entityName : entity.vendor_name) : entityName}
+                                            </Text>
+
+                                            {/* ID/EQUIP# Column for Employee/Equipment (SECOND/THIRD COLUMN) */}
+                                            {(isEquipment || isEmployee) && (
+                                                <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{entityId}</Text>
+                                            )}
+                                            {/* <--- END MODIFIED ID BLOCK ---> */}
+
+
+                                            {isEquipment && (
+                                                <>
+                                                    <Text style={[styles.dataCell, styles.colStartStop, styles.borderRight]}>
+                                                        {entity.start_hours || ''} 
+                                                    </Text>
+                                                    <Text style={[styles.dataCell, styles.colStartStop, styles.borderRight]}>
+                                                        {entity.stop_hours || ''}
+                                                    </Text>
+                                                </>
+                                            )}
+
+{/* <--- NEW: Material Name Column Body for Vendors ---> */}
+{isVendor && (
+    <Text 
+        style={[
+            styles.dataCell, 
+            { width: COL_MATERIAL_NAME }, 
+            styles.borderRight
+        ]} 
+        numberOfLines={2}
+    >
+        {materialNameState?.[entityId] || ''} {/* <--- USES CORRECT UNIQUE KEY */}
+    </Text>
+)}
+
+
+
 {/* SINGLE TICKETS COLUMN */}
-
-{/* {isSimple && (
-    <View style={[styles.dataCell, styles.colTickets, styles.borderRight]}>
-    {renderTicketCellContent(
-        currentTickets,
-        (text) => {
-            const setter = getSimpleStateSetter('tickets');
-            updateSimpleState(setter, entityId, 'total', text);
-        }
-    )}
-</View>
-)} */}
-
 {isSimple && (
   <View style={[styles.dataCell, styles.colTickets, styles.borderRight]}>
     {renderTicketCellContent(
@@ -4043,7 +3767,7 @@ const currentTickets =
       (text) => {
         setTicketsLoadsState(prev => ({
           ...prev,
-          [entityId]: text,   // store per-entity tickets, no phase key
+          [entityId]: text,   // store per-entity tickets, now with the correct unique key
         }));
       }
     )}
@@ -4051,58 +3775,67 @@ const currentTickets =
 )}
 
 
-                                        {/* Dynamic Phase Columns */}
-                                        {phaseCodes.map((phase, phaseIndex) => {
-                                            const isLastPhase = phaseIndex === phaseCodes.length - 1;
-                                            const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
+                                            {/* Dynamic Phase Columns */}
+                                            {phaseCodes.map((phase, phaseIndex) => {
+                                                const isLastPhase = phaseIndex === phaseCodes.length - 1;
+                                                const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
 
-                                            return (
-                                                <View key={phase} style={[
-                                                    isEquipment ? styles.dynamicPhaseColEquipment : styles.dynamicPhaseColSimple,
-                                                    phaseBorder,
-                                                ]}>
-                                                    {isEquipment ? (
-                                                        // Equipment: REG and S.B.
-                                                        <>
-                                                            <View style={[styles.dataCell, styles.colHoursEquipment, styles.borderRight]}>
-                                                                {renderCellContent(
-                                                                    ((hoursState as ComplexHourState)[entityId]?.[phase]?.REG ?? '0').toString(),
-                                                                    (text) => updateEquipmentState(entityId, phase, 'REG', text)
-                                                                )}
-                                                            </View>
-                                                            <View style={[styles.dataCell, styles.colHoursEquipment, styles.lastCell]}>
-                                                                {renderCellContent(
-                                                                    ((hoursState as ComplexHourState)[entityId]?.[phase]?.['S.B'] ?? '0').toString(),
-                                                                    (text) => updateEquipmentState(entityId, phase, 'S.B', text)
-                                                                )}
-                                                            </View>
-                                                        </>
-                                                    ) : (
-                                                        // Simple Logic (Material/Vendor/Dumping)
-                                                        <View style={[styles.dataCell, styles.colHoursSimple, styles.lastCell]}>
-                    {renderCellContent(
-                        ((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toString(),
-                        (text) => updateSimpleState(simpleHoursSetter, entityId, phase, text)
-                    )}
-                </View>
-                                                    )}
-                                                </View>
-                                            )
-                                        })}
+                                                return (
+                                                    <View key={phase} style={[
+                                                        isEquipment ? styles.dynamicPhaseColEquipment : styles.dynamicPhaseColSimple,
+                                                        phaseBorder,
+                                                    ]}>
+                                                        {isEquipment ? (
+                                                            // Equipment: REG and S.B.
+                                                            <>
+                                                                <View style={[styles.dataCell, styles.colHoursEquipment, styles.borderRight]}>
+                                                                    {renderCellContent(
+                                                                        ((hoursState as ComplexHourState)[entityId]?.[phase]?.REG ?? '0').toString(),
+                                                                        (text) => updateEquipmentState(entityId, phase, 'REG', text)
+                                                                    )}
+                                                                </View>
+                                                                <View style={[styles.dataCell, styles.colHoursEquipment, styles.lastCell]}>
+                                                                    {renderCellContent(
+                                                                        ((hoursState as ComplexHourState)[entityId]?.[phase]?.['S.B'] ?? '0').toString(),
+                                                                        (text) => updateEquipmentState(entityId, phase, 'S.B', text)
+                                                                    )}
+                                                                </View>
+                                                            </>
+                                                        ) : (
+                                                            // Simple Logic (Material/Vendor/Dumping)
+                                                            <View style={[styles.dataCell, styles.colHoursSimple, styles.lastCell]}>
+                        {renderCellContent(
+                            ((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toString(),
+                            (text) => updateSimpleState(simpleHoursSetter, entityId, phase, text)
+                        )}
+                    </View>
+                                                        )}
+                                                    </View>
+                                                )
+                                            })}
 
-                                        <Text style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft]}>{totalHours.toFixed(1)}</Text>
-                                    </View>
-                                );
-                            })
+                                            <Text style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft]}>{totalHours.toFixed(1)}</Text>
+                                        </View>
+                                    );
+                                });
+                            })()
                         )}
                         {/* -------------------- TABLE BODY END -------------------- */}
 
 
                         {/* -------------------- PHASE TOTALS ROW (DYNAMIC) -------------------- */}
                         <View style={[styles.tableRow, styles.phaseTotalRow]}>
+                            
+                            {/* ID Placeholder for Simple Tables (FIRST COLUMN) */}
+                            {isSimple && ( 
+                                <View style={[styles.dataCell, styles.colId]} /> 
+                            )}
+                            
+                            {/* Name Total Column */}
                             <Text style={[styles.dataCell, styles.colName, styles.phaseTotalText]}>Phase Total</Text>
 
-                            {(isEmployee || isEquipment) && (
+                            {/* ID/EQUIP# Placeholder for Employee/Equipment (SECOND/THIRD COLUMN) */}
+                            {(isEmployee || isEquipment) && ( 
                                 <View style={[styles.dataCell, styles.colId]} /> 
                             )}
 
@@ -4116,6 +3849,14 @@ const currentTickets =
                             {isEmployee && (
                                 <View style={[styles.dataCell, styles.colClassCode]} /> 
                             )}
+
+                            {/* NEW: Material Name Placeholder for Vendors */}
+                            {isVendor && ( 
+                                <View style={[styles.dataCell, { width: COL_MATERIAL_NAME }]} />
+                            )}
+
+                       
+                            
                               {isSimple && (
                                 <View style={[styles.dataCell, styles.colTickets]} />
                             )}
@@ -4147,15 +3888,20 @@ const currentTickets =
                                                 </Text>
                                             </View>
                                         ) : isEquipment ? (
-                                            <View style={styles.phaseTotalSubRow}>
-                                                <Text style={[styles.dataCell, styles.colHoursEquipment, styles.phaseTotalText, styles.borderRight]}>
-                                                    {(equipmentPhaseTotals[phase]?.REG || 0).toFixed(1)}
-                                                </Text>
-                                                <Text style={[styles.dataCell, styles.colHoursEquipment, styles.phaseTotalText,styles.lastCell]}>
-                                                    {(equipmentPhaseTotals[phase]?.['S.B'] || 0).toFixed(1)}
-                                                </Text>
-                                            </View>
-                                        ) : isSimple ? (
+  <View style={styles.phaseTotalSubRow}>
+    <Text
+      style={[
+        styles.dataCell,
+        styles.colHoursEquipment,
+        styles.phaseTotalText,
+        styles.lastCell,
+      ]}
+    >
+      {(equipmentPhaseTotals[phase] ?? 0).toFixed(1)}
+    </Text>
+  </View>
+) :
+ isSimple ? (
                                             <View style={styles.phaseTotalSubRow}>
                                                 <Text style={[styles.dataCell, styles.colHoursSimple, styles.phaseTotalText, styles.borderRight]}>
                                                     {(simplePhaseTotals[phase] || 0).toFixed(1)}
@@ -4305,18 +4051,20 @@ const label = count === 1 ? "employee" : "employees";
 )}
 
 
-
                 {/* Data Tables - Using formatted variables */}
                 <View>
-                    {/* Using formattedEmployees to pass an array to renderTableBlock */}
-                    {renderTableBlock('Employees', formattedEmployees, employeeHours, undefined, 'employee', undefined)}
+                    {/* Employee and Equipment calls remain the same for materialNameState (undefined) */}
+                    {renderTableBlock('Employees', formattedEmployees, employeeHours, undefined, 'employee', undefined, undefined)}
+                    {renderTableBlock('Equipment', formattedEquipment, equipmentHours, undefined, 'equipment', undefined, undefined)}
                     
-                    {/* Using formattedEquipment to pass an array to renderTableBlock */}
-                    {renderTableBlock('Equipment', formattedEquipment, equipmentHours, undefined, 'equipment', undefined)}
+                    {/* Material call remains the same for materialNameState (undefined) */}
+                    {renderTableBlock('Materials and Trucking', formattedMaterials, materialHours, materialTickets, 'material', materialUnits, undefined)}
                     
-                    {renderTableBlock('Materials and Trucking', formattedMaterials, materialHours, materialTickets, 'material', materialUnits)}
-                    {renderTableBlock('Vendors', formattedVendors, vendorHours, vendorTickets, 'vendor', vendorUnits)}
-                    {renderTableBlock('Dumping Sites', formattedDumpingSites, dumpingSiteHours, dumpingSiteTickets, 'dumping_site', undefined)}
+                    {/* UPDATED: Pass vendorMaterialNames for the Vendor table */}
+                    {renderTableBlock('Vendors', formattedVendors, vendorHours, vendorTickets, 'vendor', vendorUnits, vendorMaterialNames)}
+                    
+                    {/* Dumping Site call remains the same for materialNameState (undefined) */}
+                    {renderTableBlock('Dumping Sites', formattedDumpingSites, dumpingSiteHours, dumpingSiteTickets, 'dumping_site', undefined, undefined)}
                 </View>
 
                 {/* Total Quantity (Phase Code and Quantity Editable) */}
@@ -4502,6 +4250,7 @@ const styles = StyleSheet.create({
   colTickets: { width: COL_TICKET },
   colTotal: { width: COL_TOTAL },
   colStartStop: { width: COL_START_STOP }, 
+  // ADDED: Unit width style is added inline in renderTableBlock
 
   dynamicPhaseColEmployee: { 
     flexDirection: 'row',
@@ -4856,4 +4605,7 @@ phaseDropdownClose: {
 },
 
 });
+
+
 export default PETimesheetReviewScreen;
+

@@ -2030,7 +2030,7 @@ case "vendors": return makeTableWithPagination(
 case "materials_trucking":
   return makeTableWithPagination(
     "materials_trucking",
-    "Materials & Trucking",
+    "Trucking",
     ["ID", "Name", "Type", "Category", "Materials", "Unit", "Status"],
     (m) => {
       // Extract materials & units safely
@@ -2280,9 +2280,9 @@ const addMaterialRow = () => {
                 <ul className="sidebar-nav">
                     {[
                         'dashboard',
+                        "tickets",
                         "users",
                         "employees",
-                        "tickets",
                         "equipment",
                         "job-phases",
                         "materials_trucking",
@@ -2308,9 +2308,9 @@ const addMaterialRow = () => {
                                             : sec === "crewMapping"
                                             ? "Crew Mapping"
                                             : sec === "vendors"
-                                            ? "Vendor"
+                                            ? "Vendors"
 // ...
-: sec === "materials_trucking" ? "Materials & Trucking" 
+: sec === "materials_trucking" ? "Trucking" 
 // ...                                            ? "Materials & Trucking"
                                             : sec === "dumping_sites"
                                             ? "Dumping Sites"
