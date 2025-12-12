@@ -33,36 +33,6 @@ router = APIRouter(
 from datetime import date
 from sqlalchemy import func
 
-# @router.get("/counts")
-# def get_ticket_counts(
-#     foreman_id: int = Query(...),
-#     db: Session = Depends(database.get_db)
-# ):
-
-#     today = date.today()
-
-#     total = db.query(func.count(models.Ticket.id)).filter(
-#         models.Ticket.foreman_id == foreman_id,
-#         models.Ticket.date == today
-#     ).scalar()
-
-#     submitted = db.query(func.count(models.Ticket.id)).filter(
-#         models.Ticket.foreman_id == foreman_id,
-#         models.Ticket.date == today,
-#         models.Ticket.status == "SUBMITTED"
-#     ).scalar()
-
-#     pending = db.query(func.count(models.Ticket.id)).filter(
-#         models.Ticket.foreman_id == foreman_id,
-#         models.Ticket.date == today,
-#         models.Ticket.status == "PENDING"
-#     ).scalar()
-
-#     return {
-#         "total": total,
-#         "submitted": submitted,
-#         "pending": pending
-#     }
 
 from datetime import datetime, date as date_type
 
@@ -103,50 +73,49 @@ def get_tickets_for_project_engineer(
     db: Session = Depends(database.get_db),
     supervisor_id: int = Query(...),
     date: str = Query(...),
-    project_engineer_id: int = Query(...),  # ✅ new param
+    project_engineer_id: int = Query(...),
 ):
-    """
-    Get all tickets for the given Project Engineer,
-    limited to their assigned job codes.
-    """
     target_date = date_type.fromisoformat(date)
 
-    # ✅ Get all job codes assigned to this Project Engineer
+    # Get job codes assigned to PE
     job_codes = (
         db.query(models.JobPhase.job_code)
         .filter(models.JobPhase.project_engineer_id == project_engineer_id)
         .all()
     )
-    job_codes = [jc[0] for jc in job_codes]  # flatten list of tuples
+    job_codes = [jc[0] for jc in job_codes]
 
     if not job_codes:
         raise HTTPException(status_code=404, detail="No jobs assigned to this Project Engineer")
 
-    # ✅ Get foremen whose submissions belong to the supervisor on that date
+    # 🔍 Only foremen with approved daily submission
     foremen = (
         db.query(models.DailySubmission.foreman_id)
         .filter(
             models.DailySubmission.supervisor_id == supervisor_id,
             models.DailySubmission.date == target_date,
-            models.DailySubmission.status == "APPROVED",
+            models.DailySubmission.status == "APPROVED_BY_SUPERVISOR",
         )
         .distinct()
         .subquery()
     )
 
-    # ✅ Get tickets only for those job codes belonging to the engineer
+    # -------------------------
+    # 🎫 Tickets (must be APPROVED_BY_SUPERVISOR)
+    # -------------------------
     tickets = (
         db.query(models.Ticket)
         .filter(
             models.Ticket.foreman_id.in_(foremen),
             cast(models.Ticket.created_at, Date) == target_date,
-            models.Ticket.sent == True,
-            models.Ticket.job_code.in_(job_codes)  # ✅ filter by assigned job codes
+            models.Ticket.status == "APPROVED_BY_SUPERVISOR",
+            models.Ticket.job_code.in_(job_codes),
         )
         .all()
     )
 
     return [schemas.TicketSummary.from_orm(t) for t in tickets]
+
 
 # ==========================================================
 # 🔹 4️⃣ Ticket Update Endpoint

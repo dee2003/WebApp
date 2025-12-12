@@ -12,20 +12,20 @@ import {
   ImageBackground,
   Animated,
   Platform,
+  Modal,
+  Pressable
 } from 'react-native';
-// Adjust this import path to match your actual project structure
 import { useAuth } from '../../context/AuthContext'; 
 import DocumentScanner from 'react-native-document-scanner-plugin';
 import RNFS from 'react-native-fs';
 import Icon from 'react-native-vector-icons/Feather';
 
-// --- CONFIGURATION ---
-const API_BASE_URL = 'https://e79d2a4b885a.ngrok-free.app';
+import API_URL from "../../config";
 
-// --- THEME ---
+const API_BASE_URL = API_URL;
 const theme = {
   colors: {
-    primary: '#4A5C4D',
+    primary: '#070807ff',
     backgroundLight: '#F8F7F2',
     contentLight: '#3D3D3D',
     subtleLight: '#797979',
@@ -36,62 +36,54 @@ const theme = {
   borderRadius: { lg: 16, xl: 24, full: 9999 },
 };
 
-// --- MAIN COMPONENT ---
 const ForemanDashboard = ({ navigation }: { navigation: any }) => {
   const { user, logout } = useAuth();
   
-  // State Management
+  const [selectedCategory, setSelectedCategory] = useState<string>('Materials');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [scannedImageUris, setScannedImageUris] = useState<string[]>([]);
   const [screen, setScreen] = useState<'dashboard' | 'processing'>('dashboard');
 
-  // ------------------------------------------------------
-  // 1. Handle Document Scanning (Multi-Page Support)
-  // ------------------------------------------------------
   const handleScanDocument = async () => {
     try {
       setIsLoading(true);
       
-      // Trigger Scanner
-      // REMOVED: responseType: 'imageFilePath' (not required/valid for this library)
       const { scannedImages } = await DocumentScanner.scanDocument({
-        maxNumDocuments: 24, // Allow batch scanning
-        letUserAdjustCrop: true // Optional: allows user to adjust corners manually
+        maxNumDocuments: 24, 
+        letUserAdjustCrop: true 
       });
 
       if (scannedImages && scannedImages.length > 0) {
-        setScreen('processing'); // Switch UI to processing view
+        setScreen('processing'); 
         
         const processedUris: string[] = [];
         
-        // Loop through results and move to persistent storage
         for (let i = 0; i < scannedImages.length; i++) {
           const originalUri = scannedImages[i];
           const newFileName = `ticket_${Date.now()}_p${i + 1}.jpg`;
           
-          // Handle "file://" prefix for filesystem operations
           const oldPath = originalUri.startsWith('file://') 
             ? originalUri.substring(7) 
             : originalUri;
             
           const newPath = `${RNFS.DocumentDirectoryPath}/${newFileName}`;
           
-          // Move file from temp cache to Document Directory
           if (await RNFS.exists(oldPath)) {
              await RNFS.moveFile(oldPath, newPath);
              processedUris.push(`file://${newPath}`);
           } else {
-             // Fallback if file access fails (rare)
              processedUris.push(originalUri); 
           }
         }
 
-        // Update state and begin upload
         setScannedImageUris(processedUris);
-        await uploadScannedImages(processedUris);
-
+        setSelectedCategory('Materials');
+        setSelectedSubCategory(null);
+        setShowCategoryModal(true);
       } else {
-        // User cancelled the scan
         setScreen('dashboard');
       }
     } catch (err) {
@@ -102,31 +94,36 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
       setIsLoading(false);
     }
   };
-  // ------------------------------------------------------
-  // 2. Upload Logic (Sends List of Files)
-  // ------------------------------------------------------
+
   const uploadScannedImages = async (uris: string[]) => {
+    if (isLoading) return;
+
     try {
-      // Step A: Fetch Timesheets for Context
+      setIsLoading(true); 
+
       const timesheetRes = await fetch(`${API_BASE_URL}/api/timesheets/by-foreman/${user?.id}`);
       const timesheetData = await timesheetRes.json();
 
+      if (!selectedCategory) {
+        Alert.alert('Category required', 'Please select a category before uploading.');
+        setIsLoading(false); 
+        return;
+      }
+      
       if (!Array.isArray(timesheetData) || timesheetData.length === 0) {
         Alert.alert('No Timesheet Found', 'You have no timesheet records assigned.');
         setScreen('dashboard');
         return;
       }
-
-      // Step B: Select appropriate Timesheet based on Date
-      const scanDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
       
-      // Try exact match first, then fallback to most recent past timesheet
+      const scanDate = new Date().toISOString().split('T')[0];
+      
       let selected = timesheetData.find((ts: any) => ts.date === scanDate);
       
       if (!selected) {
         const sorted = timesheetData
           .slice()
-          .sort((a: any, b: any) => (a.date < b.date ? 1 : -1)); // Descending
+          .sort((a: any, b: any) => (a.date < b.date ? 1 : -1)); 
         selected = sorted.find((ts: any) => ts.date <= scanDate) || sorted[0];
       }
 
@@ -136,7 +133,6 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
         return;
       }
 
-      // Step C: Build FormData with Multiple Files
       const formData = new FormData();
       
       formData.append('foreman_id', String(user?.id));
@@ -144,7 +140,6 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
       formData.append('job_phase_id', String(selected.job_phase_id || ''));
       formData.append('job_code', selected.job_code || '');
 
-      // IMPORTANT: Append each file to the SAME key 'files' (plural)
       uris.forEach((uri, index) => {
         formData.append('files', {
           uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
@@ -153,9 +148,11 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
         } as any);
       });
 
+      formData.append('category', selectedCategory || 'Unspecified');
+      formData.append('sub_category', selectedSubCategory || '');
+
       console.log(`Uploading ${uris.length} pages linked to TS ID: ${selected.id}`);
 
-      // Step D: Send Request
       const response = await fetch(`${API_BASE_URL}/api/ocr/scan`, {
         method: 'POST',
         body: formData,
@@ -164,12 +161,15 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
         }
       });
 
+      setShowCategoryModal(false);
+
       const result = await response.json();
       
       if (response.ok) {
+        // ✅ Restored the Date and Page Count info here
         Alert.alert(
-          '✅Upload Successful', 
-          `Your ticket is now being processed by the AI. It will appear in the 'Review' tab shortly. Uploaded ${uris.length} page(s) to timesheet dated ${selected.date}.`
+          '✅ Upload Successful', 
+          `Your ticket is now being processed by the AI. It will appear in the 'Review' tab shortly.\n\nUploaded ${uris.length} page(s) to timesheet dated ${selected.date}.`
         );
       } else {
         console.log('OCR Scan Failed:', result);
@@ -179,15 +179,12 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
       console.error('Unexpected scan error:', err);
       Alert.alert('Error', 'Network request failed.');
     } finally {
+      setIsLoading(false);
       setScreen('dashboard');
       setScannedImageUris([]);
     }
   };
 
-  // ------------------------------------------------------
-  // 3. Sub-Components
-  // ------------------------------------------------------
-  
   const AppHeader = () => (
     <View style={styles.header}>
       <View style={styles.headerLeft}>
@@ -282,11 +279,9 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
     </View>
   );
 
-  // ------------------------------------------------------
-  // 4. Render Logic
-  // ------------------------------------------------------
+  // --- RENDER LOGIC ---
 
-  // View: Processing / Uploading
+  // 1. Processing Screen
   if (screen === 'processing') {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -302,31 +297,129 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
             />
           )}
           
-          <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 20 }} />
           <Text style={styles.processingSubtitle}>
-            Sending to server for AI Analysis...
+            Please verify category and upload.
           </Text>
+
+          <View style={{ marginTop: 20, width: '100%' }}>
+            <Text style={{ fontWeight: '700', color: '#333', marginBottom: 8 }}>Select Category</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              {['Materials', 'Trucking', 'Dumping'].map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => { setSelectedCategory(cat); if (cat !== 'Materials') setSelectedSubCategory(null); }}
+                  style={{
+                    padding: 10,
+                    borderRadius: 8,
+                    backgroundColor: selectedCategory === cat ? theme.colors.primary : '#eee',
+                    minWidth: 90,
+                    alignItems: 'center'
+                  }}
+                >
+                  <Text style={{ color: selectedCategory === cat ? '#fff' : '#333' }}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {selectedCategory === 'Materials' && (
+              <>
+                <Text style={{ fontWeight: '700', color: '#333', marginTop: 12, marginBottom: 8 }}>Material Type</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  {['Asphalt', 'Concrete', 'Aggregate', 'Topsoil'].map((sub) => (
+                    <TouchableOpacity
+                      key={sub}
+                      onPress={() => setSelectedSubCategory(sub)}
+                      style={{
+                        padding: 8,
+                        borderRadius: 8,
+                        backgroundColor: selectedSubCategory === sub ? '#101010ff' : '#f1f1f1',
+                        minWidth: 80,
+                        alignItems: 'center'
+                      }}
+                    >
+                      <Text style={{ color: selectedSubCategory === sub ? '#fff' : '#333' }}>{sub}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
+            <TouchableOpacity
+              onPress={() => uploadScannedImages(scannedImageUris)}
+              disabled={isLoading}
+              style={{ 
+                marginTop: 18, 
+                backgroundColor: theme.colors.primary, 
+                padding: 12, 
+                borderRadius: 10, 
+                alignItems: 'center',
+                opacity: isLoading ? 0.7 : 1 
+              }}
+            >
+              {isLoading ? (
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                   <ActivityIndicator color="#fff" size="small" />
+                   <Text style={{ color: '#fff', fontWeight: '700' }}>Uploading...</Text>
+                </View>
+              ) : (
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Upload with Category</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
   }
 
-  // View: Dashboard
+  // 2. Dashboard Screen
   return (
     <SafeAreaView style={styles.safeArea}>
+      <Modal visible={showCategoryModal} transparent animationType="fade">
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <View style={{ width: '92%', backgroundColor: '#fff', borderRadius: 12, padding: 16 }}>
+            <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 12 }}>Select Ticket Category</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+              {['Materials', 'Trucking', 'Dumping'].map((cat) => (
+                <Pressable key={cat} onPress={() => { setSelectedCategory(cat); if (cat !== 'Materials') setSelectedSubCategory(null); }} style={{ padding: 8, backgroundColor: selectedCategory === cat ? theme.colors.primary : '#eee', borderRadius: 8 }}>
+                  <Text style={{ color: selectedCategory === cat ? '#fff' : '#000' }}>{cat}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {selectedCategory === 'Materials' && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ marginBottom: 8 }}>Material Type</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  {['Asphalt', 'Concrete', 'Aggregate', 'Topsoil'].map((s) => (
+                    <Pressable key={s} onPress={() => setSelectedSubCategory(s)} style={{ padding: 8, backgroundColor: selectedSubCategory === s ? '#16A34A' : '#f0f0f0', borderRadius: 8 }}>
+                      <Text style={{ color: selectedSubCategory === s ? '#fff' : '#000' }}>{s}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+              <Pressable onPress={() => { setShowCategoryModal(false); setScreen('dashboard'); }} style={{ padding: 8 }}>
+                <Text>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={() => { setShowCategoryModal(false); setScreen('processing'); }} style={{ padding: 8 }}>
+                <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>Continue</Text>
+              </Pressable>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+      
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <AppHeader />
           
           <View style={styles.mainContent}>
             <View style={styles.welcomeHeader}>
-              <Text style={styles.welcomeTitle}>
-                Welcome, {[
-                  user?.first_name,
-                  user?.middle_name,
-                  user?.last_name,
-                ].filter(Boolean).join(' ') || 'Foreman'}
-              </Text>
+<Text style={styles.welcomeTitle}>
+  Welcome, {user?.first_name
+    ? user.first_name.charAt(0).toUpperCase() + user.first_name.slice(1).toLowerCase()
+    : "Foreman"}
+</Text>
               <Text style={styles.welcomeSubtitle}>What would you like to do today?</Text>
             </View>
             
@@ -355,9 +448,10 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
         
         <BottomNavBar />
         
+        {/* Global Loading Overlay */}
         {isLoading && (
             <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
+              <ActivityIndicator size="large" color={theme.colors.primary} />
             </View>
         )}
       </View>
@@ -365,55 +459,42 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
   );
 };
 
-// --- STYLES ---
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: theme.colors.backgroundLight },
   container: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingBottom: 80 },
-  
-  // Header
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24 },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
   headerProfileImage: { width: 40, height: 40, borderRadius: theme.borderRadius.full, backgroundColor: '#ddd' },
   headerRight: { width: 40, alignItems: 'flex-end' },
   headerButton: { padding: 8, borderRadius: theme.borderRadius.full },
-  
-  // Main Content
   mainContent: { paddingHorizontal: 24 },
   welcomeHeader: { marginBottom: 32 },
   welcomeTitle: { fontFamily: theme.fontFamily.display, fontSize: 30, fontWeight: 'bold', color: theme.colors.contentLight, marginBottom: 4 },
   welcomeSubtitle: { fontFamily: theme.fontFamily.display, color: theme.colors.subtleLight, fontSize: 16 },
   actionsContainer: { gap: 20 },
-  
-  // Card
   card: { backgroundColor: theme.colors.cardLight, borderRadius: theme.borderRadius.xl, overflow: 'hidden', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
   cardContent: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 20 },
   cardImage: { width: 80, height: 80, borderRadius: theme.borderRadius.lg, backgroundColor: '#eee' },
   cardTextContainer: { flex: 1 },
   cardTitle: { fontFamily: theme.fontFamily.display, fontSize: 16, fontWeight: 'bold', color: theme.colors.contentLight },
   cardSubtitle: { fontFamily: theme.fontFamily.display, fontSize: 14, color: theme.colors.subtleLight, marginTop: 4 },
-  
-  // Footer / Nav
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(248, 247, 242, 0.95)', borderTopWidth: 1, borderTopColor: 'rgba(229, 229, 229, 0.4)' },
   navBar: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 8, paddingVertical: 8 },
   navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: 4, borderRadius: theme.borderRadius.lg },
   navIconContainer: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   navLabel: { fontFamily: theme.fontFamily.display, fontSize: 12, fontWeight: '500', color: theme.colors.brandStone },
   navLabelActive: { fontFamily: theme.fontFamily.display, fontSize: 12, fontWeight: '700', color: theme.colors.primary },
-
-  // Processing Screen
   processingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   processingTitle: { fontFamily: theme.fontFamily.display, fontSize: 22, fontWeight: 'bold', color: theme.colors.contentLight, marginBottom: 20, textAlign: 'center' },
   processingSubtitle: { fontFamily: theme.fontFamily.display, fontSize: 14, color: theme.colors.subtleLight, marginTop: 10 },
   previewImage: { width: 250, height: 300, resizeMode: 'contain', borderRadius: theme.borderRadius.lg, marginBottom: 20, borderWidth: 1, borderColor: '#ddd' },
-  
-  // Loading Overlay (for non-processing screen loading)
   loadingOverlay: {
-     ...StyleSheet.absoluteFillObject,
-     backgroundColor: 'rgba(255,255,255,0.5)',
-     justifyContent: 'center',
-     alignItems: 'center',
-     zIndex: 100
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(255,255,255,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 100
   }
 });
 

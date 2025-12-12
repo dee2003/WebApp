@@ -65,7 +65,9 @@ class UserOut(BaseModel):
     id: int
     username: str
     email: EmailStr
-
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -705,11 +707,36 @@ class PhaseCodeSchema(BaseModel):
 class TicketSummary(BaseModel):
     id: int
     image_path: str
+    ticket_number: Optional[str] = None
+    ticket_date: Optional[str] = None
+    haul_vendor: Optional[str] = None
+    truck_number: Optional[str] = None
+    material: Optional[str] = None
+    job_number: Optional[str] = None
+    phase_code_: Optional[str] = None
+    zone: Optional[str] = None
+    hours: Optional[float] = None
+    # JSON Data
+    table_data: Optional[Dict[str, Any] | List[Any]] = None
     phase_code_id: Optional[int]
     phase_code: Optional[PhaseCodeSchema] = None
-
     class Config:
         from_attributes = True
+class TicketUpdate(BaseModel):
+    phase_code_id: Optional[int] = None
+    # Editable Fields
+    ticket_number: Optional[str] = None
+    ticket_date: Optional[str] = None
+    haul_vendor: Optional[str] = None
+    truck_number: Optional[str] = None
+    material: Optional[str] = None
+    job_number: Optional[str] = None
+    phase_code_: Optional[str] = None
+    zone: Optional[str] = None
+    hours: Optional[float] = None
+    # Editable JSON
+    table_data: Optional[Dict[str, Any] | List[Any]] = None
+    model_config = ConfigDict(from_attributes=True)
 
 
 
@@ -781,6 +808,9 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     role: str
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
     user: UserOut   # 🔥 Add this
 
 class AuditLogResponse(BaseModel):

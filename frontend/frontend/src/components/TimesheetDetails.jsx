@@ -153,27 +153,29 @@ const TimesheetDetails = () => {
 
   if (!ts) return <p>Loading...</p>;
 
-  const data = ts.data || {};
+const data = ts.data || {};
 
-  const {
-    job = {},
-    supervisor = null,
-    contract_no,
-    project_engineer,
-    time_of_day,
-    location,
-    work_description,
-    employees = [],
-    equipment = [],
-    vendors = [],
-    materials = [],
-    dumping_sites = [],
-    vendor_categories = [],
-    material_categories = [],
-    dumping_categories = [],
-    selected_vendor_materials: selectedvendormaterials = {},
-    selected_material_items = {},
-  } = data;
+const workPerformed = ts.workPerformed || data.workPerformed || "";
+
+const {
+  job = {},
+  supervisor = null,
+  contract_no,
+  project_engineer,
+  time_of_day,
+  location,
+  employees = [],
+  equipment = [],
+  vendors = [],
+  materials = [],
+  dumping_sites = [],
+  vendor_categories = [],
+  material_categories = [],
+  dumping_categories = [],
+  selected_vendor_materials: selectedvendormaterials = {},
+  selected_material_items = {},
+} = data;
+
 
   const jobCode = job.job_code || "N/A";
   const jobPhaseCodes = job.phase_codes?.join(", ") || "N/A";
@@ -259,7 +261,11 @@ const TimesheetDetails = () => {
             </thead>
             <tbody>
               <tr>
-                <td>{new Date(ts.date).toLocaleDateString()}</td>
+<td>{new Date(ts.date).toLocaleDateString("en-US", { 
+  month: "2-digit", 
+  day: "2-digit", 
+  year: "numeric" 
+})}</td>
                 <td>{ts.foreman_id || "N/A"}</td>
                 <td>{jobCode}</td>
                 <td>{data.job_name || "N/A"}</td>
@@ -326,7 +332,9 @@ const TimesheetDetails = () => {
             </thead>
             <tbody>
               <tr>
-                <td>{work_description || "N/A"}</td>
+<td>
+  {typeof workPerformed === "string" ? workPerformed : "N/A"}
+</td>
                 <td>{time_of_day || "N/A"}</td>
               </tr>
             </tbody>

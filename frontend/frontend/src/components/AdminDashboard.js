@@ -5,8 +5,9 @@ import "./CrewMapping.css";
 import {
   FaUser, FaHardHat, FaTasks, FaBox, FaBriefcase,
   FaUsers, FaTrash, FaBars, FaTimes, FaTachometerAlt,
-  FaChevronLeft, FaChevronRight
+  FaChevronLeft, FaChevronRight, FaTicketAlt
 } from 'react-icons/fa';
+import Tickets from './Tickets'; // <--- ADD THIS
 import TimesheetCounts from './TimesheetCounts';
 import './Equipment.css';
 import AuditLogViewer from './AuditLogViewer'; // <-- ADD THIS LINE
@@ -97,6 +98,7 @@ const ConfirmationModal = ({ message, onConfirm, onCancel }) => (
 const getIconForSection = (sec) => {
     switch(sec) {
         case 'dashboard': return <FaTachometerAlt />; // <= ADD THIS CASE
+        case "tickets": return <FaTicketAlt />;
         case "users": return <FaUser />;
         case "employees": return <FaUser />;
         case "equipment": return <FaHardHat />;
@@ -575,7 +577,7 @@ const JobPhasesViewModal = ({ job, onClose }) => (
 );
 // Mapping from section key to page number
 const SECTIONS = [
-    "users","employees","equipment","job-phases",
+    "users","employees","tickets","equipment","job-phases",
     "materials_trucking","vendors","dumping_sites","crewMapping"
 ];
 const ITEMS_PER_PAGE = 10; // or desired default
@@ -1902,6 +1904,8 @@ return (
         switch (activeSection) {
             case 'dashboard':
             return <TimesheetCounts />;
+            case "tickets":
+                return <Tickets />;
             case "users": 
                 return makeTableWithPagination(
                     "user", 
@@ -2276,6 +2280,7 @@ const addMaterialRow = () => {
                 <ul className="sidebar-nav">
                     {[
                         'dashboard',
+                        "tickets",
                         "users",
                         "employees",
                         "equipment",

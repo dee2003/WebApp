@@ -9,6 +9,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from .database import Base
+from sqlalchemy.dialects.postgresql import JSON
+# or
+from sqlalchemy.dialects.postgresql import JSONB
 
 # ============================================================================== #
 # 1. ENUMS (FOR STATUS AND ROLE FLAGS)
@@ -426,10 +429,11 @@ class Ticket(Base):
     job_phase_id = Column(Integer, ForeignKey("job_phases.id"), nullable=False, index=True)
     timesheet_id = Column(Integer, ForeignKey("timesheets.id"))  # 👈 Add this
     phase_code_id = Column(Integer, ForeignKey("phase_codes.id"), nullable=True)  # ✅ NEW COLUMN
-
+    category = Column(String, nullable=True)
+    sub_category = Column(String, nullable=True)
     image_path = Column(String, nullable=False)
     raw_text_content = Column(String, nullable=True)
-
+    table_data = Column(JSON, nullable=True)
     # --- Structured Data Fields (Unchanged) ---
     ticket_number = Column(String, index=True, nullable=True)
     ticket_date = Column(String, nullable=True) # Storing as string for simplicity
@@ -458,6 +462,7 @@ class Ticket(Base):
             "job_code": self.job_phase.job_code if self.job_phase else None,
             "phase_name": self.job_phase.phase_name if self.job_phase else None
         }
+
 class TimesheetFile(Base):
     __tablename__ = "timesheet_files"
     id = Column(Integer, primary_key=True, index=True)

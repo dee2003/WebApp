@@ -419,9 +419,14 @@ const handleResendClick = async (timesheet) => {
                       className="timesheet-row"
                       onClick={(e) => handleRowClick(ts, e)}
                     >
-                      <span className="col date-col">
-                        {new Date(ts.date).toLocaleDateString()}
-                      </span>
+                   <span className="col date-col">
+  {new Date(ts.date).toLocaleDateString("en-US", { 
+    month: "2-digit", 
+    day: "2-digit", 
+    year: "numeric" 
+  })}
+</span>
+
                       <span className="col foreman-col">
                         {ts.foreman_name || "N/A"}
                       </span>
