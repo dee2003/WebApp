@@ -436,8 +436,7 @@ def extract_structured_data(raw_text: str) -> dict:
 
     results = {
         "ticket_number": None, "ticket_date": None, "haul_vendor": None,
-        "truck_number": None, "material": None, "job_number": None,
-        "phase_code_": None, "zone": None, "hours": None,
+        "truck_number": None, "material": None, "job_number": None, "zone": None, "hours": None,
     }
 
     # --- SET 1: Simple Patterns (Fast, Same-Line Strict) ---
@@ -448,7 +447,6 @@ def extract_structured_data(raw_text: str) -> dict:
         "truck_number":  r'(?i)(?:Truck Number|Truck No|Truck #|Truck)\s*[:\-]?\s*([A-Za-z0-9\-]+)',
         "material":      r'(?i)(?:Material\s+hauled)\s*[:\-]?\s*([A-Za-z\d\-][A-Za-z\s\d\-]*)',
         "job_number":    r'(?i)(?:Job Number|Job No|Job #)\s*[:\-]?\s*([A-Za-z0-9\-]+)',
-        "phase_code_":   r'(?i)(?:Phase Code)\s*[:\-]?\s*([A-Za-z0-9\-]+)',
         "zone":          r'(?i)(?:Zone)\s*[:\-]?\s*([A-Za-z0-9\-]+)',
         "hours":         r'(?i)(?:Hours)\s*[:\-]?\s*([\d\.]+(?:\s?hrs)?)'
     }
@@ -467,7 +465,6 @@ def extract_structured_data(raw_text: str) -> dict:
         "truck_number":  (r'(?i)(?:Truck Number|Truck No|Truck #|Truck)', r'([A-Za-z0-9\-]+)'),
         "material":      (r'(?i)(?:Material\s+hauled)', r'([A-Za-z\d\-][A-Za-z\s\d\-]*)'),
         "job_number":    (r'(?i)(?:Job Number|Job No|Job #)', r'([A-Za-z0-9\-]+)'),
-        "phase_code_":   (r'(?i)(?:Phase Code)', r'([A-Za-z0-9\-]+)'),
         "zone":          (r'(?i)(?:Zone)', r'([A-Za-z0-9\-]+)'),
         "hours":         (r'(?i)(?:Hours)', r'([\d\.]+(?:\s?hrs)?)')
     }
@@ -770,7 +767,6 @@ def process_scan_in_background(
             truck_number=structured_data.get("truck_number"),
             material=structured_data.get("material"),
             job_number=structured_data.get("job_number"),
-            phase_code_=structured_data.get("phase_code_"),
             zone=structured_data.get("zone"),
             hours=structured_data.get("hours")
         )
@@ -912,8 +908,6 @@ def list_images_by_date(foreman_id: int, db: Session = Depends(database.get_db))
             "material": t.material,
             "job_number": t.job_number,
             
-            # --- ⭐ 3. MATCH YOUR NEW MODEL COLUMN NAME ---
-            "phase_code_": t.phase_code_, # Use the underscore
             
             "zone": t.zone,
             "hours": t.hours
@@ -949,7 +943,6 @@ class TicketUpdatePayload(BaseModel):
     truck_number: Optional[str] = None
     material: Optional[str] = None
     job_number: Optional[str] = None
-    phase_code_: Optional[str] = None
     zone: Optional[str] = None
     hours: Optional[float] = None
     
@@ -981,7 +974,6 @@ def update_ticket_text(
     ticket.truck_number = payload.truck_number
     ticket.material = payload.material
     ticket.job_number = payload.job_number
-    ticket.phase_code_ = payload.phase_code_
     ticket.zone = payload.zone
     ticket.hours = payload.hours
 
@@ -1180,7 +1172,6 @@ def get_all_images_grouped(db: Session = Depends(get_db)):
                     "truck_number": t.truck_number,
                     "material": t.material,
                     "job_number": t.job_number,
-                    "phase_code_": t.phase_code_,
                     "zone": t.zone,
                     "hours": t.hours,
                     "raw_text_content": t.raw_text_content

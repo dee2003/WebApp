@@ -54,7 +54,6 @@ type Ticket = {
     truck_number?: string;
     material?: string;
     job_number?: string;
-    phase_code_?: string;
     zone?: string;
     hours?: number;
     raw_text_content?: string;
@@ -117,7 +116,6 @@ const PETicketList = () => {
             hours: item.hours,
             zone: item.zone || '',
             job_number: item.job_number || '',
-            phase_code_: item.phase_code_ || '',
             table_data: item.table_data ? JSON.parse(JSON.stringify(item.table_data)) : [] // Deep copy
         });
         setEditModalVisible(true);
@@ -330,10 +328,7 @@ const PETicketList = () => {
                                             <Text style={styles.label}>Job Number</Text>
                                             <TextInput style={styles.input} value={formData.job_number} onChangeText={(t) => handleFieldChange('job_number', t)} />
                                         </View>
-                                        <View style={styles.inputGroup}>
-                                            <Text style={styles.label}>Phase Code</Text>
-                                            <TextInput style={styles.input} value={formData.phase_code_} onChangeText={(t) => handleFieldChange('phase_code_', t)} />
-                                        </View>
+                                        
                                     </View>
 
                                     <View style={styles.inputGroup}>

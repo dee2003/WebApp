@@ -33,7 +33,7 @@ const THUMBNAIL_HEIGHT = 130;
 const THUMBNAIL_WIDTH = 100;
 
 // ✅ Replace with your backend URL
-const API_BASE_URL = "https://9e0837b343bf.ngrok-free.app";
+const API_BASE_URL = "https://08c3cd858a93.ngrok-free.app";
 
 // --- TYPE DEFINITIONS ---
 interface TicketImage {
@@ -50,7 +50,6 @@ interface TicketImage {
   truck_number: string | null;
   material: string | null;
   job_number: string | null;
-  phase_code_: string | null;
   zone: string | null;
   hours: number | null;
 }
@@ -135,7 +134,6 @@ const getMissingFields = (data: any) => {
     { key: "truck_number", label: "Truck #" },
     { key: "job_number", label: "Job #" },
     { key: "material", label: "Material" },
-    { key: "phase_code_", label: "Phase Code" },
     { key: "zone", label: "Zone" },
     { key: "hours", label: "Hours" },
   ];
@@ -386,7 +384,6 @@ const ReviewTickets: React.FC = () => {
     truck_number: "",
     material: "",
     job_number: "",
-    phase_code_: "",
     zone: "",
     hours: "",
     table_data: [] as string[][],
@@ -441,7 +438,6 @@ const ReviewTickets: React.FC = () => {
         truck_number: selectedTicket.truck_number || "",
         material: selectedTicket.material || "",
         job_number: selectedTicket.job_number || "",
-        phase_code_: selectedTicket.phase_code_ || "",
         zone: selectedTicket.zone || "",
         hours: selectedTicket.hours ? String(selectedTicket.hours) : "",
         table_data: selectedTicket.table_data || [],
@@ -583,7 +579,7 @@ const ReviewTickets: React.FC = () => {
         return [
           escape(t.ticket_number), escape(t.ticket_date), escape(t.haul_vendor),
           escape(t.truck_number), escape(t.material), escape(t.category),
-          escape(t.sub_category), escape(t.job_number), escape(t.phase_code_),
+          escape(t.sub_category), escape(t.job_number),
           escape(t.zone), escape(t.hours), escape(tableJson),
           escape(fullPath), escape(t.submitted ? "Submitted" : "Pending")
         ].join(",");
@@ -769,7 +765,6 @@ const ReviewTickets: React.FC = () => {
           truck_number: dataToSave.truck_number,
           material: dataToSave.material,
           job_number: dataToSave.job_number,
-          phase_code_: dataToSave.phase_code_,
           zone: dataToSave.zone,
           hours: isNaN(hoursFloat) ? null : hoursFloat,
           table_data: dataToSave.table_data,
@@ -1149,7 +1144,6 @@ const ReviewTickets: React.FC = () => {
                 <InfoRow label="Truck #" value={selectedTicket?.truck_number} />
                 <InfoRow label="Material" value={selectedTicket?.material} />
                 <InfoRow label="Job #" value={selectedTicket?.job_number} />
-                <InfoRow label="Phase Code" value={selectedTicket?.phase_code_} />
                 <InfoRow label="Zone" value={selectedTicket?.zone} />
                 <InfoRow label="Hours" value={selectedTicket?.hours} />
 
@@ -1235,14 +1229,9 @@ const ReviewTickets: React.FC = () => {
               </View>
               <FormField label="Material" value={formData.material} onChange={(t: string) => setFormData({ ...formData, material: t })} required />
               <FormField label="Job Number" value={formData.job_number} onChange={(t: string) => setFormData({ ...formData, job_number: t })} required />
-              <View style={styles.rowInputs}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <FormField label="Phase Code" value={formData.phase_code_} onChange={(t: string) => setFormData({ ...formData, phase_code_: t })} required />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <FormField label="Zone" value={formData.zone} onChange={(t: string) => setFormData({ ...formData, zone: t })} required />
-                </View>
-              </View>
+        
+              <FormField label="Zone" value={formData.zone} onChange={(t: string) => setFormData({ ...formData, zone: t })} required />
+              
               <View style={styles.divider} />
               <Text style={styles.formSectionTitle}>Detailed Table (Editable)</Text>
               <Text style={styles.formHelperText}>

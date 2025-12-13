@@ -35,8 +35,7 @@ interface Ticket {
     haul_vendor?: string;
     truck_number?: string;
     material?: string;
-    job_number?: string;
-    phase_code_?: string; 
+    job_number?: string; 
     zone?: string;
     hours?: number;
     

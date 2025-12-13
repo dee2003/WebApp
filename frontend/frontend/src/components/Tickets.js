@@ -111,7 +111,6 @@ const TicketDetailView = ({ ticket, onBack }) => {
                             <tr><th>Vendor</th><td>{ticket.haul_vendor || "-"}</td></tr>
                             <tr><th>Truck Number</th><td>{ticket.truck_number || "-"}</td></tr>
                             <tr><th>Job Number</th><td>{ticket.job_number || "-"}</td></tr>
-                            <tr><th>Phase Code</th><td>{ticket.phase_code_ || "-"}</td></tr>
                             <tr><th>Material</th><td>{ticket.material || "-"}</td></tr>
                             <tr><th>Zone</th><td>{ticket.zone || "-"}</td></tr>
                             <tr><th>Hours / Qty</th><td>{ticket.hours || "-"}</td></tr>
@@ -284,7 +283,6 @@ const Tickets = () => {
                 escapeCsvCell(t.material),
                 escapeCsvCell(t.job_number),
                 escapeCsvCell(t.truck_number),
-                escapeCsvCell(t.phase_code_),
                 escapeCsvCell(t.hours),
                 escapeCsvCell(JSON.stringify(t.table_data || [])), 
                 escapeCsvCell(`${API_BASE_URL}${t.image_url || ''}`)
@@ -333,7 +331,6 @@ const Tickets = () => {
             t.material || "-",
             t.job_number || "-",
             t.truck_number || "-",
-            t.phase_code_ || "-",
             t.hours || "-"
         ]);
 

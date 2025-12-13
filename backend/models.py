@@ -438,7 +438,7 @@ class Ticket(Base):
     truck_number = Column(String, nullable=True)
     material = Column(String, nullable=True)
     job_number = Column(String, nullable=True)
-    phase_code_ = Column(String, nullable=True)
+    
     zone = Column(String, nullable=True)
     hours = Column(Float, nullable=True)
     created_at = Column(DateTime, default=func.now())

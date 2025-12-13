@@ -686,7 +686,6 @@ class Ticket(BaseModel):
     truck_number: Optional[str] = None
     material: Optional[str] = None
     job_number: Optional[str] = None
-    phase_code_: Optional[str] = None # The string text from OCR
     zone: Optional[str] = None
     hours: Optional[float] = None
     
@@ -722,7 +721,6 @@ class TicketSummary(BaseModel):
     truck_number: Optional[str] = None
     material: Optional[str] = None
     job_number: Optional[str] = None
-    phase_code_: Optional[str] = None 
     zone: Optional[str] = None
     hours: Optional[float] = None
     
@@ -745,7 +743,6 @@ class TicketUpdate(BaseModel):
     truck_number: Optional[str] = None
     material: Optional[str] = None
     job_number: Optional[str] = None
-    phase_code_: Optional[str] = None
     zone: Optional[str] = None
     hours: Optional[float] = None
     
