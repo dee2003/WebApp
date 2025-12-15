@@ -214,12 +214,12 @@ const loadDashboard = useCallback(async () => {
           renderSectionHeader={({ section }) => (
             <View style={styles.dateGroupContainer}>
               <Text style={styles.dateHeader}>
-{new Date(section.title + 'T00:00:00').toLocaleDateString('en-US', { 
-  month: '2-digit', 
-  day: '2-digit', 
-  year: 'numeric' 
-})}
-
+                {new Date(section.title + 'T00:00:00').toLocaleDateString('en-US', {
+                  weekday: 'short',
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                })}
               </Text>
             </View>
           )}

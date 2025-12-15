@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, SafeAreaView, Alert, Platform } from 'react-native';
 import DatePicker from 'react-native-date-picker';
 import { Dropdown } from 'react-native-element-dropdown';
@@ -11,6 +11,7 @@ import NetInfo from '@react-native-community/netinfo';
 import WeatherLocationCard from '../WeatherLocationCard';
 import Feather from "react-native-vector-icons/Feather";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import { useFocusEffect } from '@react-navigation/native';
 
 // ---------------- THEME ----------------
 const THEME = {
@@ -27,12 +28,14 @@ const THEME = {
 };
 
 // ---------------- HELPERS / TYPES ----------------
-type ComplexHourState = { [key: string]: { [key: string]: { REG?: string; S_B?: string } } };
+type ComplexHourState = { [key: string]: { [key: string]: { REG?: string; SB?: string } } };
 type EmployeeHourState = { [key: string]: { [key: string]: { [classCode: string]: string } } };
 type SimpleHourState = { [key: string]: { [key: string]: string } };
 
 type Props = { route: any; navigation: any };
-
+type PhaseCode = string;
+type ClassCode = string;
+type HourType = 'REG' | 'SB';
 
 // --- MOVE THESE TO TOP OF TimesheetEditScreen ---
 
@@ -99,6 +102,50 @@ const [truckingList, setTruckingList] = useState<any[]>([]);
 const [showDumpingPicker, setShowDumpingPicker] = useState(false);
 const [dumpingSearch, setDumpingSearch] = useState("");
 const [dumpingList, setDumpingList] = useState<any[]>([]);
+// ... all your existing state declarations (selectedPhases, phaseModalVisible, etc.)
+
+const savePhasesImmediately = useCallback(
+  async (phases: string[]) => {
+    console.log('[PHASE AUTOSAVE] called with phases:', phases);
+
+    try {
+      const key = `@autoSave_timesheet_${timesheetId}`;
+      console.log('[PHASE AUTOSAVE] storage key =', key);
+
+      const draftRaw = await AsyncStorage.getItem(key);
+      console.log('[PHASE AUTOSAVE] existing draftRaw =', draftRaw);
+
+      let currentDraft: any;
+
+      if (draftRaw) {
+        currentDraft = JSON.parse(draftRaw);
+      } else {
+        currentDraft = { timesheetId, data: {}, status: 'Pending' };
+      }
+
+      // ✅ ENSURE data is an object, never an array
+      if (Array.isArray(currentDraft.data) || typeof currentDraft.data !== 'object' || currentDraft.data === null) {
+        console.log('[PHASE AUTOSAVE] data was not object, resetting to {}');
+        currentDraft.data = {};
+      }
+
+      currentDraft.data.selectedPhases = phases;  // ✅ store here
+      currentDraft.savedAt = Date.now();
+
+      console.log('[PHASE AUTOSAVE] writing draft =', JSON.stringify(currentDraft));
+
+      await AsyncStorage.setItem(key, JSON.stringify(currentDraft));
+
+      console.log('[PHASE AUTOSAVE] write success');
+    } catch (e) {
+      console.warn('[PHASE AUTOSAVE] failed:', e);
+    }
+  },
+  [timesheetId],
+);
+
+
+// ... existing useEffect hooks continue here
 
 useEffect(() => {
   let unsubscribe: () => void;
@@ -167,28 +214,36 @@ const calculateTotalEmployeeHours = (
     return totals;
   };
 
-  const calculateTotalComplexHours = (state: ComplexHourState, entityId: string) => {
-    const obj = state[entityId];
-    if (!obj) return 0;
-    return Object.values(obj).reduce((acc: number, ph) => acc + toNumber(ph.REG) + toNumber(ph.S_B), 0);
-  };
+// Fix calculateTotalComplexHours (Equipment)
+const calculateTotalComplexHours = (state: ComplexHourState, entityId: string): number => {
+  const obj = state[entityId];
+  if (!obj) return 0;
+  let total = 0;
+  selectedPhases.forEach((phase: PhaseCode) => {
+    total += toNumber(obj[phase]?.REG);
+    total += toNumber(obj[phase]?.SB);
+  });
+  return total;
+};
 
   const calculateComplexPhaseTotals = (state: ComplexHourState, phaseCodes: string[] = []) => {
     const totals: { [k: string]: number } = {};
     phaseCodes.forEach(p => { totals[p] = 0; });
     Object.values(state).forEach(entity => {
       phaseCodes.forEach(p => {
-        totals[p] += toNumber(entity[p]?.REG) + toNumber(entity[p]?.S_B);
+        totals[p] += toNumber(entity[p]?.REG) + toNumber(entity[p]?.SB);
       });
     });
     return totals;
   };
 
-const calculateSimplePhaseTotals = (state: SimpleHourState, phaseCodes: string[] = []) => {
-  const totals: { [k: string]: number } = {};
-  phaseCodes.forEach(p => { totals[p] = 0; });
-  Object.values(state).forEach(entity => {
-    phaseCodes.forEach(p => { totals[p] += toNumber(entity[p]); });
+const calculateSimplePhaseTotals = (state: SimpleHourState, phaseCodes: PhaseCode[]): Record<PhaseCode, number> => {
+  const totals: Record<PhaseCode, number> = {};
+  phaseCodes.forEach((p: PhaseCode) => totals[p] = 0);
+  Object.values(state).forEach((entity: Record<PhaseCode, string>) => {
+    phaseCodes.forEach((p: PhaseCode) => {
+      totals[p] += toNumber(entity[p]);
+    });
   });
   return totals;
 };
@@ -219,13 +274,21 @@ const calculateTotalSimple = (state: SimpleHourState, entityId: string) => {
 };
 
 const restoreProcessedDraft = (draft: any, server: Timesheet | null) => {
+  
   if (!draft?.data) return;
 
   const d = draft.data;
+  if (d.ticketsLoads) {
+    console.log('RESTORING ticketsLoads FROM DRAFT', d.ticketsLoads);
+    setTicketsLoads(Object.keys(d.ticketsLoads).reduce((acc: any, k: string) => {
+      acc[k] = String(d.ticketsLoads[k] ?? '');
+      return acc;
+    }, {}));
+  }
   if (d.notes) setNotes(d.notes)
   // 2) restore selected phases (server & draft may differ)
-  const phaseCodes = d.job?.phase_codes || d.selectedPhases || [];
-  setSelectedPhases(Array.isArray(phaseCodes) ? phaseCodes : []);
+ const phaseCodes = d.job?.phasecodes || d.selectedPhases || [];
+setSelectedPhases(Array.isArray(phaseCodes) ? phaseCodes : phaseCodes.split(','));
 
   // 3) restore total quantities mapping -> UI expects phaseEntryQuantities (strings)
   if (d.total_quantities) {
@@ -253,7 +316,7 @@ const restoreProcessedDraft = (draft: any, server: Timesheet | null) => {
     setEmployeeHours(eHours);
   }
 
-  // 5) restore equipment -> equipmentHours (REG, S_B strings) and start/stop
+  // 5) restore equipment -> equipmentHours (REG, SB strings) and start/stop
   if (Array.isArray(d.equipment)) {
     const eqHours: ComplexHourState = {};
     const selectedEquipmentArr: any[] = [];
@@ -265,7 +328,7 @@ const restoreProcessedDraft = (draft: any, server: Timesheet | null) => {
       const hp = eq.hours_per_phase || {};
       Object.keys(hp).forEach(phase => {
         const v = hp[phase] || {};
-        eqHours[eq.id][phase] = { REG: String(v.REG ?? ''), S_B: String(v.S_B ?? '') };
+        eqHours[eq.id][phase] = { REG: String(v.REG ?? ''), SB: String(v.SB ?? '') };
       });
       start[eq.id] = String(eq.start_hours ?? '');
     stop[eq.id] = String(eq.stop_hours ?? '');
@@ -322,48 +385,65 @@ if (Array.isArray(d.materials_trucking)) {
 }
 
 
+// TimesheetEditScreen.tsx
+
+// ... around line 370 in restoreProcessedDraft
+
 if (Array.isArray(d.vendors)) {
   const vHours: SimpleHourState = {};
   const vTickets: Record<string, string> = {};
   const vUnits: Record<string, string | null> = {};
   const rebuiltWorkPerformed: any[] = [];
 
-  d.vendors.forEach((v: any, index: number) => {
+d.vendors.forEach((v: any, index: number) => {
+    // 💡 Retrieve IDs: v.id will now (after FIX 1) contain the uniqueRowId
     const vendorId = Number(v.vendor_id ?? v.id);
     const materialId = Number(v.material_id ?? v.id);
+    
+    // ✅ Use the stored ID (v.id) or reconstruct the unique key
+    const uniqueRowId = v.id || `${vendorId}_${materialId}`; 
 
     // Hours from draft vendors
     if (v.hours_per_phase) {
-      vHours[vendorId] = {};
+      // ✅ Use uniqueRowId to key the hours state
+      vHours[uniqueRowId] = {}; 
       Object.keys(v.hours_per_phase).forEach(phase => {
-        vHours[vendorId][phase] = String(v.hours_per_phase[phase] ?? '');
+        vHours[uniqueRowId][phase] = String(v.hours_per_phase[phase] ?? '');
       });
     }
-
-    // ✅ FIX: Tickets from workPerformed (newer data), fallback to draft
-    const ticketsFromWorkPerformed = rebuiltWorkPerformed[index]?.ticketsloads || String(v.tickets_loads ?? '0');
-    vTickets[vendorId] = ticketsFromWorkPerformed;
+   // Restore ticketsLoads state using the uniqueRowId
+    const draftTicketValue = v.tickets_loads?.[uniqueRowId] ?? v.tickets_loads;
+    if (draftTicketValue != null) {
+      setTicketsLoads(prev => ({
+        ...prev,
+        [uniqueRowId]: String(draftTicketValue),
+      }));
+    }
 
     vUnits[vendorId] = v.unit ?? null;
 
-    rebuiltWorkPerformed.push({
-id: vendorId, 
+   rebuiltWorkPerformed.push({
+      // ✅ Row ID and key must be the unique combination
+      id: uniqueRowId, 
+      __key: uniqueRowId, 
       vendor_id: vendorId,
-      vendorname: v.vendor_name ?? '',
+      // ✅ Correct property names for display
+      vendor_name: v.vendor_name ?? v.vendorname ?? '', 
       vendor_category: v.vendor_category ?? null,
       material_id: materialId,
-      materialname: v.material_name ?? '',
+      material_name: v.material_name ?? v.materialname ?? '', 
       unit: v.unit ?? null,
       detail: v.detail ?? '',
-      hoursperphase: v.hours_per_phase ?? {},
-      ticketsloads: String(v.tickets_loads ?? '0')  // Preserve string format
+      hours_per_phase: v.hours_per_phase ?? {},
+      tickets_loads: String(draftTicketValue ?? v.tickets_loads ?? '0') 
     });
   });
 
   // ✅ ORDER MATTERS: Set workPerformed FIRST
   setWorkPerformed(rebuiltWorkPerformed);
+  // 💡 FIX 5: Set vendorHours keyed by uniqueRowId
   setVendorHours(vHours);
-  setTicketsLoads(vTickets);  // Now gets correct values from workPerformed
+  // setTicketsLoads(vTickets);  // Now gets correct values from workPerformed
   setVendorUnits(vUnits);
 
   console.log('🎫 FINAL TICKETS:', vTickets);
@@ -506,11 +586,6 @@ console.log('🔥 RAW ts.data.vendors:', ts.data?.vendors?.map((v: any) => ({
   hours: v.hours_per_phase,
   tickets: v.tickets_loads
 })));
-
-        // const mt: any[] = [];
-        // if (ts.data?.selected_material_items) {
-        //   Object.values(ts.data.selected_material_items).forEach((m: any) => mt.push({ id: m.id, name: m.name, materials: m.selectedMaterials || [] }));
-        // }
         const mt: any[] = [];
 if (ts.data?.selected_material_items) {
   Object.values(ts.data.selected_material_items).forEach(m => 
@@ -565,7 +640,7 @@ const populateEquipmentComplex = (safeEntities : any[] = []) => {
     if (e.hours_per_phase) {
       for (const phase in e.hours_per_phase) {
         const v = e.hours_per_phase[phase];
-        s[e.id][phase] = { REG: String(v.REG ?? 0), S_B: String(v.S_B ?? 0) };
+        s[e.id][phase] = { REG: String(v.REG ?? 0), SB: String(v.SB ?? 0) };
       }
     }
 
@@ -586,59 +661,50 @@ const populateEquipmentComplex = (safeEntities : any[] = []) => {
           safeEntities .forEach(e => { s[e.id] = e.unit ?? null; });
           return s;
         };
-        // load autosave if present
-        const saved = await AsyncStorage.getItem(`@autoSave_timesheet_${timesheetId}`);
-        if (saved) {
+const key = `@autoSave_timesheet_${timesheetId}`;
+console.log('[PHASE RESTORE] using key =', key);
+
+const saved = await AsyncStorage.getItem(key);
+console.log('[PHASE RESTORE] saved draftRaw =', saved);
+
+if (saved) {
   const sObj = JSON.parse(saved);
-
-  // if server has `updated_at` or similar, compare:
-  const draftSavedAt = sObj.savedAt || 0;
- const timestamp = ts?.updated_at ?? ts?.data?.updated_at;
-
-const serverUpdatedAt = timestamp
-  ? new Date(timestamp).getTime()
-  : 0;
-
-  // If draft is newer than server OR offline (no connection), restore it
-  if (!isConnected || (draftSavedAt && draftSavedAt > (serverUpdatedAt || 0))) {
-    restoreProcessedDraft(sObj, ts);
-    setRestoredFromDraft(true);   // <--- SET FIRST
-    
-  } else {
-    // In other case, server is newer — you can ignore draft or keep it for future sync
-    console.log('Server newer — ignoring local draft for UI (but still kept for sync).');
-  }
+  console.log('[PHASE RESTORE] parsed draft =', sObj);
+if (sObj?.data?.selectedPhases) {
+  const fromDraft = Array.isArray(sObj.data.selectedPhases)
+    ? sObj.data.selectedPhases
+    : String(sObj.data.selectedPhases).split(',');
+  setSelectedPhases(fromDraft);
 }
-//   setWorkPerformed(wp);
-//   const vh: SimpleHourState = {};
-// const tl: Record<string, string> = {};
-// const vu: Record<string, string> = {};
+ else {
+    console.log('[PHASE RESTORE] draft has NO selectedPhases; will fall back to server');
+    setSelectedPhases(ts.data?.job?.phase_codes || []);
+  }
 
-// wp.forEach(row => {
-//   const key = row.id; // "2976_6"
-  
-//   // Hours per phase
-//   vh[key] = {};
-//   Object.keys(row.hours_per_phase || {}).forEach(phase => {
-//     vh[key][phase] = String(row.hours_per_phase[phase] ?? '');
-//   });
-  
-//   // Tickets
-//   tl[key] = String(row.tickets_loads?.[key] ?? '');
-  
-//   // Units (vendor-level)
-//   vu[row.vendor_id] = row.unit ?? vu[row.vendor_id] ?? "Hrs";
-// });
+  const draftSavedAt = sObj.savedAt || 0;
+  const timestamp = ts?.updated_at ?? ts?.data?.updated_at;
+  const serverUpdatedAt = timestamp ? new Date(timestamp).getTime() : 0;
 
-// setVendorHours(vh);
-// setTicketsLoads(prev => ({ ...prev, ...tl }));
-// setVendorUnits(vu);
-// After wp build:
+  if (!isConnected || (draftSavedAt && draftSavedAt > (serverUpdatedAt || 0))) {
+    console.log('[PHASE RESTORE] applying full restoreProcessedDraft');
+
+    restoreProcessedDraft(sObj, ts);
+    setRestoredFromDraft(true);
+    console.log('[PHASE RESTORE] DRAFT RESTORED - EXITING EARLY TO PREVENT SERVER OVERWRITE');
+  return; 
+  } else {
+    console.log('[PHASE RESTORE] server newer, skipping full draft restore');
+  }
+} else {
+  const serverPhases = ts.data?.job?.phase_codes || [];
+  console.log('[PHASE RESTORE] no draft, using server phases =', serverPhases);
+  setSelectedPhases(serverPhases);
+}
+
 
 
 if (!restoredFromDraft) {
   // phases
-  setSelectedPhases(ts.data?.job?.phase_codes || []);
 
   // employees / equipment
   setEmployeeHours(populateEmployees(ts.data?.employees || []));
@@ -799,85 +865,270 @@ if (ts.data?.supervisor && typeof ts.data.supervisor === 'object' && 'name' in t
     };
     fetchData();
   }, [timesheetId]);
-
-  // ---------------- AUTO SAVE (debounced) ----------------
-  const autoSaveTimer = useRef<any>(null);
   useEffect(() => {
-    if (!timesheet || loading) return;
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(async () => {
-      try {
-         const processedData = buildUpdatedData();
+  console.log('🔁 ticketsLoads CHANGED', ticketsLoads);
+}, [ticketsLoads]);
+
+// ---------------- AUTO SAVE (debounced) ----------------
+const autoSaveTimer = useRef<any>(null);
+
+useEffect(() => {
+  if (!timesheet || loading) return;
+
+  if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+
+  autoSaveTimer.current = setTimeout(async () => {
+    try {
+      const processedData = buildUpdatedData();
+
+      // ✅ Merge selectedPhases into data so draft.data.selectedPhases exists
+      const dataWithPhases = {
+        ...processedData,
+        selectedPhases: selectedPhases,
+          ticketsLoads, // 🔥 REQUIRED
+
+      };
 
       const draft = {
         timesheetId,
-        data: processedData,   // FINAL processed structure
-        status: "Pending",
-         savedAt: Date.now()
+        data: dataWithPhases,   // use dataWithPhases instead of processedData
+        status: 'Pending',
+        savedAt: Date.now(),
       };
-         await AsyncStorage.setItem(
+
+      // 🔍 DEBUG: see exactly what is being stored
+      console.log('[DEBUG DRAFT WRITE]', JSON.stringify(draft, null, 2));
+
+      await AsyncStorage.setItem(
         `@autoSave_timesheet_${timesheetId}`,
-        JSON.stringify(draft)
+        JSON.stringify(draft),
       );
-console.log('🚀 AUTOSAVE vendorHours:', vendorHours)
-console.log('🚀 AUTOSAVE ticketsLoads:', ticketsLoads)
-// await AsyncStorage.setItem(`autoSavetimesheettimesheetId`, JSON.stringify(draft))
+const verifyDraft = await AsyncStorage.getItem(`@autoSave_timesheet_${timesheetId}`);
+console.log('🎫 DRAFT CONTENTS:', JSON.parse(verifyDraft!).data.ticketsLoads);
+      console.log('🚀 AUTOSAVE vendorHours:', vendorHours);
+      console.log('🚀 AUTOSAVE ticketsLoads:', ticketsLoads);
+      console.log('🚀 AUTOSAVE dataWithPhases.selectedPhases:', dataWithPhases.selectedPhases);
+      console.log('Auto-saved PROCESSED data');
+    } catch (e) {
+      console.warn('Auto-save fail', e);
+    }
+  }, 1500);
 
-      console.log("Auto-saved PROCESSED data");
-      } catch (e) { console.warn('Auto-save fail', e); }
-    }, 1500);
-    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [employeeHours, equipmentHours, materialHours, vendorHours, dumpingSiteHours,ticketsLoads, notes, materialUnits, vendorUnits, timesheetDate, selectedPhases, employeeReasons,phaseEntryQuantities,workPerformed,dumpingSites]);
+  return () => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+  };
+}, [
+  employeeHours,
+  equipmentHours,
+  materialHours,
+  vendorHours,
+  dumpingSiteHours,
+  ticketsLoads,
+  notes,
+  materialUnits,
+  vendorUnits,
+  timesheetDate,
+  selectedPhases,
+  employeeReasons,
+  phaseEntryQuantities,
+  workPerformed,
+  dumpingSites,
+]);
+const buildUpdatedData = () => {
+  if (!timesheet) return {};
+const base = timesheet?.data ? { ...timesheet.data } : {};
 
+  // Rebuild grouped selected_vendor_materials from current workPerformed rows
+  const groupedVendorMaterials: { [k: string]: any } = {};
+
+  (workPerformed || []).forEach((row: any) => {
+    const vendorId = String(row.vendor_id ?? row.vendorId ?? '');
+    if (!vendorId) return;
+
+    if (!groupedVendorMaterials[vendorId]) {
+      groupedVendorMaterials[vendorId] = {
+        id: Number(row.vendor_id),
+        name: row.vendor_name ?? '',
+        vendor_category: row.vendor_category ?? '',
+        selectedMaterials: []
+      };
+    }
+
+    // Add material entry
+    groupedVendorMaterials[vendorId].selectedMaterials.push({
+      id: Number(row.material_id),
+      material: row.material_name ?? row.material ?? '',
+      unit: row.unit ?? null,
+      detail: row.detail ?? ''
+    });
+  });
+  return {
+    ...timesheet.data,
+weather: weatherData,          // Sunny
+temperature: temperatureData,  // 86°F
+location: locationData,
+ 
+    notes,
+
+    job: {
+      job_code: timesheet.data.job.job_code,
+      phase_codes: selectedPhases,
+    },
+
+    total_quantities: Object.keys(phaseEntryQuantities || {}).reduce(
+      (acc, p) => ({
+        ...acc,
+        [p]: Number(phaseEntryQuantities[p] || 0),
+      }),
+      {}
+    ),
+
+    // EMPLOYEES
+    employees: timesheet.data.employees.map((emp) => ({
+      ...emp,
+      hours_per_phase: processEmployees(employeeHours[emp.id]),
+      reason: employeeReasons[emp.id] || null,
+    })),
+
+    // EQUIPMENT
+    equipment: timesheet.data.equipment.map((eq) => {
+      console.log('Processing eq:', eq.id, startHours[eq.id], stopHours[eq.id]);
+      const raw = equipmentHours[eq.id] || {};
+      const { start_hours, stop_hours, ...phaseData } = raw;
+
+      return {
+        ...eq,
+        hours_per_phase: processEquipment(phaseData),
+        start_hours: Number(startHours[eq.id] || 0),
+    stop_hours: Number(stopHours[eq.id] || 0),
+      };
+    }),
+
+    // MATERIALS & TRUCKING
+    materials_trucking: materialsTrucking.map((m) => ({
+      id: m.id,
+      name: m.name,
+      unit: materialUnits[m.id],
+      hours_per_phase: toNumbersSimple(materialHours[m.id] || {}),
+      tickets_loads: { [m.id]: Number(ticketsLoads[m.id] || 0) },
+    })),
+     vendorHours,        // Save UI state
+    ticketsLoads,       // Save UI state  
+    vendorUnits,        // Save UI state
+    workPerformed,
+ selected_vendor_materials: groupedVendorMaterials,
+    // VENDORS
+// VENDORS - FIXED ticketsLoads mapping
+vendors: (workPerformed || []).map((r) => ({
+    // ✅ FIX: Use r.id, which correctly holds the unique key (vendor_id_material_id)
+    id: r.id, 
+    vendor_id: r.vendor_id,
+    material_id: r.material_id,
+    vendor_name: r.vendor_name,
+    material_name: r.material_name,
+    unit: r.unit,
+    detail: r.detail,
+    hours_per_phase: toNumbersSimple(vendorHours?.[r.id] || r.hours_per_phase || {}),
+    tickets_loads: { [r.id]: Number(ticketsLoads[r.id] || 0) },
+  })),
+
+    // DUMPING SITES
+    dumping_sites: dumpingSites.map((d) => ({
+      id: d.id,
+      name: d.name,
+      hours_per_phase: toNumbersSimple(dumpingSiteHours[d.id] || {}),
+      tickets_loads: { [d.id]: Number(ticketsLoads[d.id] || 0) },
+    })),
+  };
+};
+const autoSaveDraft = useCallback(async () => {
+  console.log('🚀 AUTOSAVE TRIGGERED - timesheetId:', timesheetId, 'loading:', loading);
+  
+  if (!timesheetId || loading || isSubmitting) {
+    console.log('❌ AUTOSAVE SKIPPED - missing timesheetId/loading/submitting');
+    return;
+  }
+  
+  try {
+    const processedData = buildUpdatedData();
+    console.log('📦 buildUpdatedData result:', processedData ? 'SUCCESS' : 'NULL/FAILED');
+    
+    if (!processedData) {
+      console.log('❌ AUTOSAVE SKIPPED - buildUpdatedData returned null');
+      return;
+    }
+    
+    const dataWithPhases = { ...processedData, selectedPhases: selectedPhases || [] };
+    console.log('📋 SAVING PHASES:', dataWithPhases.selectedPhases);
+    console.log('📋 SAVING EMPLOYEE HOURS:', JSON.stringify(employeeHours, null, 2).slice(0, 500) + '...');
+    
+    const draft = { timesheetId, data: dataWithPhases, status: 'Pending', savedAt: Date.now() };
+    const key = `autoSave-timesheet-${timesheetId}`;
+    
+    await AsyncStorage.setItem(key, JSON.stringify(draft));
+    console.log('✅ AUTOSAVE SUCCESS - key:', key);
+  } catch (e) {
+    console.error('💥 AUTOSAVE ERROR:', e);
+  }
+}, [timesheetId, loading, isSubmitting, selectedPhases, buildUpdatedData]);
+useFocusEffect(
+  useCallback(() => {
+    let isActive = true;
+    return () => {
+      if (isActive && timesheetId && !loading && !isSubmitting) {
+        console.log('NAVIGATION BLUR: Triggering autosave');
+        autoSaveDraft();
+      }
+      isActive = false;
+    };
+  }, [timesheetId, loading, isSubmitting, autoSaveDraft])
+);
   // ---------------- HANDLERS ----------------
-const handleEmployeeHourChange = (
-  employeeId: string,
-  phaseCode: string,
-  classCode: string,
+const handleEmployeeHourChange = useCallback((
+  employeeId: string, 
+  phaseCode: string, 
+  classCode: string, 
   value: string
 ) => {
-  // If empty, treat as 0 (IMPORTANT fix)
-  if (value.trim() === "") value = "0";
-  // 1️⃣ Sanitize input (keep numbers + dot)
+  if (value.trim() === '') value = '0';
   const sanitized = value.replace(/[^0-9.]/g, '');
+  
   setEmployeeHours(prev => {
-    // 2️⃣ Build updated object
     const updated = {
       ...prev,
       [employeeId]: {
-        ...(prev[employeeId] || {}),
+        ...prev[employeeId],
         [phaseCode]: {
-          ...(prev[employeeId]?.[phaseCode] || {}),
+          ...prev[employeeId]?.[phaseCode],
           [classCode]: sanitized,
         },
       },
     };
 
-    // 3️⃣ Compute total hours for this employee (REG + SB across all phases)
+    // Validate total hours <= 24
     let total = 0;
-
-     selectedPhases.forEach(ph => {
-      const classes = updated[employeeId]?.[ph];
-      if (classes && typeof classes === "object") {
+    selectedPhases.forEach(phase => {
+      const classes = updated[employeeId]?.[phase];
+      if (classes && typeof classes === 'object') {
         Object.values(classes).forEach(val => {
-          const num = parseFloat(val || "0");
+          const num = parseFloat(val as string) || 0;
           if (!isNaN(num)) total += num;
         });
       }
     });
 
-    // 4️⃣ Validation rule — cannot exceed 24 hours total
     if (total > 24) {
-      Alert.alert("Total hours for employee cannot exceed 24 hours");
-      return prev;  // ❗ Reject the change — revert to previous
+      Alert.alert('Total hours for employee cannot exceed 24 hours');
+      return prev; // Revert change
     }
-
-    // 5️⃣ Accept change
+  console.log('✏️ HOUR CHANGE - calling autosave');
+    // IMMEDIATE AUTOSAVE
+    autoSaveDraft();
     return updated;
   });
-};
+}, [selectedPhases, autoSaveDraft]);
 
-  const handleComplexHourChange = (setter: React.Dispatch<any>, entityId: string, phaseCode: string, hourType: 'REG' | 'S_B', value: string) => {
+  const handleComplexHourChange = (setter: React.Dispatch<any>, entityId: string, phaseCode: string, hourType: 'REG' | 'SB', value: string) => {
     const sanitized = value.replace(/[^0-9.]/g, '');
     setter((prev: ComplexHourState) => ({ ...prev, [entityId]: { ...(prev[entityId] || {}), [phaseCode]: { ...(prev[entityId]?.[phaseCode] || {}), [hourType]: sanitized } } }));
   };
@@ -1127,16 +1378,16 @@ const processEmployees = (
   return out;
 };
 
-// convert equipment REG / S_B hours
+// convert equipment REG / SB hours
 const processEquipment = (
-  m: Record<string, { REG?: string; S_B?: string }> = {}
-): Record<string, { REG: number; S_B: number }> => {
-  const out: Record<string, { REG: number; S_B: number }> = {};
+  m: Record<string, { REG?: string; SB?: string }> = {}
+): Record<string, { REG: number; SB: number }> => {
+  const out: Record<string, { REG: number; SB: number }> = {};
 
   Object.keys(m).forEach((phase) => {
     out[phase] = {
       REG: Number(m[phase]?.REG || 0),
-      S_B: Number(m[phase]?.S_B || 0),
+      SB: Number(m[phase]?.SB || 0),
     };
   });
 
@@ -1144,116 +1395,23 @@ const processEquipment = (
 };
 
 // ---------------- BUILD FINAL PAYLOAD ----------------
-const buildUpdatedData = () => {
-  if (!timesheet) return {};
-const base = timesheet?.data ? { ...timesheet.data } : {};
 
-  // Rebuild grouped selected_vendor_materials from current workPerformed rows
-  const groupedVendorMaterials: { [k: string]: any } = {};
-
-  (workPerformed || []).forEach((row: any) => {
-    const vendorId = String(row.vendor_id ?? row.vendorId ?? '');
-    if (!vendorId) return;
-
-    if (!groupedVendorMaterials[vendorId]) {
-      groupedVendorMaterials[vendorId] = {
-        id: Number(row.vendor_id),
-        name: row.vendor_name ?? '',
-        vendor_category: row.vendor_category ?? '',
-        selectedMaterials: []
-      };
-    }
-
-    // Add material entry
-    groupedVendorMaterials[vendorId].selectedMaterials.push({
-      id: Number(row.material_id),
-      material: row.material_name ?? row.material ?? '',
-      unit: row.unit ?? null,
-      detail: row.detail ?? ''
-    });
-  });
-  return {
-    ...timesheet.data,
-weather: weatherData,          // Sunny
-temperature: temperatureData,  // 86°F
-location: locationData,
- 
-    notes,
-
-    job: {
-      job_code: timesheet.data.job.job_code,
-      phase_codes: selectedPhases,
-    },
-
-    total_quantities: Object.keys(phaseEntryQuantities || {}).reduce(
-      (acc, p) => ({
-        ...acc,
-        [p]: Number(phaseEntryQuantities[p] || 0),
-      }),
-      {}
-    ),
-
-    // EMPLOYEES
-    employees: timesheet.data.employees.map((emp) => ({
-      ...emp,
-      hours_per_phase: processEmployees(employeeHours[emp.id]),
-      reason: employeeReasons[emp.id] || null,
-    })),
-
-    // EQUIPMENT
-    equipment: timesheet.data.equipment.map((eq) => {
-      console.log('Processing eq:', eq.id, startHours[eq.id], stopHours[eq.id]);
-      const raw = equipmentHours[eq.id] || {};
-      const { start_hours, stop_hours, ...phaseData } = raw;
-
-      return {
-        ...eq,
-        hours_per_phase: processEquipment(phaseData),
-        start_hours: Number(startHours[eq.id] || 0),
-    stop_hours: Number(stopHours[eq.id] || 0),
-      };
-    }),
-
-    // MATERIALS & TRUCKING
-    materials_trucking: materialsTrucking.map((m) => ({
-      id: m.id,
-      name: m.name,
-      unit: materialUnits[m.id],
-      hours_per_phase: toNumbersSimple(materialHours[m.id] || {}),
-      tickets_loads: { [m.id]: Number(ticketsLoads[m.id] || 0) },
-    })),
-     vendorHours,        // Save UI state
-    ticketsLoads,       // Save UI state  
-    vendorUnits,        // Save UI state
-    workPerformed,
- selected_vendor_materials: groupedVendorMaterials,
-    // VENDORS
-    vendors: (workPerformed || []).map((r: any) => ({
-      // build server-friendly vendor row — adapt fields to match server shape
-      vendor_id: Number(r.vendor_id),
-      vendor_name: r.vendor_name ?? '',
-      vendor_category: r.vendor_category ?? '',
-      material_id: Number(r.material_id),
-      material_name: r.material_name ?? r.material ?? '',
-      unit: r.unit ?? null,
-      detail: r.detail ?? '',
-  // tickets_loads: { [r.id]: Number(ticketsLoads?.[r.id] ?? r.tickets_loads?.[r.id] ?? 0) },
-  //     hours_per_phase: r.hours_per_phase ?? {}
- tickets_loads: Number(ticketsLoads?.[r.id] ?? 0), 
-  hours_per_phase: vendorHours?.[r.id] || r.hours_per_phase || {}
-  
-    })),
-
-    // DUMPING SITES
-    dumping_sites: dumpingSites.map((d) => ({
-      id: d.id,
-      name: d.name,
-      hours_per_phase: toNumbersSimple(dumpingSiteHours[d.id] || {}),
-      tickets_loads: { [d.id]: Number(ticketsLoads[d.id] || 0) },
-    })),
-  };
-};
-
+// const autoSaveDraft = useCallback(async () => {
+//   if (!timesheetId || loading) return;
+//   try {
+//     const processedData = buildUpdatedData();  // ✅ Now declared above
+//     const dataWithPhases = { ...processedData, selectedPhases };
+//     const draft = {
+//       timesheetId,
+//       data: dataWithPhases,
+//       status: 'Pending',
+//       savedAt: Date.now(),
+//     };
+//     await AsyncStorage.setItem(`autoSave-timesheet-${timesheetId}`, JSON.stringify(draft));
+//   } catch (e) {
+//     console.warn('Immediate autosave failed', e);
+//   }
+// }, [timesheetId, loading, buildUpdatedData, selectedPhases]); 
 
   // ---------------- RENDER: TABLE-LIKE SECTIONS ----------------
 const handlePhaseEntryChange = (phaseCode: string, value: string) => {
@@ -1751,7 +1909,7 @@ const loadAvailableEquipment = async () => {
 const renderEmployeeTable = () => {
   const employees = timesheet?.data?.employees || [];
   // const phaseCodes = timesheet?.data?.job?.phase_codes || [];
-  const phaseCodes = jobPhaseCodes;
+const phaseCodes = jobPhaseCodes;
 
   const phaseTotals = calculateEmployeePhaseTotals(employeeHours, selectedPhases);
 
@@ -2047,7 +2205,8 @@ return [emp.class_1, emp.class_2].filter(Boolean);
               </View>
             </View>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+{/* Phase header row */}
+<ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={tableStyles.phaseFooterRow}>
                 {selectedPhases.map((p: string) => (
                   <View key={`tot-${p}`} style={[tableStyles.headerCell, { width: 96 }]}>
@@ -2056,6 +2215,7 @@ return [emp.class_1, emp.class_2].filter(Boolean);
                 ))}
               </View>
             </ScrollView>
+
           </View>
         </ScrollView>
         
@@ -2117,7 +2277,7 @@ const renderTotalQuantities = () => {
       <View style={styles.quantityGrid}>
         {selectedPhases.map((phaseCode) => (
           <View key={phaseCode} style={styles.quantityItem}>
-            <Text style={styles.quantityLabel}>{`Phase ${phaseCode}`}</Text>
+    <Text style={styles.quantityLabel}>{`Phase ${phaseCode}`}</Text>
             <TextInput
               style={styles.quantityInput}
               keyboardType="numeric"
@@ -2132,19 +2292,47 @@ const renderTotalQuantities = () => {
     </View>
   );
 };
-const handleEquipmentHourChange = (entityId: string, phaseCode: string, hourType: 'REG' | 'S_B', value: string) => {
-  const sanitized = value.replace(/[^0-9.]/g, ''); // ✅ Sanitize
-  setEquipmentHours(prev => ({
-    ...prev,
-    [entityId]: {
-      ...prev[entityId],
-      [phaseCode]: {
-        ...prev[entityId]?.[phaseCode],
-        [hourType]: sanitized  // ✅ Safe deep update
-      }
+const handleEquipmentHourChange = (
+  entityId: string,
+  phaseCode: string,
+  hourType: 'REG' | 'SB',  // ✅ Fixed: 'SB' not 'SB'
+  value: string
+) => {
+  // If empty, treat as 0
+  if (value.trim() === "") value = "0";
+  
+  // 1️⃣ Sanitize input (keep numbers + dot)
+  const sanitized = value.replace(/[^0-9.]/g, '');
+  
+  setEquipmentHours(prev => {
+    // 2️⃣ Build updated object
+    const updated = {
+      ...prev,
+      [entityId]: {
+        ...(prev[entityId] || {}),
+        [phaseCode]: {
+          ...(prev[entityId]?.[phaseCode] || {}),
+          [hourType]: sanitized,
+        },
+      },
+    };
+
+    // 3️⃣ Optional: Validate total equipment hours per phase don't exceed employee hours
+    // (You can add this if needed, similar to employee 24hr limit)
+    const totalEqHours = calculateTotalComplexHours(updated, entityId);
+    if (totalEqHours > 24) {  // Or your business rule
+      Alert.alert("Total equipment hours cannot exceed 24 hours");
+      return prev;  // Reject change
     }
-  }));
+
+    // 👇 IMMEDIATE AUTOSAVE — ONLY for VALID changes 👇
+    autoSaveDraft();
+
+    // 4️⃣ Accept change
+    return updated;
+  });
 };
+
 
 const handleVendorHourChange = (rowId: string, phaseCode: string, value: string) => {
   const sanitized = value.replace(/[^0-9.]/g, '');
@@ -2193,48 +2381,59 @@ const handleDumpingSiteHourChange = (entityId: string, phaseCode: string, value:
   }));
 };
 
-
-
-const handleVendorTicketsChange = (rowId: string, value: string) => {
+// SIMPLY THIS:
+const handleVendorTicketsChange = useCallback((rowId: string, value: string) => {
+  if (value.trim() === '' || value === '0') return;
   const sanitized = value.replace(/[^0-9.]/g, '');
+  
   setTicketsLoads(prev => ({ ...prev, [rowId]: sanitized }));
-  setWorkPerformed(prev => prev.map(row =>
-    row.id === rowId ? { ...row, tickets_loads: sanitized } : row
+  setWorkPerformed(prev => prev.map(row => 
+    row.id === rowId ? { ...row, ticketsloads: sanitized } : row
   ));
-};
+  
+  // ✅ NOTHING ELSE - debounced useEffect handles it (1.5s)
+  console.log('🎫 TICKETS UPDATED - autosave in 1.5s');
+}, []);
 
 
 
- const renderEntityTable = (
+const renderEntityTable = (
   title: string,
   entities: any[],
   type: 'equipment' | 'material' | 'vendor' | 'dumping_site'
 ) => {
   const safeEntities = Array.isArray(entities) ? entities : [];
 
-   // 🔥 ADD DEBUG LOG HERE - FIRST LINE IN FUNCTION
   console.log('🏗️ TABLE DEBUG:', {
     type,
-    entitiesLength: safeEntities ?.length || 0,
-    entitiesSample: safeEntities ?.slice(0, 2),  // First 2 items
+    entitiesLength: safeEntities?.length || 0,
+    entitiesSample: safeEntities?.slice(0, 2),
     materialsTruckingLength: materialsTrucking?.length || 0,
     materialHoursKeys: Object.keys(materialHours),
-    selectedPhasesLength: selectedPhases?.length || 0
+    selectedPhasesLength: selectedPhases?.length || 0,
   });
-  // const phaseCodes = timesheet?.data?.job?.phase_codes || [];
-  const phaseCodes = jobPhaseCodes;
+
+  // ✅ USE SELECTED PHASES HERE
+  const phaseCodes = selectedPhases;
 
   const isEquipment = type === 'equipment';
 
   const hoursState: any =
-    isEquipment ? equipmentHours : type === 'material' ? materialHours : type === 'vendor' ? vendorHours : dumpingSiteHours;
+    isEquipment
+      ? equipmentHours
+      : type === 'material'
+      ? materialHours
+      : type === 'vendor'
+      ? vendorHours
+      : dumpingSiteHours;
 
- 
-const phaseTotals = isEquipment 
-  ? calculateComplexPhaseTotals(equipmentHours, phaseCodes)
-  : calculateSimplePhaseTotalsByEntities(hoursState, safeEntities , phaseCodes);
+  const phaseTotals = isEquipment
+    ? calculateComplexPhaseTotals(equipmentHours, phaseCodes)
+    : calculateSimplePhaseTotalsByEntities(hoursState, safeEntities, phaseCodes);
 
   return (
+    // ... rest of renderEntityTable stays exactly as in your file
+
     
      
 <View style={styles.tableCard}>
@@ -2495,19 +2694,35 @@ const phaseTotals = isEquipment
 )}
 
    
+// ... existing code (around line 1058)
 
-    {type !== "equipment" && (
-      <View style={[tableStyles.cellFixed, { width: 140 }]}>
-        <InlineEditableNumber
-          value={ticketsLoads[String(ent.id)] ?? ""}
-          onChange={(v) => {
-            const clean = v.replace(/[^0-9]/g, "");
-            setTicketsLoads(prev => ({ ...prev, [String(ent.id)]: clean }));
-          }}
-          placeholder={type === "dumping_site" ? "0" : "0"}
-        />
-      </View>
-    )}
+{type !== "equipment" && (
+  <View style={[tableStyles.cellFixed, { width: 140 }]}>
+    <InlineEditableNumber 
+      value={ticketsLoads[String(ent.id)] ?? ""} 
+      onChange={(v) => {
+        const clean = v.replace(/[^0-9]/g, "");
+        const rowId = String(ent.id);
+        console.log('🎟️ TICKET INPUT CHANGE', { rowId, rawValue: v, cleanedValue: clean, });
+
+        setTicketsLoads(prev => {
+          const updated = {
+            ...prev,
+            [rowId]: clean,
+          };
+          console.log('🎟️ ticketsLoads STATE AFTER SET', updated);
+          return updated;
+        });
+        
+        // 🔥 FIX: Trigger immediate autosave after state change
+        autoSaveDraft(); 
+      }}
+      placeholder={type === "dumping_site" ? "0" : "0"}
+    />
+  </View>
+)}
+
+
   </>
 )}
 
@@ -2517,10 +2732,10 @@ const phaseTotals = isEquipment
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center' }}>
                     <View style={tableStyles.phaseRow}>
                       {selectedPhases.map((p: string) => {
-                        // Equipment: two fields per phase (REG, S_B)
+                        // Equipment: two fields per phase (REG, SB)
                         if (isEquipment) {
                           const regVal = equipmentHours[ent.id]?.[p]?.REG ?? '';
-                          const sbVal = equipmentHours[ent.id]?.[p]?.S_B ?? '';
+                          const sbVal = equipmentHours[ent.id]?.[p]?.SB ?? '';
 
                           return (
                             <View key={`${ent.id}-${p}`} style={[tableStyles.cell, { width: 96 }]}>
@@ -2534,7 +2749,7 @@ const phaseTotals = isEquipment
                                 />
                                 <InlineEditableNumber
                                   value={sbVal}
-                                  onChange={(v) => handleEquipmentHourChange(ent.id, p, 'S_B', v)} 
+                                  onChange={(v) => handleEquipmentHourChange(ent.id, p, 'SB', v)} 
                                    validateHours={true} 
                                   placeholder="0.0"
                                   style={tableStyles.hourInput}
@@ -2614,12 +2829,6 @@ const getHourChangeHandler = () => {
                   ))}
                 </View>
               </ScrollView>
-
-              {/* <View style={[tableStyles.cellFixed, { width: 88 }]}>
-                <Text style={tableStyles.footerTotal}>
-                  {Object.values(phaseTotals || {}).reduce((s: number, n: any) => s + (Number(n) || 0), 0).toFixed(1)}
-                </Text>
-              </View> */}
             </View>
           </ScrollView>
         </View>
@@ -2713,16 +2922,22 @@ const getHourChangeHandler = () => {
     <Text style={styles.phaseText}>{p}</Text>
 
     {/* Checkbox press only */}
-    <TouchableOpacity
-      onPress={() => {
-        setSelectedPhases(prev => {
-          if (prev.includes(p)) {
-            return prev.filter(x => x !== p);   // uncheck
-          }
-          return [...prev, p];                  // check
-        });
-      }}
-    >
+<TouchableOpacity
+  onPress={() => {
+    setSelectedPhases(prev => {
+      const already = prev.includes(p);
+      const newPhases = already
+        ? prev.filter(x => x !== p)
+        : [...prev, p];
+
+      console.log('[PHASE TOGGLE] prev =', prev, 'clicked =', p, 'newPhases =', newPhases);
+      savePhasesImmediately(newPhases);
+      return newPhases;
+    });
+  }}
+>
+
+
       <View style={styles.checkbox}>
         {selectedPhases.includes(p) && <Text style={styles.tick}>✓</Text>}
       </View>

@@ -89,7 +89,7 @@ const TicketDetailView = ({ ticket, onBack }) => {
                             href={finalUrl} 
                             target="_blank" 
                             rel="noopener noreferrer" 
-                            className="header-btn btn-primaryy" 
+                            className="header-btn btn-primary" 
                             style={{textDecoration: 'none', color: 'white'}}
                         >
                             <FaExternalLinkAlt /> Open Original File
@@ -111,7 +111,6 @@ const TicketDetailView = ({ ticket, onBack }) => {
                             <tr><th>Vendor</th><td>{ticket.haul_vendor || "-"}</td></tr>
                             <tr><th>Truck Number</th><td>{ticket.truck_number || "-"}</td></tr>
                             <tr><th>Job Number</th><td>{ticket.job_number || "-"}</td></tr>
-                            <tr><th>Phase Code</th><td>{ticket.phase_code_ || "-"}</td></tr>
                             <tr><th>Material</th><td>{ticket.material || "-"}</td></tr>
                             <tr><th>Zone</th><td>{ticket.zone || "-"}</td></tr>
                             <tr><th>Hours / Qty</th><td>{ticket.hours || "-"}</td></tr>
@@ -284,7 +283,6 @@ const Tickets = () => {
                 escapeCsvCell(t.material),
                 escapeCsvCell(t.job_number),
                 escapeCsvCell(t.truck_number),
-                escapeCsvCell(t.phase_code_),
                 escapeCsvCell(t.hours),
                 escapeCsvCell(JSON.stringify(t.table_data || [])), 
                 escapeCsvCell(`${API_BASE_URL}${t.image_url || ''}`)
@@ -333,7 +331,6 @@ const Tickets = () => {
             t.material || "-",
             t.job_number || "-",
             t.truck_number || "-",
-            t.phase_code_ || "-",
             t.hours || "-"
         ]);
 
@@ -432,7 +429,7 @@ const Tickets = () => {
                             <FaTimes /> Clear
                         </button>
                     ) : (
-                        <button className="header-btn btn-primaryy" onClick={() => setIsSearchModalOpen(true)}>
+                        <button className="header-btn btn-primary" onClick={() => setIsSearchModalOpen(true)}>
                             <FaSearch /> Advanced Search
                         </button>
                     )}
@@ -541,11 +538,11 @@ const Tickets = () => {
                     <div className="modal-content" style={{width: '500px'}}>
                         <div className="modal-header">
                             <h3>Advanced Search</h3>
-                            <button onClick={() => setIsSearchModalOpen(false)} className="btn-smm btn-outlinee">×</button>
+                            <button onClick={() => setIsSearchModalOpen(false)} className="btn-sm btn-outline">×</button>
                         </div>
                         <div className="modal-body" style={{padding: '20px'}}>
                             <form onSubmit={handleSearchSubmit}>
-                                <div className="form-groupp">
+                                <div className="form-group">
                                     <label>Date Range (YYYY-MM-DD)</label>
                                     <div style={{display:'flex', gap:'10px'}}>
                                         <input type="date" className="form-control" 
@@ -559,28 +556,28 @@ const Tickets = () => {
                                         />
                                     </div>
                                 </div>
-                                <div className="form-groupp">
+                                <div className="form-group">
                                     <label>Ticket Number</label>
                                     <input type="text" className="form-control" placeholder="e.g. 12345"
                                         value={searchFilters.ticket_number}
                                         onChange={e => setSearchFilters({...searchFilters, ticket_number: e.target.value})}
                                     />
                                 </div>
-                                <div className="form-groupp">
+                                <div className="form-group">
                                     <label>Vendor</label>
                                     <input type="text" className="form-control" placeholder="e.g. M Luis"
                                         value={searchFilters.haul_vendor}
                                         onChange={e => setSearchFilters({...searchFilters, haul_vendor: e.target.value})}
                                     />
                                 </div>
-                                <div className="form-groupp">
+                                <div className="form-group">
                                     <label>Material</label>
                                     <input type="text" className="form-control" placeholder="e.g. Asphalt"
                                         value={searchFilters.material}
                                         onChange={e => setSearchFilters({...searchFilters, material: e.target.value})}
                                     />
                                 </div>
-                                <div className="form-groupp">
+                                <div className="form-group">
                                     <label>Job Number</label>
                                     <input type="text" className="form-control" placeholder="e.g. J-2023"
                                         value={searchFilters.job_number}
@@ -590,7 +587,7 @@ const Tickets = () => {
                                 
                                 <div className="modal-footer">
                                     <button type="button" onClick={clearSearch} className="header-btn btn-outline">Reset</button>
-                                    <button type="submit" className="header-btn btn-primaryy">Search</button>
+                                    <button type="submit" className="header-btn btn-primary">Search</button>
                                 </div>
                             </form>
                         </div>

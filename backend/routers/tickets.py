@@ -20,16 +20,6 @@ router = APIRouter(
     tags=["Tickets"]
 )
 
-
-# ==========================================================
-# 🔹 1️⃣ Foreman View: All Tickets (optional)
-# ==========================================================
-# (You can keep your commented block here if needed)
-
-
-# ==========================================================
-# 🔹 2️⃣ Supervisor View: Only Submitted Tickets
-# ==========================================================
 from datetime import date
 from sqlalchemy import func
 
@@ -72,9 +62,12 @@ def get_tickets_for_supervisor(
 def get_tickets_for_project_engineer(
     db: Session = Depends(database.get_db),
     supervisor_id: int = Query(...),
+    foreman_id: int = Query(...),
     date: str = Query(...),
     project_engineer_id: int = Query(...),
 ):
+    print("Hit PE tickets endpoint", foreman_id, project_engineer_id, date)
+
     target_date = date_type.fromisoformat(date)
 
     # Get job codes assigned to PE
@@ -120,9 +113,10 @@ def get_tickets_for_project_engineer(
 # ==========================================================
 # 🔹 4️⃣ Ticket Update Endpoint
 from pydantic import BaseModel
+from typing import Optional, Dict, Any, List
 
 class TicketUpdatePhase(BaseModel):
-    phase_code_id: int  # Must match the frontend payload
+    phase_code_id: Optional[int] = None
 
 @router.patch("/{ticket_id}", response_model=schemas.Ticket)
 def update_ticket_phase_code(

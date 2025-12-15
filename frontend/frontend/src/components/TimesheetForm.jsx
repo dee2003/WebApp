@@ -268,9 +268,11 @@ useEffect(() => {
         // --- 2. TOP-LEVEL FIELDS (using snake_case) ---
         
         // Date (Top-level, correct key 'date')
-        if (existingTimesheet.date) {
-            setDate(existingTimesheet.date.split('T')[0]);
-        }
+if (existingTimesheet.date) {
+    setDate(new Date(existingTimesheet.date)); // convert string to Date object
+}
+
+
 
         // Foreman ID (Top-level, correct key 'foreman_id')
         // Convert to String() because <select> values are strings
@@ -548,8 +550,9 @@ const selectionData = {
 
   const payload = {
     foreman_id: parseInt(selectedForemanId, 10),
-    date,
-    job_phase_id: selectedJobPhaseId,
+date: date instanceof Date 
+        ? date.toISOString().split('T')[0] // "YYYY-MM-DD"
+        : date, // in case it’s already a string    job_phase_id: selectedJobPhaseId,
     data: timesheetData,
     status: "Pending",
   };

@@ -680,12 +680,16 @@ class TicketCreate(TicketBase):
 class Ticket(BaseModel):
     id: int
     foreman_id: int
-    job_phase_id: int
+    job_phase_id: Optional[int]  # <-- allow None
     image_path: str
     extracted_text: Optional[str] = None
     status: str
     created_at: Optional[datetime]
     timesheet_id: Optional[int]
+    phase_code: Optional[PhaseCode] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
     
     # ✅ Include the full phase code object (code, description, unit)
     phase_code: Optional[PhaseCode] = None
@@ -708,22 +712,26 @@ class TicketSummary(BaseModel):
     id: int
     image_path: str
     ticket_number: Optional[str] = None
-    ticket_date: Optional[str] = None
+    ticket_date: Optional[date] = None
     haul_vendor: Optional[str] = None
     truck_number: Optional[str] = None
     material: Optional[str] = None
     job_number: Optional[str] = None
-    phase_code_: Optional[str] = None
     zone: Optional[str] = None
     hours: Optional[float] = None
+
     # JSON Data
     table_data: Optional[Dict[str, Any] | List[Any]] = None
     phase_code_id: Optional[int]
     phase_code: Optional[PhaseCodeSchema] = None
+
     class Config:
-        from_attributes = True
+        orm_mode = True  # ✅ Must be orm_mode
+
+
 class TicketUpdate(BaseModel):
     phase_code_id: Optional[int] = None
+    
     # Editable Fields
     ticket_number: Optional[str] = None
     ticket_date: Optional[str] = None
@@ -731,11 +739,12 @@ class TicketUpdate(BaseModel):
     truck_number: Optional[str] = None
     material: Optional[str] = None
     job_number: Optional[str] = None
-    phase_code_: Optional[str] = None
     zone: Optional[str] = None
     hours: Optional[float] = None
+    
     # Editable JSON
     table_data: Optional[Dict[str, Any] | List[Any]] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -808,9 +817,6 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     role: str
-    first_name: Optional[str] = None
-    middle_name: Optional[str] = None
-    last_name: Optional[str] = None
     user: UserOut   # 🔥 Add this
 
 class AuditLogResponse(BaseModel):
@@ -824,7 +830,6 @@ class AuditLogResponse(BaseModel):
 
     class Config:
         orm_mode = True
-# File: C:\TimesheetWebApp\timesheet-app-dev\backend\schemas.py (or similar file)
 
 from pydantic import BaseModel
 from datetime import datetime

@@ -7,6 +7,7 @@ from typing import List
 from .. import models, schemas
 from sqlalchemy import func, cast
 from sqlalchemy.sql.sqltypes import Date
+from ..models import Timesheet, Ticket, JobPhase, User,PhaseCode
 
 from ..database import get_db
 router = APIRouter(prefix="/api/project-engineer", tags=["Project Engineer"])
@@ -14,32 +15,30 @@ router = APIRouter(prefix="/api/project-engineer", tags=["Project Engineer"])
 @router.get("/dashboard")
 def get_project_engineer_dashboard(project_engineer_id: int, db: Session = Depends(database.get_db)):
     try:
-        # 1. Aggregate timesheets per date + foreman
+        # ------------------------
+        # TIMESHEETS
+        # ------------------------
         timesheets = (
             db.query(
-                models.Timesheet.date,
-                models.Timesheet.foreman_id,
-                func.concat_ws(
-                    " ",
-                    models.User.first_name,
-                    models.User.middle_name,
-                    models.User.last_name
-                ).label("foreman_name"),
-                func.min(models.JobPhase.job_code).label("job_code"),  # pick one job code if multiple
-                func.count(models.Timesheet.id).label("ts_count")      # count all timesheets
+                Timesheet.date,
+                Timesheet.foreman_id,
+                func.concat_ws(" ", User.first_name, User.middle_name, User.last_name).label("foreman_name"),
+                func.min(JobPhase.job_code).label("job_code"),
+                func.count(Timesheet.id).label("ts_count")
             )
-            .join(models.JobPhase, models.Timesheet.job_phase_id == models.JobPhase.id)
-            .join(models.User, models.Timesheet.foreman_id == models.User.id)
+            # Join via JSON job_code
+            .join(JobPhase, JobPhase.job_code == Timesheet.data["job"]["job_code"].astext)
+            .join(User, Timesheet.foreman_id == User.id)
             .filter(
-                models.JobPhase.project_engineer_id == project_engineer_id,
-                models.Timesheet.status == "APPROVED_BY_SUPERVISOR",
+                JobPhase.project_engineer_id == project_engineer_id,
+                Timesheet.status == "APPROVED_BY_SUPERVISOR"
             )
             .group_by(
-                models.Timesheet.date,
-                models.Timesheet.foreman_id,
-                models.User.first_name,
-                models.User.middle_name,
-                models.User.last_name
+                Timesheet.date,
+                Timesheet.foreman_id,
+                User.first_name,
+                User.middle_name,
+                User.last_name
             )
             .all()
         )
@@ -55,35 +54,42 @@ def get_project_engineer_dashboard(project_engineer_id: int, db: Session = Depen
             for ts in timesheets
         ]
 
-        # 2. Tickets (same grouping logic)
+        # ------------------------
+        # TICKETS
+        # ------------------------
         tickets = (
             db.query(
-                models.Ticket.foreman_id,
+                Ticket.ticket_date.label("date"),
+                Ticket.foreman_id,
                 func.concat_ws(
                     " ",
-                    models.User.first_name,
-                    models.User.middle_name,
-                    models.User.last_name
+                    User.first_name,
+                    User.middle_name,
+                    User.last_name
                 ).label("foreman_name"),
-                func.min(models.JobPhase.job_code).label("job_code"),
-                cast(models.Ticket.created_at, Date).label("date"),
-                func.count(models.Ticket.id).label("ticket_count")
+                JobPhase.job_code.label("job_code"),
+                func.count(Ticket.id).label("ticket_count")
             )
-            .join(models.JobPhase, models.Ticket.job_phase_id == models.JobPhase.id)
-            .join(models.User, models.Ticket.foreman_id == models.User.id)
+            .join(PhaseCode, Ticket.phase_code_id == PhaseCode.id)
+            .join(JobPhase, PhaseCode.job_phase_id == JobPhase.id)
+            .join(User, Ticket.foreman_id == User.id)
             .filter(
-                models.JobPhase.project_engineer_id == project_engineer_id,
-                models.Ticket.status == "APPROVED_BY_SUPERVISOR"
+                JobPhase.project_engineer_id == project_engineer_id,
+                Ticket.status == "APPROVED_BY_SUPERVISOR"
             )
             .group_by(
-                models.Ticket.foreman_id,
-                models.User.first_name,
-                models.User.middle_name,
-                models.User.last_name,
-                cast(models.Ticket.created_at, Date)
+                Ticket.ticket_date,
+                Ticket.foreman_id,
+                User.first_name,
+                User.middle_name,
+                User.last_name,
+                JobPhase.job_code
             )
             .all()
         )
+
+
+
 
         ticket_data = [
             {
