@@ -350,7 +350,7 @@ def update_timesheet(
             create_df(data.get("vendors", [])).to_excel(writer, index=False, sheet_name="Vendors")
             create_dumping_site_df(data.get("dumping_sites", [])).to_excel(writer, index=False, sheet_name="DumpingSites")
         
-        NGROK_BASE_URL = "https://08c3cd858a93.ngrok-free.app"
+        NGROK_BASE_URL = "https://20452867d4b4.ngrok-free.app"
         file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
         # :white_check_mark: Save file info in DB
         file_record = models.TimesheetFile(

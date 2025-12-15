@@ -33,7 +33,7 @@ const THUMBNAIL_HEIGHT = 130;
 const THUMBNAIL_WIDTH = 100;
 
 // ✅ Replace with your backend URL
-const API_BASE_URL = "https://08c3cd858a93.ngrok-free.app";
+const API_BASE_URL = "https://20452867d4b4.ngrok-free.app";
 
 // --- TYPE DEFINITIONS ---
 interface TicketImage {
