@@ -156,10 +156,14 @@ const ProjectEngineerNavigator = () => (
 // -------------------- Root Navigator --------------------
 const RootStack = createStackNavigator<RootStackParamList>();
 const AppNavigator = () => {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+const role = user?.role?.toLowerCase();
+  if (isLoading) {
+    return null; // or splash screen
+  }
 
   return (
-    <RootStack.Navigator>
+   <RootStack.Navigator screenOptions={{ headerShown: false }}>
       {!user ? (
         <>
           <RootStack.Screen
@@ -187,7 +191,7 @@ const AppNavigator = () => {
         </>
       ) : (
         <>
-          {user.role === "foreman" && (
+          {role === "foreman" && (
             <RootStack.Screen
               name="Foreman"
               component={ForemanNavigator}
@@ -195,7 +199,7 @@ const AppNavigator = () => {
             />
           )}
 
-          {user.role === "supervisor" && (
+          {role === "supervisor" && (
             <RootStack.Screen
               name="Supervisor"
               component={SupervisorNavigator}
@@ -203,12 +207,15 @@ const AppNavigator = () => {
             />
           )}
 
-          {user.role === "project_engineer" && (
+          {role === "project_engineer" && (
             <RootStack.Screen
               name="ProjectEngineer"
               component={ProjectEngineerNavigator}
               options={{ headerShown: false }}
             />
+          )}
+           {!["foreman", "supervisor", "project_engineer"].includes(role!) && (
+            <RootStack.Screen name="Login" component={LoginScreen} />
           )}
         </>
       )}

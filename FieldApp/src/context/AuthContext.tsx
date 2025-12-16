@@ -108,24 +108,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pingInterval = useRef<NodeJS.Timeout | null>(null);
 
   // --- 1. Check Local Storage on App Start ---
-  useEffect(() => {
-    const loadStorageData = async () => {
-      try {
-        const storedUser = await AsyncStorage.getItem('user');
-        const storedToken = await AsyncStorage.getItem('token');
+useEffect(() => {
+  const loadStorageData = async () => {
+    try {
+      const storedUser = await AsyncStorage.getItem('user');
+      const storedToken = await AsyncStorage.getItem('token');
+console.log("🧪 Validating stored token...");
 
-        if (storedUser && storedToken) {
-          setUser(JSON.parse(storedUser));
-          setToken(storedToken);
-        }
-      } catch (e) {
-        console.error("Failed to load user data", e);
-      } finally {
-        setIsLoading(false);
+      if (storedUser && storedToken) {
+        // 🔐 Validate token with backend
+        const response = await axios.get(`${API_BASE_URL}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${storedToken}`,
+          },
+        });
+
+        // ✅ Token valid → allow auto-login
+        setUser(response.data);
+        setToken(storedToken);
+        await AsyncStorage.setItem('user', JSON.stringify(response.data));
+        console.log("✅ Token valid, user loaded:", response.data);
+
+      } else {
+        // ❌ No credentials
+        setUser(null);
+        setToken(null);
       }
-    };
-    loadStorageData();
-  }, []);
+    } catch (error) {
+      // ❌ Token invalid → force logout
+      await AsyncStorage.removeItem('user');
+      await AsyncStorage.removeItem('token');
+      setUser(null);
+      setToken(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  loadStorageData();
+}, []);
+
 
   // --- 2. Login Function ---
   const login = async (userData: User, newToken: string) => {
@@ -138,6 +160,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setToken(newToken);
         await AsyncStorage.setItem('user', JSON.stringify(userData));
         await AsyncStorage.setItem('token', newToken);
+        console.log("🔑 LOGIN TOKEN:", newToken);
+console.log("👤 LOGIN USER:", userData);
+
     } catch (e) {
         console.error("Login Error saving to storage:", e);
     } finally {
@@ -173,13 +198,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+
   // --- 4. WebSocket Logic (FIXED FOR MULTI-USER SWITCHING) ---
   useEffect(() => {
     // A. Guard: If no user, ensure socket is dead and stop.
-    if (!user) {
-      cleanUpSocket();
-      return;
-    }
+   if (isLoading || !user) {
+  cleanUpSocket();
+  return;
+}
 
     // B. Connection Logic
     const connectWebSocket = () => {

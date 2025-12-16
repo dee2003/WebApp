@@ -66,15 +66,11 @@ export default function SupervisorTicketsScreen({ route }: any) {
 
     useEffect(() => {
         navigation.setOptions({
-<<<<<<< HEAD
-            title: `${foremanName} (${new Date(routeDate).toLocaleDateString()})`,
-=======
 title: `${foremanName} (${new Date(routeDate + 'T00:00:00').toLocaleDateString('en-US', { 
   month: '2-digit', 
   day: '2-digit', 
   year: 'numeric' 
 })})`,
->>>>>>> main
         });
     }, [foremanName, routeDate, navigation]);
 

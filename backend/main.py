@@ -638,7 +638,8 @@ def login(
     }
 
 
-app.include_router(auth_router)
+
+
 
 def get_current_user(token: str = Depends(token.oauth2_scheme), db: Session = Depends(database.get_db)):
     """
@@ -665,6 +666,20 @@ def get_current_user(token: str = Depends(token.oauth2_scheme), db: Session = De
         raise credentials_exception
         
     return user
+
+@auth_router.get("/me")
+def get_me(current_user: models.User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "first_name": current_user.first_name,
+        "middle_name": current_user.middle_name,
+        "last_name": current_user.last_name,
+        "role": current_user.role.value
+    }
+
+app.include_router(auth_router)
 # -------------------------------
 # Admin Dashboard Data Endpoint
 # -------------------------------

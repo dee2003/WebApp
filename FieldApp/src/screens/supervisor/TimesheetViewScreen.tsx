@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // import React, { useEffect, useState, useCallback } from 'react';
 // import {
 //     View,
@@ -2208,8 +2207,6 @@
 // export default TimesheetReviewScreen;
 
 
-=======
->>>>>>> main
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
