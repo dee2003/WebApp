@@ -1083,6 +1083,38 @@ useFocusEffect(
     };
   }, [timesheetId, loading, isSubmitting, autoSaveDraft])
 );
+
+// Proposed Minor Change (Remove setTimeout)
+useFocusEffect(
+    useCallback(() => {
+        const refetchPhaseCodes = async () => {
+            const currentJobCode = timesheet?.data?.job?.job_code;
+            if (!currentJobCode) {
+                return; 
+            }
+            
+            console.log('Refetching phase codes on focus...');
+            try {
+                const jobRes = await apiClient.get(`/api/job-phases/${currentJobCode}`);
+                const codes = (jobRes.data?.phase_codes || []).map((p: any) => p.code);
+                setJobPhaseCodes(codes);
+            } catch (e) {
+                console.warn("Failed to load job phase codes on focus", e);
+            }
+        };
+
+        // Call immediately when focused and 'timesheet' data is available.
+        // It runs once on mount after the main useEffect updates 'timesheet',
+        // and again every time the screen is focused thereafter.
+        refetchPhaseCodes(); 
+        
+        return () => {
+            // No cleanup needed here if you remove the timeout
+        };
+    }, [timesheet]) // Dependency on 'timesheet' is key
+);
+
+
   // ---------------- HANDLERS ----------------
 const handleEmployeeHourChange = useCallback((
   employeeId: string, 
@@ -2909,8 +2941,12 @@ const getHourChangeHandler = () => {
       <Text style={styles.modalTitle}>Select Phase Codes</Text>
 
       <ScrollView style={{ maxHeight: 350 }}>
-        
-        {jobPhaseCodes.map(p => {
+        {jobPhaseCodes.length === 0 ? (
+  <Text style={{ textAlign: 'center', color: '#999', marginTop: 20 }}>
+    No phase codes available
+  </Text>
+) : (
+        jobPhaseCodes.map(p => {
           
           const isSelected = selectedPhases.includes(p);
 
@@ -2943,9 +2979,9 @@ const getHourChangeHandler = () => {
       </View>
     </TouchableOpacity>
   </View>
-);
-
-        })}
+ );
+  })
+)}
       </ScrollView>
 
       <TouchableOpacity

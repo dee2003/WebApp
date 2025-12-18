@@ -15,15 +15,6 @@ router = APIRouter(
     tags=["Tickets"]
 )
 
-# ==========================================================
-# 🔹 1. Supervisor View: Get Submitted Tickets
-# ==========================================================
-# (You can keep your commented block here if needed)
-
-
-# ==========================================================
-# 🔹 2️⃣ Supervisor View: Only Submitted Tickets
-# ==========================================================
 from datetime import date
 from sqlalchemy import func
 
@@ -95,9 +86,12 @@ def update_ticket(
 def get_tickets_for_project_engineer(
     db: Session = Depends(database.get_db),
     supervisor_id: int = Query(...),
+    foreman_id: int = Query(...),
     date: str = Query(...),
     project_engineer_id: int = Query(...),
 ):
+    print("Hit PE tickets endpoint", foreman_id, project_engineer_id, date)
+
     target_date = date_type.fromisoformat(date)
 
     # Get job codes assigned to PE
@@ -141,7 +135,30 @@ def get_tickets_for_project_engineer(
 
 
 # ==========================================================
-# 🔹 4. Submit Tickets (Status Change)
+# 🔹 4️⃣ Ticket Update Endpoint
+from pydantic import BaseModel
+from typing import Optional, Dict, Any, List
+
+class TicketUpdatePhase(BaseModel):
+    phase_code_id: Optional[int] = None
+
+@router.patch("/{ticket_id}", response_model=schemas.Ticket)
+def update_ticket_phase_code(
+    ticket_id: int,
+    update: TicketUpdatePhase,
+    db: Session = Depends(get_db),
+):
+    ticket = db.query(models.Ticket).filter(models.Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    ticket.phase_code_id = update.phase_code_id
+    db.commit()
+    db.refresh(ticket)
+    return ticket
+
+# ==========================================================
+# 🔹 5️⃣ Submit Tickets
 # ==========================================================
 @router.post("/submit", status_code=status.HTTP_200_OK)
 def submit_tickets(payload: dict, db: Session = Depends(database.get_db)):

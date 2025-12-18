@@ -2680,9 +2680,16 @@ grandTotal = entities.reduce((sum, e) => {
     // The vendor data source is now corrected to the array with hours/tickets.
     const formattedVendors = data.vendors || [];
     const formattedDumpingSites = data.dumping_sites || [];
-
+const ARE_TICKETS_SUBMITTED = false;
     return (
         <SafeAreaView style={styles.safeArea}>
+            {!ARE_TICKETS_SUBMITTED && (
+            <View style={styles.warningBanner}>
+                <Text style={styles.warningText}>
+                    ⚠️ Before sending the timesheet, please submit all the tickets.
+                </Text>
+            </View>
+        )}
             <ScrollView contentContainerStyle={{ padding: THEME.SPACING, paddingBottom: 50 }}>
                 {/* Info Card */}
                 <View style={styles.infoCard}>
@@ -2838,7 +2845,27 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-
+// ... inside styles = StyleSheet.create({...
+warningBanner: {
+    backgroundColor: '#FFEBEE', // Light Red/Pink for a warning
+    padding: 12,
+    marginBottom: 10,
+    borderRadius: 4,
+    alignItems: 'center',
+    marginHorizontal: 16, // Match screen padding
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+    elevation: 3,
+},
+warningText: {
+    color: '#B71C1C', // Darker Red for text
+    fontWeight: 'bold',
+    textAlign: 'center',
+    fontSize: 14,
+},
+// ...
   tableTitle: { fontSize: 20, fontWeight: 'bold', color: THEME.text, marginBottom: 12 },
 
   // Table container (dynamic width based on # of phases)

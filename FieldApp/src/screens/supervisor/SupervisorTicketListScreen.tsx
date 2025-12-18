@@ -35,8 +35,7 @@ interface Ticket {
     haul_vendor?: string;
     truck_number?: string;
     material?: string;
-    job_number?: string;
-    phase_code_?: string; 
+    job_number?: string; 
     zone?: string;
     hours?: number;
     
@@ -66,11 +65,7 @@ export default function SupervisorTicketsScreen({ route }: any) {
 
     useEffect(() => {
         navigation.setOptions({
-title: `${foremanName} (${new Date(routeDate + 'T00:00:00').toLocaleDateString('en-US', { 
-  month: '2-digit', 
-  day: '2-digit', 
-  year: 'numeric' 
-})})`,
+            title: `${foremanName} (${new Date(routeDate).toLocaleDateString()})`,
         });
     }, [foremanName, routeDate, navigation]);
 
@@ -80,10 +75,12 @@ title: `${foremanName} (${new Date(routeDate + 'T00:00:00').toLocaleDateString('
         fetchStateSetter(true);
         try {
             const phasesRes = await apiClient.get('/api/job-phases/phase-codes');
-            const phases = phasesRes.data.map((p: any) => ({
-                label: `${p.code} - ${p.description || ''}`,
-                value: p.id,
-            }));
+const phases = phasesRes.data.map((p: any) => ({
+    label: `${p.code} - ${p.description || ''}`, // display
+    value: p.id,  // numeric id <- this is what must be sent to backend
+}));
+setAvailablePhases(phases);
+
             setAvailablePhases(phases);
 
             const ticketRes = await apiClient.get('/api/tickets/for-supervisor', {
@@ -107,19 +104,32 @@ title: `${foremanName} (${new Date(routeDate + 'T00:00:00').toLocaleDateString('
         setRefreshing(true);
         loadData();
     };
+const handleQuickPhaseUpdate = async (
+  ticketId: number,
+  newPhaseId: number | string
+) => {
+  if (newPhaseId == null) {
+    Alert.alert("Validation Error", "You must select a phase code.");
+    return;
+  }
 
-    const handleQuickPhaseUpdate = async (ticketId: number, newPhaseId: number) => {
-        if (!newPhaseId) return;
-        setTickets(prev => prev.map(t => 
-            t.id === ticketId ? { ...t, phase_code_id: newPhaseId } : t
-        ));
-        try {
-            await apiClient.patch(`/api/tickets/${ticketId}`, { phase_code_id: newPhaseId });
-        } catch (error) {
-            Alert.alert("Error", "Failed to save phase selection.");
-            loadData(); 
-        }
-    };
+  const phaseId = Number(newPhaseId); // ensure numeric
+
+  // Optimistic UI update
+  setTickets(prev =>
+    prev.map(t => (t.id === ticketId ? { ...t, phase_code_id: phaseId } : t))
+  );
+
+  try {
+    await apiClient.patch(`/api/tickets/${ticketId}`, { phase_code_id: phaseId });
+  } catch (error) {
+    Alert.alert("Error", "Failed to save phase selection.");
+    loadData(); // revert UI if PATCH fails
+  }
+};
+
+
+
 
     const openTicketModal = (ticket: Ticket, initialViewMode: 'form' | 'file') => {
         setSelectedTicket(ticket);
@@ -298,23 +308,15 @@ title: `${foremanName} (${new Date(routeDate + 'T00:00:00').toLocaleDateString('
 
                     <Text style={styles.labelSmall}>Phase Code</Text>
                     <View style={styles.pickerContainer}>
-                        <RNPickerSelect
-                            onValueChange={(value) => handleQuickPhaseUpdate(item.id, value)}
-                            items={availablePhases}
-                            value={item.phase_code_id}
-                            placeholder={{ label: 'Select Phase...', value: null }}
-                            style={{
-                                inputIOS: styles.pickerText,
-                                inputAndroid: styles.pickerText,
-                                placeholder: styles.pickerPlaceholder,
-                                iconContainer: {
-                                    top: 12,
-                                    right: 10,
-                                }
-                            }}
-                            useNativeAndroidPickerStyle={false}
-                            Icon={() => <Ionicons name="chevron-down" size={16} color="#666" />}
-                        />
+<RNPickerSelect
+  onValueChange={(value) => handleQuickPhaseUpdate(item.id, value)}
+  items={availablePhases}
+  value={item.phase_code_id}       // must be numeric FK
+  placeholder={{ label: 'Select Phase...', value: undefined }}
+  useNativeAndroidPickerStyle={false}
+/>
+
+
                     </View>
 
                     <TouchableOpacity 

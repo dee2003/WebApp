@@ -96,31 +96,59 @@ const SupervisorDashboard = () => {
     /**
      * Fetches the dashboard data and pending submitted dates.
      */
-    const loadDashboardData = useCallback(async (isInitialLoad: boolean = false) => {
-        try {
-            const [notifRes, submittedRes] = await Promise.all([
-                apiClient.get('/api/review/notifications'),
-                apiClient.get('/api/review/submitted-dates'),
-            ]);
-            setNotifications(notifRes.data);
-            setSubmittedDates(submittedRes.data);
-            
-            // Show summary only on the very first successful load
-            if (isInitialLoad && notifRes.data.length > 0) {
-                showPendingSummary(notifRes.data);
-            }
+//     const loadDashboardData = useCallback(async (isInitialLoad: boolean = false) => {
+//     try {
+//         const [notifRes, submittedRes] = await Promise.all([
+//             apiClient.get('/api/review/notifications'),
+//             apiClient.get(`/api/review/submitted-dates?supervisor_id=${user?.id}`), // pass supervisor id
+//         ]);
+//         setNotifications(notifRes.data);
+//         setSubmittedDates(submittedRes.data);
+        
+//         // Show summary only on the very first successful load
+//         if (isInitialLoad && notifRes.data.length > 0) {
+//             showPendingSummary(notifRes.data);
+//         }
 
-        } catch (error: any) {
-            console.error('Failed to load data:', error);
+//     } catch (error: any) {
+//         console.error('Failed to load data:', error);
+//         Alert.alert(
+//             'Error',
+//             error.response?.data?.detail || 'Failed to load dashboard data'
+//         );
+//     } finally {
+//         setLoading(false);
+//         setRefreshing(false);
+//     }
+// }, [showPendingSummary, user?.id]);
+const loadDashboardData = useCallback(async (isInitialLoad: boolean = false) => {
+    if (!user?.id) return; // ✅ Skip if logged out
+
+    try {
+        const [notifRes, submittedRes] = await Promise.all([
+            apiClient.get('/api/review/notifications'),
+            apiClient.get(`/api/review/submitted-dates?supervisor_id=${user.id}`),
+        ]);
+        setNotifications(notifRes.data);
+        setSubmittedDates(submittedRes.data);
+
+        if (isInitialLoad && notifRes.data.length > 0) {
+            showPendingSummary(notifRes.data);
+        }
+    } catch (error: any) {
+        console.error('Failed to load data:', error);
+        if (error.response?.status !== 401) { // optional
             Alert.alert(
                 'Error',
                 error.response?.data?.detail || 'Failed to load dashboard data'
             );
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
         }
-    }, [showPendingSummary]);
+    } finally {
+        setLoading(false);
+        setRefreshing(false);
+    }
+}, [showPendingSummary, user?.id]);
+
 
     // Initial data load and notification summary trigger
     useEffect(() => {

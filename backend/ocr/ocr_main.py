@@ -30,12 +30,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # --- AI Model Setup ---
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
-from ultralytics import YOLO
 
-# Path to your custom YOLOv8 model
-YOLO_MODEL_PATH = os.path.join(os.path.dirname(__file__), "best.pt")
-
-# --- File Storage Setup ---
 TICKETS_DIR = r"D:\WebApp\backend\tickets_dir"
 DEBUG_DIR = r"D:\WebApp\backend\debug_output"
 PDF_TICKETS_DIR = r"D:\WebApp\backend\ticket_pdfs"
@@ -55,13 +50,13 @@ processor = TrOCRProcessor.from_pretrained('microsoft/trocr-large-handwritten')
 model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-large-handwritten').to(device)
 print("✅ TrOCR model loaded successfully.")
 
-print("Loading custom YOLOv8 model for table cell detection...")
-if not os.path.exists(YOLO_MODEL_PATH):
-    print(f"❌ CRITICAL ERROR: YOLO model not found at '{YOLO_MODEL_PATH}'")
-    yolo_model = None
-else:
-    yolo_model = YOLO(YOLO_MODEL_PATH)
-    print("✅ Custom YOLOv8 model loaded successfully.")
+# print("Loading custom YOLOv8 model for table cell detection...")
+# if not os.path.exists(YOLO_MODEL_PATH):
+#     print(f"❌ CRITICAL ERROR: YOLO model not found at '{YOLO_MODEL_PATH}'")
+#     yolo_model = None
+# else:
+#     yolo_model = YOLO(YOLO_MODEL_PATH)
+#     print("✅ Custom YOLOv8 model loaded successfully.")
 
 @router.websocket("/ws/{foreman_id}")
 async def websocket_endpoint(websocket: WebSocket, foreman_id: int):
@@ -153,6 +148,7 @@ def remove_lines(image: Image.Image) -> Image.Image:
     final_image_rgb = cv2.cvtColor(final_binarized, cv2.COLOR_GRAY2RGB)
     return Image.fromarray(final_image_rgb)
 
+
 def enhance_cell_image(cell_cv_image):
     if cell_cv_image.shape[0] < 10 or cell_cv_image.shape[1] < 10:
         return None
@@ -196,128 +192,250 @@ def get_y_overlap(box1, box2):
 
 
 # ------------------------------------------------------------------- #
-# --- TABLE EXTRACTION (YOLO) - WITH INDIVIDUAL CELL SAVING ---
+# --- TABLE EXTRACTION (PURE OPENCV, NO YOLO) ---                     #
 # ------------------------------------------------------------------- #
 
 def extract_table_data_yolo(image: Image.Image, debug_dir_path: str):
-    print("Running primary table extraction with YOLO...")
-    if yolo_model is None: return None
+    """
+    OpenCV-based table extraction that mimics the old YOLO interface.
+
+    Returns:
+        {
+            "extracted_table": List[List[str]],
+            "table_bbox": [min_x, min_y, max_x, max_y]
+        }
+        or None if no table-like region is found.
+    """
+    print("Running primary table extraction with OpenCV (no YOLO)...")
+
+    # Convert PIL -> OpenCV BGR
     original_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
     h, w, _ = original_cv.shape
-    
-    # Predict using YOLO
-    results = yolo_model.predict(original_cv, conf=0.7, verbose=False) 
-    if not results or not results[0].boxes: return None
-    
-    cell_boxes = results[0].boxes.xyxy.cpu().numpy().astype(int).tolist()
-    if not cell_boxes: return None
 
-    # --- STEP 1: Sort Boxes Top-to-Bottom ---
+    # 1) Binarize image
+    gray = cv2.cvtColor(original_cv, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(
+        gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+    )
+
+    # 2) Detect horizontal and vertical lines (border detection)
+    horizontalsize = max(20, w // 40)
+    verticalsize = max(20, h // 40)
+
+    horizontal_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT, (horizontalsize, 1)
+    )
+    vertical_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT, (1, verticalsize)
+    )
+
+    horizontal_lines = cv2.erode(binary, horizontal_kernel, iterations=1)
+    horizontal_lines = cv2.dilate(horizontal_lines, horizontal_kernel, iterations=1)
+
+    vertical_lines = cv2.erode(binary, vertical_kernel, iterations=1)
+    vertical_lines = cv2.dilate(vertical_lines, vertical_kernel, iterations=1)
+
+    table_mask = cv2.add(horizontal_lines, vertical_lines)
+
+    # 3) Find candidate table contours (outer border)
+    contours, _ = cv2.findContours(
+        table_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+    if not contours:
+        print("No strong table borders found; skipping table extraction.")
+        return None
+
+    min_area = (h * w) * 0.05
+    best_cnt = None
+    best_area = 0
+
+    for cnt in contours:
+        x, y, cw, ch = cv2.boundingRect(cnt)
+        area = cw * ch
+        if area < min_area:
+            continue
+        if area > best_area:
+            best_area = area
+            best_cnt = (x, y, cw, ch)
+
+    if best_cnt is None:
+        print("No suitable table region detected by morphology.")
+        return None
+
+    x, y, cw, ch = best_cnt
+    min_x, min_y, max_x, max_y = x, y, x + cw, y + ch
+    table_bbox = [min_x, min_y, max_x, max_y]
+
+    # Save debug visualization
+    try:
+        dbg_mask = cv2.cvtColor(table_mask, cv2.COLOR_GRAY2BGR)
+        cv2.rectangle(dbg_mask, (min_x, min_y), (max_x, max_y), (0, 0, 255), 2)
+        dbg_mask_pil = Image.fromarray(cv2.cvtColor(dbg_mask, cv2.COLOR_BGR2RGB))
+        out_path = os.path.join(debug_dir_path, "3_detected_cells_on_original.png")
+        dbg_mask_pil.save(out_path)
+        print(f"✅ Debug image saved to: {out_path}")
+    except Exception as e:
+        print(f"Warning while saving debug image: {e}")
+
+    # 4) Crop the table region and find inner grid (cells)
+    table_region = original_cv[min_y:max_y, min_x:max_x]
+    if table_region.size == 0:
+        print("Table crop is empty; aborting table extraction.")
+        return None
+
+    tr_gray = cv2.cvtColor(table_region, cv2.COLOR_BGR2GRAY)
+    _, tr_bin = cv2.threshold(
+        tr_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+    )
+
+    tr_h, tr_w = tr_bin.shape
+    cell_horiz_size = max(10, tr_w // 60)
+    cell_vert_size = max(10, tr_h // 60)
+
+    h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (cell_horiz_size, 1))
+    v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, cell_vert_size))
+
+    h_lines_tr = cv2.erode(tr_bin, h_kernel, iterations=1)
+    h_lines_tr = cv2.dilate(h_lines_tr, h_kernel, iterations=1)
+
+    v_lines_tr = cv2.erode(tr_bin, v_kernel, iterations=1)
+    v_lines_tr = cv2.dilate(v_lines_tr, v_kernel, iterations=1)
+
+    table_grid_mask = cv2.add(h_lines_tr, v_lines_tr)
+
+    # 5) Find contours for each cell candidate, with de-duplication
+    cnts, _ = cv2.findContours(
+        table_grid_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    raw_boxes = []
+    for c in cnts:
+        x2, y2, w2, h2 = cv2.boundingRect(c)
+        area = w2 * h2
+        if area < 50:
+            continue
+        if w2 > tr_w * 0.9 and h2 > tr_h * 0.9:
+            continue
+        raw_boxes.append([x2, y2, x2 + w2, y2 + h2])
+
+    def box_area(b):
+        return max(0, b[2] - b[0]) * max(0, b[3] - b[1])
+
+    def is_inside(inner, outer, tol=3):
+        return (
+            inner[0] >= outer[0] - tol
+            and inner[1] >= outer[1] - tol
+            and inner[2] <= outer[2] + tol
+            and inner[3] <= outer[3] + tol
+        )
+
+    raw_boxes.sort(key=box_area, reverse=True)
+    cell_boxes = []
+    for b in raw_boxes:
+        keep = True
+        for kept in cell_boxes:
+            if is_inside(b, kept):
+                keep = False
+                break
+        if keep:
+            cell_boxes.append(b)
+
+    if not cell_boxes:
+        print("No inner cell boxes found; treating region as one block.")
+        cleaned_pil = remove_lines(image)
+        cleaned_cv = cv2.cvtColor(np.array(cleaned_pil), cv2.COLOR_RGB2BGR)
+        cell_roi = cleaned_cv[min_y:max_y, min_x:max_x]
+        enhanced = enhance_cell_image(cell_roi)
+        if enhanced is None:
+            return None
+        texts = run_batch_ocr([enhanced])
+        table_grid = [[texts[0] if texts else ""]]
+        return {"extracted_table": table_grid, "table_bbox": table_bbox}
+
+    # 6) Sort and group boxes into rows
     cell_boxes.sort(key=lambda b: (b[1] + b[3]) / 2)
-
-    # --- STEP 2: Group Cells into Rows ---
     rows = []
     current_row = []
     last_y_center = -1
-    
+
     heights = [b[3] - b[1] for b in cell_boxes]
     avg_cell_height = sum(heights) / len(heights) if heights else 30
-    row_threshold = avg_cell_height * 0.5 
+    row_threshold = avg_cell_height * 0.5
 
     for box in cell_boxes:
         y_center = (box[1] + box[3]) / 2
-        if last_y_center == -1 or abs(y_center - last_y_center) < row_threshold: 
+        if last_y_center == -1 or abs(y_center - last_y_center) < row_threshold:
             current_row.append(box)
         else:
-            current_row.sort(key=lambda b: b[0]) 
+            current_row.sort(key=lambda b: b[0])
             rows.append(current_row)
             current_row = [box]
         last_y_center = y_center
-        
+
     if current_row:
         current_row.sort(key=lambda b: b[0])
         rows.append(current_row)
 
-    # --- STEP 3: Vertical Clustering (Filter Isolated Boxes) ---
-    table_blocks = [] 
-    current_block = []
-    GAP_THRESHOLD = max(25, avg_cell_height * 0.6) 
-    previous_row_bottom = -1
+    if not rows:
+        print("Rows list empty after grouping; aborting table extraction.")
+        return None
 
-    for row in rows:
-        row_top = min(b[1] for b in row)
-        row_bottom = max(b[3] for b in row)
-        
-        if previous_row_bottom == -1:
-            current_block.append(row)
-        else:
-            gap = row_top - previous_row_bottom
-            if gap < GAP_THRESHOLD:
-                current_block.append(row)
-            else:
-                table_blocks.append(current_block)
-                current_block = [row]
-        previous_row_bottom = row_bottom
+    cleaned_pil_full = remove_lines(image)
+    cleaned_cv_full = cv2.cvtColor(np.array(cleaned_pil_full), cv2.COLOR_RGB2BGR)
 
-    if current_block:
-        table_blocks.append(current_block)
-
-    # --- STEP 4: Select the "Dominant" Block ---
-    if not table_blocks: return None
-    main_table_rows = max(table_blocks, key=lambda block: sum(len(r) for r in block))
-    print(f"DEBUG: Found {len(table_blocks)} blocks. Selected main table with {len(main_table_rows)} rows.")
-
-    # --- STEP 5: Visualization (Draw Red Boxes) ---
-    draw_img = image.copy()
-    draw = ImageDraw.Draw(draw_img)
-    for row in main_table_rows:
-        for box in row:
-            x1, y1, x2, y2 = box
-            draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
-    
-    debug_path = os.path.join(debug_dir_path, "3_detected_cells_on_original.png")
-    draw_img.save(debug_path)
-    print(f"✅ Debug image saved to: {debug_path}")
-
-    # --- STEP 6: Re-calculate Table Bounding Box ---
-    all_main_boxes = [box for row in main_table_rows for box in row]
-    min_x = max(0, min(b[0] for b in all_main_boxes) - 10)
-    min_y = max(0, min(b[1] for b in all_main_boxes) - 10)
-    max_x = min(w, max(b[2] for b in all_main_boxes) + 10)
-    max_y = min(h, max(b[3] for b in all_main_boxes) + 10)
-    table_bbox = [min_x, min_y, max_x, max_y]
-
-    # --- STEP 7: Extract Images & OCR (WITH SAVING) ---
-    cleaned_pil = remove_lines(image)
-    cleaned_cv = cv2.cvtColor(np.array(cleaned_pil), cv2.COLOR_RGB2BGR)
-    
     cell_images = []
     cell_coords = []
-    max_cols = len(max(main_table_rows, key=len)) if main_table_rows else 0
-    table_grid = [["" for _ in range(max_cols)] for _ in range(len(main_table_rows))]
 
-    for r_idx, row_boxes in enumerate(main_table_rows):
+    max_cols = len(max(rows, key=len)) if rows else 0
+    table_grid = [["" for _ in range(max_cols)] for _ in range(len(rows))]
+
+    for r_idx, row_boxes in enumerate(rows):
         for c_idx, box in enumerate(row_boxes):
-            x1, y1, x2, y2 = box
-            cell_roi = cleaned_cv[max(0, y1-2):min(h, y2+2), max(0, x1-2):min(w, x2+2)]
+            x1 = min_x + box[0]
+            y1 = min_y + box[1]
+            x2 = min_x + box[2]
+            y2 = min_y + box[3]
+
+            cell_roi = cleaned_cv_full[
+                max(0, y1 - 2):min(h, y2 + 2),
+                max(0, x1 - 2):min(w, x2 + 2)
+            ]
             enhanced = enhance_cell_image(cell_roi)
-            if enhanced:
-                # 🟢 RESTORED: Save individual cell image
-                save_path = os.path.join(debug_dir_path, f"cell_{r_idx}_{c_idx}.png")
-                enhanced.save(save_path)
-                
-                cell_images.append(enhanced)
-                cell_coords.append((r_idx, c_idx))
+            if enhanced is None:
+                continue
+
+            save_path = os.path.join(debug_dir_path, f"cell_{r_idx}_{c_idx}.png")
+            enhanced.save(save_path)
+
+            cell_images.append(enhanced)
+            cell_coords.append((r_idx, c_idx))
 
     if cell_images:
         texts = run_batch_ocr(cell_images)
         for (r, c), text in zip(cell_coords, texts):
-            if c < len(table_grid[r]):
+            if r < len(table_grid) and c < len(table_grid[r]):
                 table_grid[r][c] = text
             else:
-                table_grid[r].append(text)
+                while c >= len(table_grid[r]):
+                    table_grid[r].append("")
+                table_grid[r][c] = text
 
-    return {"extracted_table": table_grid, "table_bbox": table_bbox}
+    non_empty_cells = sum(
+        1 for row in table_grid for v in row if v and str(v).strip()
+    )
+    if non_empty_cells == 0:
+        print("OpenCV table grid produced no text; relying on contour pipeline only.")
+        return None
+
+    # Return both grid and bbox plus avg_cell_height for later use  # <<< FIX
+    return {
+        "extracted_table": table_grid,
+        "table_bbox": table_bbox,
+        "avg_cell_height": avg_cell_height,  # <<< FIX
+    }
+
+
+
 # ------------------------------------------------------------------- #
 # --- CELL SEGMENTATION ---
 # ------------------------------------------------------------------- #
@@ -435,8 +553,7 @@ def extract_structured_data(raw_text: str) -> dict:
 
     results = {
         "ticket_number": None, "ticket_date": None, "haul_vendor": None,
-        "truck_number": None, "material": None, "job_number": None,
-        "phase_code_": None, "zone": None, "hours": None,
+        "truck_number": None, "material": None, "job_number": None, "zone": None, "hours": None,
     }
 
     # --- SET 1: Simple Patterns (Fast, Same-Line Strict) ---
@@ -447,7 +564,6 @@ def extract_structured_data(raw_text: str) -> dict:
         "truck_number":  r'(?i)(?:Truck Number|Truck No|Truck #|Truck)\s*[:\-]?\s*([A-Za-z0-9\-]+)',
         "material":      r'(?i)(?:Material\s+hauled)\s*[:\-]?\s*([A-Za-z\d\-][A-Za-z\s\d\-]*)',
         "job_number":    r'(?i)(?:Job Number|Job No|Job #)\s*[:\-]?\s*([A-Za-z0-9\-]+)',
-        "phase_code_":   r'(?i)(?:Phase Code)\s*[:\-]?\s*([A-Za-z0-9\-]+)',
         "zone":          r'(?i)(?:Zone)\s*[:\-]?\s*([A-Za-z0-9\-]+)',
         "hours":         r'(?i)(?:Hours)\s*[:\-]?\s*([\d\.]+(?:\s?hrs)?)'
     }
@@ -466,7 +582,6 @@ def extract_structured_data(raw_text: str) -> dict:
         "truck_number":  (r'(?i)(?:Truck Number|Truck No|Truck #|Truck)', r'([A-Za-z0-9\-]+)'),
         "material":      (r'(?i)(?:Material\s+hauled)', r'([A-Za-z\d\-][A-Za-z\s\d\-]*)'),
         "job_number":    (r'(?i)(?:Job Number|Job No|Job #)', r'([A-Za-z0-9\-]+)'),
-        "phase_code_":   (r'(?i)(?:Phase Code)', r'([A-Za-z0-9\-]+)'),
         "zone":          (r'(?i)(?:Zone)', r'([A-Za-z0-9\-]+)'),
         "hours":         (r'(?i)(?:Hours)', r'([\d\.]+(?:\s?hrs)?)')
     }
@@ -538,104 +653,140 @@ def extract_structured_data(raw_text: str) -> dict:
 # ------------------------------------------------------------------- #
 
 def process_scan_in_background(
-    file_contents_list: List[Tuple[str, bytes]], 
-    foreman_id: int, 
+    file_contents_list: List[Tuple[str, bytes]],
+    foreman_id: int,
     timesheet_id: int,
-    category: str,       # 👈 Add this
+    category: str,
     sub_category: str
 ):
     db = SessionLocal()
     try:
-        # --- 1. SETUP & VALIDATION ---
         foreman = db.query(models.User).filter(models.User.id == foreman_id).first()
         timesheet = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
-        
+
         if not foreman or not timesheet:
             print(f"❌ BACKGROUND ERROR: Foreman {foreman_id} or Timesheet {timesheet_id} not found.")
             return
 
-        print(f"✅ BACKGROUND TASK: Started processing for Foreman {foreman.username}, Timesheet {timesheet.id}")
-        
         sane_username = sanitize_filename(foreman.username)
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
         internal_unique_id = f"{timestamp}_{sane_username}"
-        
+
         debug_scan_dir = os.path.join(DEBUG_DIR, internal_unique_id)
         os.makedirs(debug_scan_dir, exist_ok=True)
-        
+
         all_pages_pil_images = []
         all_pages_final_rows = []
 
         print(f"Processing {len(file_contents_list)} file(s) for batch {internal_unique_id}...")
-        
-        # --- 2. IMAGE PROCESSING LOOP ---
+
         for index, (filename, file_content) in enumerate(file_contents_list):
             print(f"--- Processing Page {index + 1} of {len(file_contents_list)} ---")
             page_debug_dir = os.path.join(debug_scan_dir, f"page_{index+1}")
             os.makedirs(page_debug_dir, exist_ok=True)
-            
+
             original_image_pil = Image.open(io.BytesIO(file_content)).convert("RGB")
             all_pages_pil_images.append(original_image_pil)
-            
-            # Preprocessing
+
+
             print("Preprocessing image (basic)...")
             basic_processed_pil = basic_preprocess(original_image_pil.copy())
             basic_processed_pil.save(os.path.join(page_debug_dir, "0_basic_processed.png"), format='PNG')
-            
-            # Extract Table (YOLO)
+
+            # Extract Table
             table_result = extract_table_data_yolo(basic_processed_pil, page_debug_dir)
             image_for_contours = basic_processed_pil.copy()
             table_data = None
             table_y_start = float('inf')
-            
+            table_avg_cell_height = 30  # default                # <<< FIX
+
             if table_result:
-                print("✅ Table found via YOLO!")
+                print("✅ Table found via OpenCV table extractor!")
                 table_data = table_result["extracted_table"]
                 table_bbox = table_result["table_bbox"]
                 table_y_start = table_bbox[1]
-                
-                # Erase table for contour detection
+                table_avg_cell_height = table_result.get("avg_cell_height", 30)  # <<< FIX
+
                 draw = ImageDraw.Draw(image_for_contours)
                 draw.rectangle(table_bbox, fill="white")
                 image_for_contours.save(os.path.join(page_debug_dir, "4_erased_table_from_basic.png"))
-            else: 
-                print("⚠️ No table found via YOLO for this page.")
-            
-            # Extract Lines (Contours)
+            else:
+                print("⚠️ No table found for this page.")
+
             print("Applying line removal to non-table areas...")
             image_for_contours_cleaned_pil = remove_lines(image_for_contours)
-            image_for_contours_cleaned_pil.save(os.path.join(page_debug_dir, "5_image_for_contours_CLEANED.png"), format='PNG')
-            image_for_contours_cleaned_cv = cv2.cvtColor(np.array(image_for_contours_cleaned_pil), cv2.COLOR_RGB2BGR)
-            
+            image_for_contours_cleaned_pil.save(
+                os.path.join(page_debug_dir, "5_image_for_contours_CLEANED.png"),
+                format='PNG'
+            )
+            image_for_contours_cleaned_cv = cv2.cvtColor(
+                np.array(image_for_contours_cleaned_pil), cv2.COLOR_RGB2BGR
+            )
+
             print("--- Calling extract_lines_data (non-table text) IN-MEMORY ---")
-            line_result = extract_lines_data(image_for_contours_cleaned_cv, f"{internal_unique_id}_page_{index+1}") 
-            
+            line_result = extract_lines_data(
+                image_for_contours_cleaned_cv,
+                f"{internal_unique_id}_page_{index+1}"
+            )
+
             contour_lines = []
             if line_result and line_result.get("all_lines"):
                 print(f"✅ Contour extraction found {len(line_result['all_lines'])} lines.")
                 contour_lines = line_result["all_lines"]
             elif not table_data:
                 print("⚠️ No text (table or contour) found on this page.")
-                continue 
-            
-            # Merge Data (Visual Order)
+                continue
+
             page_final_data_rows = []
             table_inserted = False
-            
+
+            # Margin so table is inserted slightly before first overlapping line  # <<< FIX
+            insert_margin = table_avg_cell_height * 0.8
+
             for line in contour_lines:
-                if not table_inserted and table_data and line["y"] >= table_y_start:
+                if (
+                    not table_inserted
+                    and table_data
+                    and line["y"] + insert_margin >= table_y_start  # <<< FIX
+                ):
                     page_final_data_rows.extend(table_data)
                     table_inserted = True
+
                 page_final_data_rows.append(line["row_text"])
-            
-            if not table_inserted and table_data: 
+
+            if not table_inserted and table_data:
                 page_final_data_rows.extend(table_data)
-            
+
             if not page_final_data_rows:
                 print("⚠️ Page processing resulted in empty content.")
                 continue
 
-            all_pages_final_rows.append({"page": index + 1, "rows": page_final_data_rows})
+            # --- Sandwich / header-fix logic on this page ---       # <<< FIX
+            rows = page_final_data_rows
+            strong_row_indices = []
+            for i, row in enumerate(rows):
+                non_empty_count = len([c for c in row if c and str(c).strip()])
+                if non_empty_count >= 8:
+                    strong_row_indices.append(i)
+
+            if strong_row_indices:
+                table_start_idx = strong_row_indices[0]
+                table_end_idx = strong_row_indices[-1]
+                max_cols = 0
+                for idx in strong_row_indices:
+                    max_cols = max(max_cols, len(rows[idx]))
+
+                # Detect a single-cell header just above table and move it below table
+                if table_start_idx > 0:
+                    header_row = rows[table_start_idx - 1]
+                    non_empty = [c for c in header_row if c and str(c).strip()]
+                    if len(non_empty) == 1:   # looks like "Start time approved..."  # <<< FIX
+                        header = rows.pop(table_start_idx - 1)
+                        table_start_idx -= 1
+                        table_end_idx -= 1
+                        rows.insert(table_end_idx + 1, header)
+
+            all_pages_final_rows.append({"page": index + 1, "rows": rows})
         
         if not all_pages_pil_images:
             print("❌ BACKGROUND ERROR: No valid images were processed.")
@@ -672,7 +823,7 @@ def process_scan_in_background(
             strong_row_indices = []
             for i, row in enumerate(rows):
                 non_empty_count = len([c for c in row if c and str(c).strip()])
-                if non_empty_count >= 4:
+                if non_empty_count >= 8:
                     strong_row_indices.append(i)
 
             table_start_idx = strong_row_indices[0] if strong_row_indices else -1
@@ -769,7 +920,6 @@ def process_scan_in_background(
             truck_number=structured_data.get("truck_number"),
             material=structured_data.get("material"),
             job_number=structured_data.get("job_number"),
-            phase_code_=structured_data.get("phase_code_"),
             zone=structured_data.get("zone"),
             hours=structured_data.get("hours")
         )
@@ -911,8 +1061,6 @@ def list_images_by_date(foreman_id: int, db: Session = Depends(database.get_db))
             "material": t.material,
             "job_number": t.job_number,
             
-            # --- ⭐ 3. MATCH YOUR NEW MODEL COLUMN NAME ---
-            "phase_code_": t.phase_code_, # Use the underscore
             
             "zone": t.zone,
             "hours": t.hours
@@ -948,7 +1096,6 @@ class TicketUpdatePayload(BaseModel):
     truck_number: Optional[str] = None
     material: Optional[str] = None
     job_number: Optional[str] = None
-    phase_code_: Optional[str] = None
     zone: Optional[str] = None
     hours: Optional[float] = None
     
@@ -975,12 +1122,11 @@ def update_ticket_text(
 
     # 1. Update Structured Header Data
     ticket.ticket_number = payload.ticket_number
-    ticket.ticket_date = payload.ticket_date
+    ticket.ticket_date = datetime.strptime(payload.ticket_date, "%m-%d-%Y").date()    
     ticket.haul_vendor = payload.haul_vendor
     ticket.truck_number = payload.truck_number
     ticket.material = payload.material
     ticket.job_number = payload.job_number
-    ticket.phase_code_ = payload.phase_code_
     ticket.zone = payload.zone
     ticket.hours = payload.hours
 
@@ -1179,7 +1325,6 @@ def get_all_images_grouped(db: Session = Depends(get_db)):
                     "truck_number": t.truck_number,
                     "material": t.material,
                     "job_number": t.job_number,
-                    "phase_code_": t.phase_code_,
                     "zone": t.zone,
                     "hours": t.hours,
                     "raw_text_content": t.raw_text_content

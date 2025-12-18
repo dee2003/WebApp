@@ -559,3 +559,14 @@ class AuditLog(Base):
     
     # The timestamp of when the action occurred
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+class TicketWorkflow(Base):
+    __tablename__ = "ticket_workflows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=False)
+    supervisor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String, nullable=False)
+    by_role = Column(String, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    comments = Column(String, nullable=True)

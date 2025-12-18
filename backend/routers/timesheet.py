@@ -39,50 +39,34 @@ print("🔗 [Router] BASE_URL loaded:", BASE_URL)
 @router.get("/counts-by-status", response_model=schemas.TimesheetCountsResponse)
 def get_timesheet_counts_by_status(db: Session = Depends(get_db)):
     try:
-        # ✅ Ensure values match DB enum exactly
         foreman_statuses = [
             models.SubmissionStatus.DRAFT.value,
             models.SubmissionStatus.PENDING.value,
-            models.SubmissionStatus.REJECTED.value,
         ]
-
         supervisor_statuses = [
             models.SubmissionStatus.SUBMITTED.value,
-            models.SubmissionStatus.SENT.value,  # -> "Sent"
         ]
-
-        engineer_status = models.SubmissionStatus.APPROVED.value
-
+        engineer_status = models.SubmissionStatus.APPROVED_BY_SUPERVISOR.value
         counts_query = db.query(
             func.count(
                 case((models.Timesheet.status.cast(String).in_(foreman_statuses), 1))
             ).label("foreman_total"),
-
             func.count(
                 case((models.Timesheet.status.cast(String).in_(supervisor_statuses), 1))
             ).label("supervisor_total"),
-
             func.count(
                 case((models.Timesheet.status.cast(String) == engineer_status, 1))
-            ).label("engineer_total")
+            ).label("engineer_total"),
         ).first()
-
-        print("DEBUG foreman_statuses:", foreman_statuses)
-        print("DEBUG supervisor_statuses:", supervisor_statuses)
-
         return {
             "foreman": int(counts_query.foreman_total or 0),
             "supervisor": int(counts_query.supervisor_total or 0),
             "project_engineer": int(counts_query.engineer_total or 0),
         }
-
     except Exception as e:
-        print(f"[ERROR] Failed to calculate timesheet counts: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="An internal error occurred while calculating timesheet counts."
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
+    
     
 @router.post("/", response_model=schemas.Timesheet)
 # @audit(action="CREATED", entity="Timesheet")
