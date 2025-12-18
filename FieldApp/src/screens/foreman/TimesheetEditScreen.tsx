@@ -1083,6 +1083,38 @@ useFocusEffect(
     };
   }, [timesheetId, loading, isSubmitting, autoSaveDraft])
 );
+
+// Proposed Minor Change (Remove setTimeout)
+useFocusEffect(
+    useCallback(() => {
+        const refetchPhaseCodes = async () => {
+            const currentJobCode = timesheet?.data?.job?.job_code;
+            if (!currentJobCode) {
+                return; 
+            }
+            
+            console.log('Refetching phase codes on focus...');
+            try {
+                const jobRes = await apiClient.get(`/api/job-phases/${currentJobCode}`);
+                const codes = (jobRes.data?.phase_codes || []).map((p: any) => p.code);
+                setJobPhaseCodes(codes);
+            } catch (e) {
+                console.warn("Failed to load job phase codes on focus", e);
+            }
+        };
+
+        // Call immediately when focused and 'timesheet' data is available.
+        // It runs once on mount after the main useEffect updates 'timesheet',
+        // and again every time the screen is focused thereafter.
+        refetchPhaseCodes(); 
+        
+        return () => {
+            // No cleanup needed here if you remove the timeout
+        };
+    }, [timesheet]) // Dependency on 'timesheet' is key
+);
+
+
   // ---------------- HANDLERS ----------------
 const handleEmployeeHourChange = useCallback((
   employeeId: string, 
@@ -2499,22 +2531,16 @@ const renderEntityTable = (
       <Text style={tableStyles.headerText}>{isEquipment ? 'EQUIPMENT NAME' : title.toUpperCase()}</Text>
     </View>
    {/* Start Hours (equipment only) */}
-{type === 'equipment' && (
-  <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
-    <Text style={tableStyles.headerText}>START HOURS</Text>
-  </View>
-)}
-
-{/* Stop Hours (equipment only) */}
-{type === 'equipment' && (
-  <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
-    <Text style={tableStyles.headerText}>STOP HOURS</Text>
-  </View>
-)}
+{/* ADDED UNIT COLUMN HEADER HERE */}
+    {!isEquipment && (
+      <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
+        <Text style={tableStyles.headerText}>UNIT</Text>
+      </View>
+    )}
     {type !== 'equipment' && (
       <View style={[tableStyles.headerCellFixed, { width: 140 }]}>
         <Text style={tableStyles.headerText}>
-          {type === 'dumping_site' ? '# OF LOADS' : '# OF TICKETS'}
+          {type === 'dumping_site' ? '# OF TICKETS' : '# OF TICKETS'}
         </Text>
       </View>
     )}
@@ -2547,7 +2573,7 @@ const renderEntityTable = (
                 <View style={tableStyles.phaseHeaderRow}>
                   {selectedPhases.map((code: string) => (
                     <View key={`hours-${code}`} style={[tableStyles.headerCell, { width: 96 }]}>
-                      <Text style={tableStyles.headerSubText}>{isEquipment ? 'REG | S.B' : 'HRS/Qty'}</Text>
+                      <Text style={tableStyles.headerSubText}>{isEquipment ? 'REG | S.B' : 'Qty'}</Text>
                     </View>
                   ))}
                 </View>
@@ -2656,45 +2682,14 @@ const renderEntityTable = (
    <View style={[tableStyles.cellFixed, { width: 200 }]}>
       <Text style={tableStyles.cellText}>{name}</Text>
     </View>
-    {/* ORIGINAL LAYOUT FOR OTHER TYPES */}
-    {/* Start Hours cell */}
-    
-{type === 'equipment' && (
-  
-  <View style={[tableStyles.cellFixed, { width: 100 }]}>
-    <InlineEditableNumber
-      value={startHours[ent.id] ?? ""}
-      onChange={(v) =>
-   setStartHours(prev => ({
-      ...prev,
-      [ent.id]: v
-    }))
-}
- validateHours={true} 
-      placeholder="0.0"
-    />
-  </View>
-)}
-
-{/* Stop Hours cell */}
-{type === 'equipment' && (
-  <View style={[tableStyles.cellFixed, { width: 100 }]}>
-    <InlineEditableNumber
-      value={stopHours[ent.id] ?? ""}
-      onChange={(v) =>
-  setStopHours(prev => ({
-    ...prev,
-    [ent.id]: v
-  }))
-}
- validateHours={true} 
-      placeholder="0.0"
-    />
-  </View>
-)}
-
-   
-// ... existing code (around line 1058)
+{/* ADDED UNIT COLUMN CELL HERE */}
+    {!isEquipment && (
+      <View style={[tableStyles.cellFixed, { width: 100 }]}>
+        <Text style={tableStyles.cellText}>
+          {type === 'material' ? (materialUnits[ent.id] || ent.unit || 'Hrs') : (ent.unit || 'Loads')}
+        </Text>
+      </View>
+    )}
 
 {type !== "equipment" && (
   <View style={[tableStyles.cellFixed, { width: 140 }]}>
@@ -2738,7 +2733,7 @@ const renderEntityTable = (
                           const sbVal = equipmentHours[ent.id]?.[p]?.SB ?? '';
 
                           return (
-                            <View key={`${ent.id}-${p}`} style={[tableStyles.cell, { width: 96 }]}>
+                            <View key={`${ent.id}-${p}`} style={[tableStyles.cell, { width: 100 }]}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                                 <InlineEditableNumber
                                   value={regVal}
@@ -2747,6 +2742,14 @@ const renderEntityTable = (
                                   placeholder="0.0"
                                   style={tableStyles.hourInput}
                                 />
+                                <View 
+          style={{ 
+            width: 1, 
+            height: '100%', 
+            backgroundColor: '#E5E7EB', // Matches THEME.border
+            marginHorizontal: -2
+          }} 
+        />
                                 <InlineEditableNumber
                                   value={sbVal}
                                   onChange={(v) => handleEquipmentHourChange(ent.id, p, 'SB', v)} 
@@ -2909,8 +2912,12 @@ const getHourChangeHandler = () => {
       <Text style={styles.modalTitle}>Select Phase Codes</Text>
 
       <ScrollView style={{ maxHeight: 350 }}>
-        
-        {jobPhaseCodes.map(p => {
+        {jobPhaseCodes.length === 0 ? (
+  <Text style={{ textAlign: 'center', color: '#999', marginTop: 20 }}>
+    No phase codes available
+  </Text>
+) : (
+        jobPhaseCodes.map(p => {
           
           const isSelected = selectedPhases.includes(p);
 
@@ -2943,9 +2950,9 @@ const getHourChangeHandler = () => {
       </View>
     </TouchableOpacity>
   </View>
-);
-
-        })}
+ );
+  })
+)}
       </ScrollView>
 
       <TouchableOpacity

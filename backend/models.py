@@ -45,6 +45,7 @@ class SubmissionStatus(str, enum.Enum):
     SUBMITTED_TO_ENGINEER = "SubmittedToEngineer"  # ✅ add this
     APPROVED_BY_SUPERVISOR = "APPROVED_BY_SUPERVISOR"  # ✅ add this
     REVIEWED_BY_SUPERVISOR = "REVIEWED_BY_SUPERVISOR"
+    APPROVED_BY_PE = "APPROVED_BY_PE" # <--- Ensure this is here
 
 # ============================================================================== #
 # 2. ASSOCIATION TABLES (FOR MANY-TO-MANY RELATIONSHIPS)

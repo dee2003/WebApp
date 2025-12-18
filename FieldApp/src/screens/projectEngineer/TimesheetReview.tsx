@@ -151,6 +151,7 @@ const [ticketsState, setTicketsState] = useState<SimpleHourState>({});
 // NEW: holds simple one-value tickets per entity (no phase key)
 const [ticketsLoadsState, setTicketsLoadsState] =
     useState<Record<string, string>>({});
+const [approvedByName, setApprovedByName] = useState<string>('Not yet submitted');
 
     // --- Helper function to clean numeric input and strip leading zeros (New) ---
     const cleanNumericInput = (value: string): string => {
@@ -221,7 +222,39 @@ const getEntityDisplayName = (entity: any, type: TableCategory): string => {
             const tsData = response.data;
             setTimesheet(tsData);
             
-            // Fetch all phase codes for this job_code
+const supervisorData = tsData.data.supervisor;
+    if (supervisorData && supervisorData.name) {
+      setSupervisorName(supervisorData.name.trim());
+    } else {
+      setSupervisorName('N/A');
+    }
+
+    // 🔹 2) Approved By (who actually submitted, from supervisor_submissions)
+    try {
+      const subRes = await apiClient.get(`/api/review/supervisor_submissions/by-date`, {
+        params: { date: tsData.date },
+      });
+
+      if (subRes.data && subRes.data.supervisor_id) {
+        const supRes = await apiClient.get(`/api/users/${subRes.data.supervisor_id}`);
+        const sup = supRes.data;
+        setApprovedByName(`${sup.first_name} ${sup.last_name}`.trim());
+      } else {
+        setApprovedByName('Not yet submitted');
+      }
+    } catch (err) {
+      console.warn('Supervisor submission fetch failed', err);
+      setApprovedByName('Not found');
+    }
+
+    // 🔹 existing job phase-codes logic
+    try {
+      const jobCode = tsData.data.job.job_code;
+      const resp = await apiClient.get(`/api/job-phases/${jobCode}/phase-codes-list`);
+      setFullJobPhaseCodes(resp.data.map((p: any) => p.code));
+    } catch (e) {
+      console.error('Failed to fetch full phase codes list', e);
+    }
             try {
                 // This line now correctly accesses tsData.data.job
                 const jobCode = tsData.data.job.job_code;
@@ -380,7 +413,6 @@ const getEntityDisplayName = (entity: any, type: TableCategory): string => {
             // Fetch Foreman Name (Existing Logic)
             const userRes = await apiClient.get(`/api/users/${tsData.foreman_id}`);
             setForemanName(`${userRes.data.first_name} ${userRes.data.last_name}`.trim());
-            const supervisorData = tsData.data.supervisor;
             if (supervisorData && supervisorData.name) {
                  setSupervisorName(supervisorData.name.trim());
             } else {
@@ -1736,7 +1768,62 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
 
 const count = overEmployees.length;
 const label = count === 1 ? "employee" : "employees";
+const handlePESaveAndExport = async () => {
+    setLoading(true);
+    try {
+        // 1. Rebuild the data from state back into the backend format
+        const finalPayload = {
+            // Rebuilds employee hours from your local state maps
+            employees: rebuildEmployeeData(), 
+            
+            // Rebuilds equipment hours (REG/SB)
+            equipment: rebuildEquipmentData(),
+            
+            // Rebuilds materials, vendors, and dumping sites
+            materials_trucking: rebuildSimpleEntityData(
+                timesheet?.data.materials_trucking || [], 
+                materialHours, 
+                materialTickets, 
+                'material'
+            ),
+            vendors: rebuildSimpleEntityData(
+                timesheet?.data.vendors || [], 
+                vendorHours, 
+                vendorTickets, 
+                'vendor'
+            ),
+            
+            // Notes and Job details
+            notes: notes,
+            job_name: timesheet?.data.job_name,
+            job_id: timesheet?.data.job?.job_code,
+            total_quantities: totalQuantities,
+        };
 
+        // 2. Call the specific PE endpoint
+        const response = await apiClient.patch(
+            `/api/timesheets/${timesheetId}/pe-review`, 
+            finalPayload
+        );
+
+        if (response.status === 200) {
+            // The backend returns the updated timesheet which includes the new Excel URL
+            Alert.alert(
+                "Success", 
+                "Timesheet approved and a new version of the Excel has been generated.",
+                [{ text: "OK", onPress: () => setIsEditing(false) }]
+            );
+            
+            // Refresh the local data to show the new file in the history list
+            if (fetchData) await fetchData(); 
+        }
+    } catch (error) {
+        console.error("PE Save Error:", error);
+        Alert.alert("Error", "Failed to save edits and generate the Excel report.");
+    } finally {
+        setLoading(false);
+    }
+};
     return (
         <SafeAreaView style={styles.safeArea}>
             <ScrollView contentContainerStyle={{ padding: THEME.SPACING, paddingBottom: 50 }}>
@@ -1754,7 +1841,10 @@ const label = count === 1 ? "employee" : "employees";
                             
                             {/* Supervisor Field, which uses the directly accessed supervisorName */}
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Supervisor</Text><Text style={styles.infoValue}>{supervisorName}</Text></View>
-                            
+                            <View style={styles.infoItem}>
+  <Text style={styles.infoLabel}>Approved By</Text>
+  <Text style={styles.infoValue}>{approvedByName}</Text>
+</View>
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Project Engineer</Text><Text style={styles.infoValue}>{data.project_engineer || 'N/A'}</Text></View>
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Day/Night</Text><Text style={styles.infoValue}>{data.time_of_day || 'N/A'}</Text></View>
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Location</Text><Text style={styles.infoValue}>{data.location || 'N/A'}</Text></View>
@@ -1792,6 +1882,20 @@ const label = count === 1 ? "employee" : "employees";
                             </TouchableOpacity>
                         )}
                     </View>
+                    {/* Replace or add to your existing Footer/Action Bar */}
+<View style={styles.peActionContainer}>
+    <TouchableOpacity 
+        style={[styles.actionButton, { backgroundColor: '#2E7D32' }]} 
+        onPress={handlePESaveAndExport}
+        disabled={loading}
+    >
+        {loading ? (
+            <ActivityIndicator color="#FFF" />
+        ) : (
+            <Text style={styles.actionButtonText}>APPROVE & GENERATE EXCEL</Text>
+        )}
+    </TouchableOpacity>
+</View>
                 </View>
 
 {overEmployees.length > 0 && (
@@ -2397,7 +2501,13 @@ phaseDropdownClose: {
     paddingHorizontal: 10,
     borderRadius: 6,
 },
-
+peActionContainer: {
+        padding: 16,
+        backgroundColor: '#FFF',
+        borderTopWidth: 1,
+        borderTopColor: '#EEE',
+        paddingBottom: 30, // Extra padding for bottom safe area
+    },
 });
 
 

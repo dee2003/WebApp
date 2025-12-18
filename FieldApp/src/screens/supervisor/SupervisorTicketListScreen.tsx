@@ -38,7 +38,8 @@ interface Ticket {
     job_number?: string; 
     zone?: string;
     hours?: number;
-    
+    job_phase_id?: number;   // ✅ ADD THIS
+
     table_data?: any[] | null; 
 }
 
@@ -62,6 +63,8 @@ export default function SupervisorTicketsScreen({ route }: any) {
     const [isSaving, setIsSaving] = useState(false);
     const [viewMode, setViewMode] = useState<'form' | 'file'>('form'); 
     const [formData, setFormData] = useState<Partial<Ticket>>({});
+const [phaseOptionsByTicket, setPhaseOptionsByTicket] =
+  useState<Record<number, PhaseOption[]>>({});
 
     useEffect(() => {
         navigation.setOptions({
@@ -69,36 +72,57 @@ export default function SupervisorTicketsScreen({ route }: any) {
         });
     }, [foremanName, routeDate, navigation]);
 
-    // ✅ Load Data
-    const loadData = useCallback(async () => {
-        const fetchStateSetter = refreshing ? setRefreshing : setLoading;
-        fetchStateSetter(true);
-        try {
-            const phasesRes = await apiClient.get('/api/job-phases/phase-codes');
-const phases = phasesRes.data.map((p: any) => ({
-    label: `${p.code} - ${p.description || ''}`, // display
-    value: p.id,  // numeric id <- this is what must be sent to backend
-}));
-setAvailablePhases(phases);
+const loadData = useCallback(async () => {
+  const fetchStateSetter = refreshing ? setRefreshing : setLoading;
+  fetchStateSetter(true);
 
-            setAvailablePhases(phases);
+  try {
+    const ticketRes = await apiClient.get('/api/tickets/for-supervisor', {
+      params: { foreman_id: foremanId, date: routeDate },
+    });
 
-            const ticketRes = await apiClient.get('/api/tickets/for-supervisor', {
-                params: { foreman_id: foremanId, date: routeDate },
-            });
-            setTickets(ticketRes.data || []);
-        } catch (err: any) {
-            console.error('Load Error:', err);
-            Alert.alert('Error', 'Failed to load data.');
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    }, [foremanId, routeDate, refreshing]);
+    setTickets(ticketRes.data || []);
+  } catch (err) {
+    Alert.alert('Error', 'Failed to load tickets.');
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, [foremanId, routeDate, refreshing]);
+
+const loadPhaseCodesForTicket = async (ticket: Ticket) => {
+  console.log('Ticket ID:', ticket.id, 'job_phase_id:', ticket.job_phase_id);
+
+  if (!ticket.job_phase_id) return;
+
+  try {
+const res = await apiClient.get('/api/job-phases/phase-codes', {
+  params: { job_phase_id: ticket.job_phase_id },
+});
+
+
+    const phases = res.data.map((p: any) => ({
+      label: `${p.code} - ${p.description || ''}`,
+      value: p.id,
+    }));
+
+    setPhaseOptionsByTicket(prev => ({
+      ...prev,
+      [ticket.id]: phases,
+    }));
+  } catch (err) {
+    console.error('Failed to load phase codes', err);
+  }
+};
 
     useEffect(() => {
         loadData();
     }, [loadData]);
+useEffect(() => {
+  tickets.forEach(ticket => {
+    loadPhaseCodesForTicket(ticket);
+  });
+}, [tickets]);
 
     const handleRefresh = () => {
         setRefreshing(true);
@@ -108,11 +132,6 @@ const handleQuickPhaseUpdate = async (
   ticketId: number,
   newPhaseId: number | string
 ) => {
-  if (newPhaseId == null) {
-    Alert.alert("Validation Error", "You must select a phase code.");
-    return;
-  }
-
   const phaseId = Number(newPhaseId); // ensure numeric
 
   // Optimistic UI update
@@ -309,12 +328,15 @@ const handleQuickPhaseUpdate = async (
                     <Text style={styles.labelSmall}>Phase Code</Text>
                     <View style={styles.pickerContainer}>
 <RNPickerSelect
-  onValueChange={(value) => handleQuickPhaseUpdate(item.id, value)}
-  items={availablePhases}
-  value={item.phase_code_id}       // must be numeric FK
+  items={phaseOptionsByTicket[item.id] || []}
+  value={item.phase_code_id}
+  onValueChange={(value) =>
+    handleQuickPhaseUpdate(item.id, value)
+  }
   placeholder={{ label: 'Select Phase...', value: undefined }}
   useNativeAndroidPickerStyle={false}
 />
+
 
 
                     </View>

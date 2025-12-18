@@ -1,79 +1,4 @@
 
-
-
-// // /src/context/AuthContext.tsx
-// import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-// import AsyncStorage from '@react-native-async-storage/async-storage';
-// import { User } from '../types';
-
-// interface AuthContextType {
-//   user: User | null;
-//   token: string | null;
-//   login: (userData: User, token: string) => void;
-//   logout: () => void;
-// }
-
-// const AUTH_STORAGE_KEY = 'authData';
-
-// const AuthContext = createContext<AuthContextType | null>(null);
-
-// export const AuthProvider = ({ children }: { children: ReactNode }) => {
-//   const [user, setUser] = useState<User | null>(null);
-//   const [token, setToken] = useState<string | null>(null);
-//   const [loading, setLoading] = useState(true);
-
-//   useEffect(() => {
-//     // Load stored auth on mount
-//     const loadAuthData = async () => {
-//       try {
-//         const jsonValue = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
-
-//       } catch (e) {
-//         console.error('Failed to load auth data', e);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-//     loadAuthData();
-//   }, []);
-
-//   const login = async (userData: User, token: string) => {
-//     console.log("🟢 AuthContext Login Called");
-//   console.log("👤 Saving User:", userData);
-//   console.log("🆔 Saving User ID:", userData?.id);
-//   console.log("🔑 Saving Token:", token);
-//     setUser(userData);
-//     setToken(token);
-//     // Persist to storage
-//     await AsyncStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user: userData, token }));
-//   };
-
-//   const logout = async () => {
-//     setUser(null);
-//     setToken(null);
-//     await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-//   };
-
-//   if (loading) {
-//     // Optionally show loading indicator while loading auth data
-//     return null;
-//   }
-
-//   return (
-//     <AuthContext.Provider value={{ user, token, login, logout }}>
-//       {children}
-//     </AuthContext.Provider>
-//   );
-// };
-
-// export const useAuth = (): AuthContextType => {
-//   const context = useContext(AuthContext);
-//   if (!context) {
-//     throw new Error('useAuth must be used within an AuthProvider');
-//   }
-//   return context;
-// };
-
 // src/context/AuthContext.tsx
 import React, { createContext, useState, useContext, ReactNode, useEffect, useRef } from 'react';
 import { Alert } from 'react-native'; 
@@ -81,6 +6,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import { User } from '../types';
 import API_URL from "../config";  // <-- use config file
+import apiClient from '../api/apiClient'; // <- your Axios instance
 
 const API_BASE_URL = API_URL;
 
@@ -105,42 +31,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pingInterval = useRef<NodeJS.Timeout | null>(null);
 
   // --- 1. Check Local Storage on App Start ---
-  useEffect(() => {
-    const loadStorageData = async () => {
-      try {
-        const storedUser = await AsyncStorage.getItem('user');
-        const storedToken = await AsyncStorage.getItem('token');
-
-        if (storedUser && storedToken) {
-          setUser(JSON.parse(storedUser));
-          setToken(storedToken);
-        }
-      } catch (e) {
-        console.error("Failed to load user data", e);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadStorageData();
-  }, []);
-
-  // --- 2. Login Function ---
-  const login = async (userData: User, newToken: string) => {
-    // Explicitly clear any previous state first
-    cleanUpSocket();
-    
-    setIsLoading(true);
+useEffect(() => {
+  const loadStorageData = async () => {
     try {
-        setUser(userData);
-        setToken(newToken);
-        await AsyncStorage.setItem('user', JSON.stringify(userData));
-        await AsyncStorage.setItem('token', newToken);
+      const storedUser = await AsyncStorage.getItem('user');
+      const storedToken = await AsyncStorage.getItem('token');
+
+      if (storedUser && storedToken) {
+        setUser(JSON.parse(storedUser));
+        setToken(storedToken);
+
+        // ✅ Restore Axios header globally
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+        console.log('🔑 Axios header restored on app start:', apiClient.defaults.headers.common['Authorization']);
+      }
     } catch (e) {
-        console.error("Login Error saving to storage:", e);
+      console.error("Failed to load user data", e);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
+  loadStorageData();
+}, []);
+
+
+  // --- 2. Login Function ---
+
+const login = async (userData: User, newToken: string) => {
+  cleanUpSocket();
+  
+  setIsLoading(true);
+  try {
+    setUser(userData);
+    setToken(newToken);
+    await AsyncStorage.setItem('user', JSON.stringify(userData));
+    await AsyncStorage.setItem('token', newToken);
+
+    // ✅ Set token globally for all Axios requests
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+    console.log('🔑 Axios header set after login:', apiClient.defaults.headers.common['Authorization']);
+  } catch (e) {
+    console.error("Login Error saving to storage:", e);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
   
   // --- 3. Logout Function ---
   const logout = async () => {

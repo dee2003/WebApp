@@ -11,8 +11,10 @@ from datetime import datetime
 from dotenv import load_dotenv
 from sqlalchemy.orm.attributes import flag_modified
 import os
-from ..models import Timesheet  # <-- import your model
-
+from ..models import Timesheet,JobPhase   # <-- import your model
+from ..database import get_db
+from ..auditing import log_action
+from .. import oauth2
 load_dotenv()
 load_dotenv(r"C:\TimesheetWebApp\timesheet-app-dev\backend\.env")  # Use raw string for Windows
 sender_email = os.getenv("SMTP_USER")
@@ -36,19 +38,16 @@ print("🔗 [Router] BASE_URL loaded:", BASE_URL)
 @router.get("/counts-by-status", response_model=schemas.TimesheetCountsResponse)
 def get_timesheet_counts_by_status(db: Session = Depends(get_db)):
     try:
-        # ✅ Ensure values match DB enum exactly
         foreman_statuses = [
             models.SubmissionStatus.DRAFT.value,
             models.SubmissionStatus.PENDING.value,
-            models.SubmissionStatus.REJECTED.value,
         ]
 
         supervisor_statuses = [
             models.SubmissionStatus.SUBMITTED.value,
-            models.SubmissionStatus.SENT.value,  # -> "Sent"
         ]
 
-        engineer_status = models.SubmissionStatus.APPROVED.value
+        engineer_status = models.SubmissionStatus.APPROVED_BY_SUPERVISOR.value
 
         counts_query = db.query(
             func.count(
@@ -61,11 +60,8 @@ def get_timesheet_counts_by_status(db: Session = Depends(get_db)):
 
             func.count(
                 case((models.Timesheet.status.cast(String) == engineer_status, 1))
-            ).label("engineer_total")
+            ).label("engineer_total"),
         ).first()
-
-        print("DEBUG foreman_statuses:", foreman_statuses)
-        print("DEBUG supervisor_statuses:", supervisor_statuses)
 
         return {
             "foreman": int(counts_query.foreman_total or 0),
@@ -74,19 +70,21 @@ def get_timesheet_counts_by_status(db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        print(f"[ERROR] Failed to calculate timesheet counts: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="An internal error occurred while calculating timesheet counts."
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
-    
+
+
 @router.post("/", response_model=schemas.Timesheet)
-# @audit(action="CREATED", entity="Timesheet")
-def create_timesheet(timesheet: schemas.TimesheetCreate, db: Session = Depends(get_db)):
+def create_timesheet(
+    timesheet: schemas.TimesheetCreate,
+    db: Session = Depends(get_db)
+):
+    print("FULL PAYLOAD:", timesheet.model_dump())
+    print("job_phase_id:", timesheet.job_phase_id)
+
     data_to_store = timesheet.data or {}
 
-    # --- Derive job name robustly (handles all frontend variants) ---
+    # --- Derive job name robustly ---
     job_name = (
         data_to_store.get("job_name")
         or (data_to_store.get("job") or {}).get("job_description")
@@ -95,21 +93,42 @@ def create_timesheet(timesheet: schemas.TimesheetCreate, db: Session = Depends(g
         or "Untitled Timesheet"
     )
 
-    # --- Create new timesheet entry ---
+    # --- Create new timesheet ---
     db_ts = models.Timesheet(
         foreman_id=timesheet.foreman_id,
         job_phase_id=timesheet.job_phase_id,
         date=timesheet.date,
         status="DRAFT",
-        data=data_to_store,        # Passing dictionary directly to JSONB
+        data=data_to_store,
         timesheet_name=job_name
     )
 
     db.add(db_ts)
     db.commit()
     db.refresh(db_ts)
-    return db_ts
 
+    # --- AUDIT LOG ---
+# Fetch the related JobPhase
+    job_phase = db.query(JobPhase).filter(JobPhase.id == timesheet.job_phase_id).first()
+    job_code = job_phase.job_code if job_phase else "Unknown"
+
+    # Audit log
+    log_action(
+        db=db,
+        user_id=timesheet.foreman_id,
+        action="CREATED",
+        target_resource="TIMESHEET",
+        target_resource_id=str(db_ts.id),
+        details=(
+            f"Timesheet '{db_ts.timesheet_name}' "
+            f"created for job_code={job_code} "
+            f"on date={timesheet.date}"
+        )
+    )
+
+
+    db.commit()
+    return db_ts
 
 @router.get("/by-foreman/{foreman_id}", response_model=List[schemas.Timesheet])
 def get_timesheets_by_foreman(foreman_id: int, db: Session = Depends(get_db)):
@@ -272,19 +291,21 @@ def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
         "timesheet_name": timesheet.timesheet_name,
         "data": saved_data,
     }
-
+from sqlalchemy.orm.attributes import flag_modified # Needed for JSONB updates
 @router.put("/{timesheet_id}", response_model=schemas.Timesheet)
 
 def update_timesheet(
     timesheet_id: int,
     timesheet_update: schemas.TimesheetUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user)
 ):
     # --- Fetch timesheet ---
     ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
     if not ts:
         raise HTTPException(status_code=404, detail="Timesheet not found")
     payload = timesheet_update.dict(exclude_unset=True)
+    current_status = ts.status # <<-- Store the current status for the guardrail
     def clean_legacy_tickets(data):
         for entity_key in ["materials_trucking", "vendors", "dumping_sites"]:
             if entity_key in data:
@@ -293,10 +314,34 @@ def update_timesheet(
         return data
     if "data" in payload:
         ts.data = clean_legacy_tickets(payload["data"])
-    if "status" in payload and payload["status"] == "IN_PROGRESS":
-        ts.status = SubmissionStatus.IN_PROGRESS
+        flag_modified(ts, "data")
+    PROTECTED_STATUSES = [
+            SubmissionStatus.SUBMITTED.value,
+            SubmissionStatus.REVIEWED_BY_SUPERVISOR.value,
+            SubmissionStatus.APPROVED_BY_SUPERVISOR.value,
+        ]
     if "status" in payload:
-        ts.status = payload["status"]
+            new_status = payload["status"]
+            
+            # Scenario A: Timesheet is already submitted/reviewed (Supervisor editing data)
+            if current_status in PROTECTED_STATUSES:
+                
+                # If the new status is a reverting status (DRAFT/PENDING), IGNORE it.
+                if new_status not in PROTECTED_STATUSES:
+                    # Log the warning and prevent the status change
+                    print(f"⚠️ [WARNING] Status change from {current_status} to {new_status} blocked by guardrail in update_timesheet.")
+                    # The status is not updated, it remains current_status (ts.status = current_status is implicit)
+                    pass 
+                
+                # If the new status is a *forward* status (like REVIEWED_BY_SUPERVISOR) 
+                # or the same status, allow it. This handles the supervisor's 'Save & Review' action.
+                else:
+                    ts.status = new_status
+            
+            # Scenario B: Timesheet is in DRAFT/PENDING (Foreman is saving/submitting)
+            else:
+                # Allow any status change (e.g., DRAFT -> SUBMITTED)
+                ts.status = new_status
     # --- Keep job name synced ---
     data_to_store = ts.data or {}
     job_name = (
@@ -310,6 +355,21 @@ def update_timesheet(
     ts.data["job_name"] = job_name
     db.commit()
     db.refresh(ts)
+    log_action(
+    db=db,
+    user_id=current_user.id,
+    action="TIMESHEET_UPDATED",
+    target_resource="TIMESHEET",
+    target_resource_id=str(ts.id),
+    details=(
+        f"Timesheet '{ts.timesheet_name}' "
+        f"updated by {current_user.role.value} "
+        f"({current_user.username})."
+    )
+)
+
+    db.commit()
+
     # --- Excel file generation ---
     try:
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -350,7 +410,7 @@ def update_timesheet(
             create_df(data.get("vendors", [])).to_excel(writer, index=False, sheet_name="Vendors")
             create_dumping_site_df(data.get("dumping_sites", [])).to_excel(writer, index=False, sheet_name="DumpingSites")
         
-        NGROK_BASE_URL = "https://f46d5ac63561.ngrok-free.app"
+        NGROK_BASE_URL = "https://7c01582ddbc7.ngrok-free.app"
         file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
         # :white_check_mark: Save file info in DB
         file_record = models.TimesheetFile(
@@ -375,15 +435,25 @@ from ..models import SubmissionStatus
 from datetime import datetime
 from sqlalchemy import func
 @router.post("/{timesheet_id}/send", response_model=schemas.Timesheet)
-def send_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
+def send_timesheet(
+    timesheet_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user)  # capture user
+):
+    # --- Fetch timesheet ---
     ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
     if not ts:
         raise HTTPException(status_code=404, detail="Timesheet not found")
+
     if ts.status == SubmissionStatus.SUBMITTED:
         raise HTTPException(status_code=400, detail="Timesheet already sent")
+
+    # --- Update timesheet ---
     ts.sent = True
     ts.sent_date = datetime.utcnow()
-    ts.status = SubmissionStatus.SUBMITTED  # :white_check_mark: fixed value
+    ts.status = SubmissionStatus.SUBMITTED  # fixed value
+
+    # --- Log workflow action ---
     workflow = models.TimesheetWorkflow(
         timesheet_id=ts.id,
         foreman_id=ts.foreman_id,
@@ -393,11 +463,27 @@ def send_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
         comments="Sent to supervisor",
     )
     db.add(workflow)
+
+    # --- Commit changes ---
     db.commit()
     db.refresh(ts)
+
+    # --- Audit log ---
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        action="TIMESHEET_SENT",
+        target_resource="TIMESHEET",
+        target_resource_id=str(ts.id),
+        details=(
+            f"Timesheet '{ts.timesheet_name}' (ID: {ts.id}, Date: {ts.date}) "
+            f"was sent by {current_user.role.value} ({current_user.username})."
+        )
+    )
+    db.commit()
+
     return ts
 
-    
 # -------------------------------
 # DELETE a timesheet
 # -------------------------------
@@ -662,3 +748,94 @@ def resend_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Resend error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to resend timesheet")
+    
+
+from openpyxl import load_workbook
+@router.patch("/{timesheet_id}/pe-review", response_model=schemas.Timesheet)
+def pe_review_and_generate_excel(
+    timesheet_id: int,
+    payload: dict, # Receives the JSON data from your React Native frontend
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(oauth2.get_current_user)
+):
+    # 1. Fetch Timesheet from DB
+    ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
+    if not ts:
+        raise HTTPException(status_code=404, detail="Timesheet not found")
+
+    # 2. Update Database with PE Edits
+    # This stores the edited numbers (employees, equipment, etc.) into the JSONB field
+    ts.data.update(payload)
+    ts.status = "APPROVED_BY_PE" # Set final status
+    flag_modified(ts, "data")
+    db.commit()
+
+    # 3. Path Configuration
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Change this line in your backend code:
+    template_path = os.path.join(BASE_DIR, "assets", "Alfonso - Template.xlsx")    
+    # Generate a UNIQUE filename using timestamp to avoid replacing existing files
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_name = f"TS_{ts.id}_{ts.date}_PE_FINAL_{timestamp}.xlsx"
+    
+    storage_dir = os.path.join(BASE_DIR, "storage", "pe_reports")
+    os.makedirs(storage_dir, exist_ok=True)
+    final_output_path = os.path.join(storage_dir, file_name)
+
+    # 4. Fill the Template
+    try:
+        wb = load_workbook(template_path)
+        ws = wb["Timesheet"] # Ensure your sheet name matches exactly
+
+        # Mapping Header Data (Based on your CSV sample)
+        ws["D1"] = str(ts.date)            # Date
+        ws["U1"] = ts.data.get("job_id", "") # JOB#
+        ws["U3"] = ts.data.get("job_name", "")
+        
+        # Checking the PE Approval Box
+        ws["R3"] = "TRUE" # This marks the False box to True in your template
+        ws["X3"] = current_user.username # PE Name signature
+
+        # Mapping Employees (Starting Row 9)
+        # Note: Your template has a specific structure (Rows 9, 13, 17...)
+        row_idx = 9
+        for emp in ts.data.get("employees", []):
+            if row_idx > 50: break # Safety stop for template bounds
+            ws.cell(row=row_idx, column=1, value=emp.get("id"))
+            ws.cell(row=row_idx, column=2, value=f"{emp.get('first_name')} {emp.get('last_name')}")
+            
+            # Phase Hours Mapping
+            # (Requires specific column mapping based on your phase columns)
+            # Example: ws.cell(row=row_idx, column=5, value=emp.get('hours'))
+            
+            row_idx += 4 # Skip to next block in the Alfonso template
+
+        # Mapping Equipment
+        # Your CSV shows Equipment starts much lower (around Row 60+)
+        eq_row = 60 
+        for eq in ts.data.get("equipment", []):
+            ws.cell(row=eq_row, column=1, value=eq.get("name"))
+            ws.cell(row=eq_row, column=2, value=eq.get("id"))
+            eq_row += 1
+
+        # 5. Save the unique version
+        wb.save(final_output_path)
+
+        # 6. Save the file link to the database
+        NGROK_URL = "https://7c01582ddbc7.ngrok-free.app"
+        file_url = f"{NGROK_URL}/storage/pe_reports/{file_name}"
+        
+        file_record = models.TimesheetFile(
+            timesheet_id=ts.id,
+            file_path=file_url,
+            created_at=datetime.now()
+        )
+        db.add(file_record)
+        db.commit()
+
+        return ts
+
+    except Exception as e:
+        db.rollback()
+        print(f"Excel Generation Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate template-based Excel.")

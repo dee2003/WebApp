@@ -572,7 +572,9 @@ class Timesheet(BaseModel):
     data: Dict[str, Any]
     status: str                 # <-- ADD THIS FIELD
     files: List[TimesheetFile] = []
-    
+    job_phase_id: Optional[int] = None   # <-- Add this
+    job_code: Optional[str] = None       # <-- Optional, if you want to send job code
+    files: List[TimesheetFile] = []
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -604,27 +606,6 @@ class LoginRequest(BaseModel):
     email: str | None = None
     password: str
 
-# class DailySubmissionBase(BaseModel):
-#     date: date
-#     foreman_id: int
-#     job_code: Optional[str] = None
-#     total_hours: float
-#     ticket_count: int
-#     status: SubmissionStatus
-# class DailySubmission(DailySubmissionBase):
-#     id: int
-    
-    # Denormalized read-only fields for the supervisor dashboard
-    # foreman_name: str
-    # job_name: Optional[str] = None  # optional convenience if you resolve job name server-side
-
-    # class Config:
-    #     from_attributes = True  # pydantic v2; use orm_mode=True for pydantic v1
-# class DailySubmissionCreate(BaseModel):
-#     date: date
-#     timesheet_ids: List[int]
-#     ticket_ids: List[int] = []      # if you have tickets
-#     job_code: Optional[str] = None  # optional
 
 
 # For supervisor requesting changes
@@ -719,6 +700,7 @@ class TicketSummary(BaseModel):
     job_number: Optional[str] = None
     zone: Optional[str] = None
     hours: Optional[float] = None
+    job_phase_id: Optional[int]   # 👈 ADD THIS
 
     # JSON Data
     table_data: Optional[Dict[str, Any] | List[Any]] = None
