@@ -555,7 +555,9 @@ class TimesheetFileBase(BaseModel):
 class TimesheetFile(BaseModel):
     id: int
     timesheet_id: int
-    foreman_id: int
+    foreman_id: Optional[int] = None   # ✅ FIX
+    pe_id: Optional[int] = None
+
     file_path: str
     created_at: Optional[datetime]
 
@@ -631,6 +633,7 @@ class Notification(BaseModel):
     ticket_count: int
     timesheet_count: int
     job_code: Optional[str] = None
+    work_date: date  # <--- Add this field
 
 class UnreviewedItem(BaseModel):
     """Details of items blocking submission."""

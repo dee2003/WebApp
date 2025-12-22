@@ -33,6 +33,7 @@ interface Notification {
     ticket_count: number;
     timesheet_count: number;
     job_code?: string;
+    work_date?: string; // Add this line to handle the actual work date
 }
 
 const THEME_COLORS = {
@@ -330,46 +331,69 @@ const dateText = new Date(section.title + 'T00:00:00').toLocaleDateString(
                             </View>
                         );
                     }}
-                    renderItem={({ item }) => (
-                        <View style={styles.card}>
-                            <View style={styles.foremanInfoRow}>
-                                <Text style={styles.foremanName} numberOfLines={1}>
-                                    <Ionicons name="person-circle-outline" size={20} color={THEME_COLORS.contentLight} /> {item.foreman_name}
-                                </Text>
-                                {item.job_code && (
-                                    <Text style={styles.jobCodeRight} numberOfLines={1}>
-                                        JOB: {item.job_code}
-                                    </Text>
-                                )}
-                            </View>
+ renderItem={({ item }) => {
+    // 1. Add this console log here
+    console.log(`Checking Foreman: ${item.foreman_name} | Notification Date: ${item.date} | Work Date: ${item.work_date}`);
 
-                            <TouchableOpacity
-                                style={styles.actionRow}
-                                onPress={() => navigation.navigate('SupervisorTimesheetList', { foremanId: item.foreman_id, date: item.date, foremanName: item.foreman_name })}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={styles.actionLabel} numberOfLines={1}>
-                                    <Ionicons name="receipt-outline" size={18} color={THEME_COLORS.primary} />
-                                    {' '} Timesheets ({item.timesheet_count ?? 0})
-                                </Text>
-                                <Ionicons name="chevron-forward-outline" size={22} color={THEME_COLORS.subtleLight} />
-                            </TouchableOpacity>
-                            
-                            <View style={styles.divider} />
-                            
-                            <TouchableOpacity
-                                style={styles.actionRow}
-                                onPress={() => navigation.navigate('SupervisorTicketList', { foremanId: item.foreman_id, foremanName: item.foreman_name, date: item.date })}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={styles.actionLabel} numberOfLines={1}>
-                                    <Ionicons name="document-text-outline" size={18} color={THEME_COLORS.primary} />
-                                    {' '} Tickets ({item.ticket_count ?? 0})
-                                </Text>
-                                <Ionicons name="chevron-forward-outline" size={22} color={THEME_COLORS.subtleLight} />
-                            </TouchableOpacity>
-                        </View>
-                    )}
+    return (
+        <View style={styles.card}>
+            <View style={styles.foremanInfoRow}>
+                <Text style={styles.foremanName} numberOfLines={1}>
+                    <Ionicons name="person-circle-outline" size={20} color={THEME_COLORS.contentLight} /> {item.foreman_name}
+                </Text>
+                {item.job_code && (
+                    <Text style={styles.jobCodeRight} numberOfLines={1}>
+                        JOB: {item.job_code}
+                    </Text>
+                )}
+            </View>
+
+            <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => {
+                    // 2. Add an extra log inside the onPress to see exactly what is being sent
+                    const finalDate = item.work_date || item.date;
+                    console.log("Navigating to Timesheets with Date:", finalDate);
+                    
+                    navigation.navigate('SupervisorTimesheetList', { 
+foremanId: item.foreman_id, 
+    date: item.work_date || item.date, // item.work_date is now "2025-12-17"
+    foremanName: item.foreman_name 
+                    });
+                }}
+                activeOpacity={0.7}
+            >
+                <Text style={styles.actionLabel} numberOfLines={1}>
+                    <Ionicons name="receipt-outline" size={18} color={THEME_COLORS.primary} />
+                    {' '} Timesheets ({item.timesheet_count ?? 0})
+                </Text>
+                <Ionicons name="chevron-forward-outline" size={22} color={THEME_COLORS.subtleLight} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => {
+                     // 3. Apply the same date logic to Tickets
+                    const finalDate = item.work_date || item.date;
+                    navigation.navigate('SupervisorTicketList', { 
+                        foremanId: item.foreman_id, 
+                        foremanName: item.foreman_name, 
+                        date: finalDate 
+                    });
+                }}
+                activeOpacity={0.7}
+            >
+                <Text style={styles.actionLabel} numberOfLines={1}>
+                    <Ionicons name="document-text-outline" size={18} color={THEME_COLORS.primary} />
+                    {' '} Tickets ({item.ticket_count ?? 0})
+                </Text>
+                <Ionicons name="chevron-forward-outline" size={22} color={THEME_COLORS.subtleLight} />
+            </TouchableOpacity>
+        </View>
+    );
+}}
                 />
             </View>
         </SafeAreaView>

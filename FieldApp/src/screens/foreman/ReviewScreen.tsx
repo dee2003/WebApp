@@ -35,6 +35,8 @@ const THUMBNAIL_WIDTH = 100;
 import API_URL from "../../config";
 
 const API_BASE_URL = API_URL;
+
+
 // --- TYPE DEFINITIONS ---
 interface TicketImage {
   id: number;

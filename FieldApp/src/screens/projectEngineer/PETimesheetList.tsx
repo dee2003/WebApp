@@ -12,7 +12,7 @@ import {
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/apiClient';
 import type { ProjectEngineerStackParamList } from '../../navigation/AppNavigator';
-import Icon from 'react-native-vector-icons/Ionicons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import { StackNavigationProp } from '@react-navigation/stack';
 
 // Type for each timesheet
@@ -90,7 +90,7 @@ const PETimesheetListScreen = () => {
                 <Text style={styles.cardTitle} numberOfLines={1}>{item.timesheet_name}</Text>
                 {/* <Text style={styles.cardSubtitle} numberOfLines={1}>Job: {item.job_name || 'N/A'}</Text> */}
             </View>
-            <Icon name="chevron-forward-outline" size={24} color={THEME.colors.subtleLight} />
+            <Ionicons name="chevron-forward-outline" size={24} color={THEME.colors.subtleLight} />
         </TouchableOpacity>
     );
 
@@ -122,7 +122,7 @@ const PETimesheetListScreen = () => {
                 ListHeaderComponent={ListHeaderComponent}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Icon name="document-text-outline" size={60} color={THEME.colors.brandStone} />
+                        <Ionicons name="document-text-outline" size={60} color={THEME.colors.brandStone} />
                         <Text style={styles.emptyText}>No timesheets found for this date.</Text>
                         <Text style={styles.emptySubText}>The foreman has not submitted any timesheets yet.</Text>
                     </View>

@@ -88,7 +88,6 @@ const COL_SIMPLE_HOUR = 110;
 const COL_EQUIP = 110;
 const COL_TICKET = 110;
 const COL_TOTAL = 100;
-const COL_START_STOP = 70;
 const COL_UNIT = 80; // <--- ADDED: New constant for unit/material column
 const COL_MATERIAL_NAME = 120; // <--- ADDED: New constant for Material Name column
 
@@ -141,6 +140,7 @@ const TimesheetReviewScreen = () => {
     const [vendorMaterialNames, setVendorMaterialNames] = useState<UnitState>({}); 
     const [dumpingSiteHours, setDumpingSiteHours] = useState<SimpleHourState>({});
     const [dumpingSiteTickets, setDumpingSiteTickets] = useState<SimpleHourState>({});
+const [dumpingSiteUnits, setDumpingSiteUnits] = useState<UnitState>({});
 
     // Total list of phase codes for validation (original list from job)
     const allJobPhaseCodes = timesheet?.data.job.phase_codes?.map((p: any) => (p?.code ?? p)) || [];
@@ -293,6 +293,13 @@ const getEntityDisplayName = (entity: any, type: TableCategory): string => {
                 });
                 return state;
             };
+const populateDumpingSiteUnits = (entities: any[] = []): UnitState => {
+  const state: UnitState = {};
+  entities.forEach(e => {
+    state[String(e.id)] = e.unit || '';
+  });
+  return state;
+};
 
             // NEW: Helper to extract material name from the 'vendors' array line items (using unique key)
             const populateVendorMaterialNames = (entities: any[] = []): UnitState => {
@@ -353,6 +360,8 @@ const getEntityDisplayName = (entity: any, type: TableCategory): string => {
             const formattedMaterials = tsData.data.materials_trucking || [];
             const formattedVendors = tsData.data.vendors || [];
             const formattedDumpingSites = tsData.data.dumping_sites || [];
+           setDumpingSiteUnits(populateDumpingSiteUnits(formattedDumpingSites));
+
             setEmployeeHours(populateEmployeeComplex(tsData.data.employees));
             setEquipmentHours(populateEquipmentComplex(tsData.data.equipment));
             setMaterialHours(populateSimple(formattedMaterials, 'hours_per_phase', 'material')); 
@@ -1119,19 +1128,20 @@ if (isEmployee) {
 } 
 // EQUIPMENT: Name + EQUIP + Start + Stop + Total
 else if (isEquipment) {
-  fixedWidth += COL_ID + (COL_START_STOP * 2);
-} 
+  fixedWidth += COL_ID;
+}
+
 // SIMPLE TABLES: ID + Name + (Material Name) + Unit + Tickets + Total
 else if (isSimple) {
-  fixedWidth += COL_ID; 
+  fixedWidth += COL_ID;
 
-  if (isVendor) { // <--- NEW: Add Material Name width for Vendors
-      fixedWidth += COL_MATERIAL_NAME;
+  if (isVendor) {
+    fixedWidth += COL_MATERIAL_NAME;
   }
 
-  if (isMaterial || isVendor) { // <--- Include Unit width for Materials and Vendors
-      fixedWidth += COL_UNIT;
-  }
+  // ✅ unit for ALL simple tables
+  fixedWidth += COL_UNIT;
+
   fixedWidth += COL_TICKET;
 }
 
@@ -1297,12 +1307,7 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
                                 </Text>
                             )}
 
-                            {isEquipment && (
-                                <>
-                                    <Text style={[styles.headerCell, styles.colStartStop, styles.borderRight, styles.headerCellBottomBorder]}>Start Hours</Text>
-                                    <Text style={[styles.headerCell, styles.colStartStop, styles.borderRight, styles.headerCellBottomBorder]}>Stop Hours</Text>
-                                </>
-                            )}
+
 
                             {isEmployee && (
                                 <Text style={[styles.headerCell, styles.colClassCode, styles.borderRight, styles.headerCellBottomBorder]}>
@@ -1325,7 +1330,19 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
                     )}
 
 
-                   
+                   {isSimple && (
+  <Text
+    style={[
+      styles.headerCell,
+      { width: COL_UNIT },
+      styles.borderRight,
+      styles.headerCellBottomBorder
+    ]}
+  >
+    Unit
+  </Text>
+)}
+
 
                     {/* SINGLE TICKETS COLUMN (before phases) */}
 {isSimple && (
@@ -1507,17 +1524,36 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
                                             )}
                                             
                                             {/* Name Column */}
-                                            <Text 
-                                                style={[
-                                                    styles.dataCell, 
-                                                    styles.colName, 
-                                                    styles.borderRight,
-                                                    isVendor && !isFirstRowForVendor ? styles.transparentCell : null
-                                                ]} 
-                                                numberOfLines={2}
-                                            >
-                                                {isVendor ? (isFirstRowForVendor ? entityName : entity.vendor_name) : entityName}
-                                            </Text>
+{/* Name Column */}
+<Text 
+  style={[
+    styles.dataCell, 
+    styles.colName, 
+    styles.borderRight,
+    isVendor && !isFirstRowForVendor ? styles.transparentCell : null
+  ]} 
+  numberOfLines={2}
+>
+  {isVendor ? (isFirstRowForVendor ? entityName : entity.vendor_name) : entityName}
+</Text>
+
+{/* ✅ UNIT COLUMN — ADD THIS HERE */}
+{isSimple && (
+  <Text
+    style={[
+      styles.dataCell,
+      { width: COL_UNIT },
+      styles.borderRight
+    ]}
+  >
+    {type === 'material'
+      ? unitState?.[entityId] || ''
+      : type === 'vendor'
+        ? unitState?.[entityId] || ''
+        : dumpingSiteUnits?.[entityId] || ''}
+  </Text>
+)}
+
 
                                             {/* ID/EQUIP# Column for Employee/Equipment (SECOND/THIRD COLUMN) */}
                                             {(isEquipment || isEmployee) && (
@@ -1526,16 +1562,7 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
                                             {/* <--- END MODIFIED ID BLOCK ---> */}
 
 
-                                            {isEquipment && (
-                                                <>
-                                                    <Text style={[styles.dataCell, styles.colStartStop, styles.borderRight]}>
-                                                        {entity.start_hours || ''} 
-                                                    </Text>
-                                                    <Text style={[styles.dataCell, styles.colStartStop, styles.borderRight]}>
-                                                        {entity.stop_hours || ''}
-                                                    </Text>
-                                                </>
-                                            )}
+
 
 {/* <--- NEW: Material Name Column Body for Vendors ---> */}
 {isVendor && (
@@ -1633,12 +1660,6 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
                                 <View style={[styles.dataCell, styles.colId]} /> 
                             )}
 
-                            {isEquipment && (
-                                <>
-                                    <View style={[styles.dataCell, styles.colStartStop]} /> 
-                                    <View style={[styles.dataCell, styles.colStartStop]} /> 
-                                </>
-                            )}
 
                             {isEmployee && (
                                 <View style={[styles.dataCell, styles.colClassCode]} /> 
@@ -1649,7 +1670,7 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
                                 <View style={[styles.dataCell, { width: COL_MATERIAL_NAME }]} />
                             )}
 
-                       
+                     
                             
                               {isSimple && (
                                 <View style={[styles.dataCell, styles.colTickets]} />
@@ -2043,7 +2064,6 @@ const styles = StyleSheet.create({
   colHoursEquipment: { width: COL_EQUIP },
   colTickets: { width: COL_TICKET },
   colTotal: { width: COL_TOTAL },
-  colStartStop: { width: COL_START_STOP }, 
   // ADDED: Unit width style is added inline in renderTableBlock
 
   dynamicPhaseColEmployee: { 
