@@ -63,11 +63,22 @@ def get_all_job_phases(db: Session = Depends(database.get_db)):
         .all()
     )
 
+from fastapi import Query, HTTPException
 
-# ✅ Get phase codes
 @router.get("/phase-codes")
-def get_phase_codes(db: Session = Depends(get_db)):
-    return db.query(models.PhaseCode).all()
+def get_phase_codes(
+    job_phase_id: int | None = Query(None),
+    db: Session = Depends(get_db)
+):
+    if not job_phase_id:
+        return []  # 👈 safest for dropdowns
+
+    return (
+        db.query(models.PhaseCode)
+        .filter(models.PhaseCode.job_phase_id == job_phase_id)
+        .all()
+    )
+
 
 
 # ✅ Get active job phases

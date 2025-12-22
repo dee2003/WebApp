@@ -2140,34 +2140,37 @@ return [emp.class_1, emp.class_2].filter(Boolean);
 
 
       {/* Reason dropdown under name */}
-      {calculateTotalEmployeeHours(employeeHours, emp.id) === 0 && (
-        <View
-           style={{
+    
+
+{calculateTotalEmployeeHours(employeeHours, emp.id) === 0 && (
+  <Dropdown
+    style={{
       marginTop: 4,
       backgroundColor: "white",
       borderWidth: 1,
       borderColor: "#ccc",
       borderRadius: 8,
-      width: 120,
-      height: 36, // reduce container height
-      justifyContent: "center", // vertically center the picker
-      paddingHorizontal: 4,
+      width: 140,
+      height: 36,
+      paddingHorizontal: 8,
     }}
-        >
-          <Picker
-            selectedValue={employeeReasons[emp.id] || ""}
-            onValueChange={(v) =>
-              setEmployeeReasons((prev) => ({ ...prev, [emp.id]: v }))
-            }
-          >
-            <Picker.Item label="Select Reason…" value="" />
-            <Picker.Item label="Sick" value="Sick" />
-            <Picker.Item label="Safe" value="Safe" />
-            <Picker.Item label="Off" value="Off" />
-            <Picker.Item label="Other Crew" value="Other Crew" />
-          </Picker>
-        </View>
-      )}
+    placeholderStyle={{ fontSize: 12, color: '#999' }}
+    selectedTextStyle={{ fontSize: 12, color: '#000' }}
+    data={[
+      { label: 'Sick', value: 'Sick' },
+      { label: 'Safe', value: 'Safe' },
+      { label: 'Off', value: 'Off' },
+      { label: 'Other Crew', value: 'Other Crew' },
+    ]}
+    labelField="label"
+    valueField="value"
+    placeholder="Select Reason..."
+    value={employeeReasons[emp.id] || ""}
+    onChange={item => {
+      setEmployeeReasons((prev) => ({ ...prev, [emp.id]: item.value }));
+    }}
+  />
+)}
     </View>
   ) : (
     <Text />
@@ -2531,22 +2534,16 @@ const renderEntityTable = (
       <Text style={tableStyles.headerText}>{isEquipment ? 'EQUIPMENT NAME' : title.toUpperCase()}</Text>
     </View>
    {/* Start Hours (equipment only) */}
-{type === 'equipment' && (
-  <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
-    <Text style={tableStyles.headerText}>START HOURS</Text>
-  </View>
-)}
-
-{/* Stop Hours (equipment only) */}
-{type === 'equipment' && (
-  <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
-    <Text style={tableStyles.headerText}>STOP HOURS</Text>
-  </View>
-)}
+{/* ADDED UNIT COLUMN HEADER HERE */}
+    {!isEquipment && (
+      <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
+        <Text style={tableStyles.headerText}>UNIT</Text>
+      </View>
+    )}
     {type !== 'equipment' && (
       <View style={[tableStyles.headerCellFixed, { width: 140 }]}>
         <Text style={tableStyles.headerText}>
-          {type === 'dumping_site' ? '# OF LOADS' : '# OF TICKETS'}
+          {type === 'dumping_site' ? '# OF TICKETS' : '# OF TICKETS'}
         </Text>
       </View>
     )}
@@ -2579,7 +2576,7 @@ const renderEntityTable = (
                 <View style={tableStyles.phaseHeaderRow}>
                   {selectedPhases.map((code: string) => (
                     <View key={`hours-${code}`} style={[tableStyles.headerCell, { width: 96 }]}>
-                      <Text style={tableStyles.headerSubText}>{isEquipment ? 'REG | S.B' : 'HRS/Qty'}</Text>
+                      <Text style={tableStyles.headerSubText}>{isEquipment ? 'REG | S.B' : 'Qty'}</Text>
                     </View>
                   ))}
                 </View>
@@ -2688,45 +2685,14 @@ const renderEntityTable = (
    <View style={[tableStyles.cellFixed, { width: 200 }]}>
       <Text style={tableStyles.cellText}>{name}</Text>
     </View>
-    {/* ORIGINAL LAYOUT FOR OTHER TYPES */}
-    {/* Start Hours cell */}
-    
-{type === 'equipment' && (
-  
-  <View style={[tableStyles.cellFixed, { width: 100 }]}>
-    <InlineEditableNumber
-      value={startHours[ent.id] ?? ""}
-      onChange={(v) =>
-   setStartHours(prev => ({
-      ...prev,
-      [ent.id]: v
-    }))
-}
- validateHours={true} 
-      placeholder="0.0"
-    />
-  </View>
-)}
-
-{/* Stop Hours cell */}
-{type === 'equipment' && (
-  <View style={[tableStyles.cellFixed, { width: 100 }]}>
-    <InlineEditableNumber
-      value={stopHours[ent.id] ?? ""}
-      onChange={(v) =>
-  setStopHours(prev => ({
-    ...prev,
-    [ent.id]: v
-  }))
-}
- validateHours={true} 
-      placeholder="0.0"
-    />
-  </View>
-)}
-
-   
-// ... existing code (around line 1058)
+{/* ADDED UNIT COLUMN CELL HERE */}
+    {!isEquipment && (
+      <View style={[tableStyles.cellFixed, { width: 100 }]}>
+        <Text style={tableStyles.cellText}>
+          {type === 'material' ? (materialUnits[ent.id] || ent.unit || 'Hrs') : (ent.unit || 'Loads')}
+        </Text>
+      </View>
+    )}
 
 {type !== "equipment" && (
   <View style={[tableStyles.cellFixed, { width: 140 }]}>
@@ -2770,7 +2736,7 @@ const renderEntityTable = (
                           const sbVal = equipmentHours[ent.id]?.[p]?.SB ?? '';
 
                           return (
-                            <View key={`${ent.id}-${p}`} style={[tableStyles.cell, { width: 96 }]}>
+                            <View key={`${ent.id}-${p}`} style={[tableStyles.cell, { width: 100 }]}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                                 <InlineEditableNumber
                                   value={regVal}
@@ -2779,6 +2745,14 @@ const renderEntityTable = (
                                   placeholder="0.0"
                                   style={tableStyles.hourInput}
                                 />
+                                <View 
+          style={{ 
+            width: 1, 
+            height: '100%', 
+            backgroundColor: '#E5E7EB', // Matches THEME.border
+            marginHorizontal: -2
+          }} 
+        />
                                 <InlineEditableNumber
                                   value={sbVal}
                                   onChange={(v) => handleEquipmentHourChange(ent.id, p, 'SB', v)} 

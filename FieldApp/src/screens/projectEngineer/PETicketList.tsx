@@ -66,9 +66,9 @@ const CARD_HEIGHT = 120;
 
 const PETicketList = () => {
     const navigation = useNavigation<PETicketListNavigationProp>();
-    const route = useRoute<RouteProp<ProjectEngineerStackParamList, 'PETicketList'>>();
-    const { foremanId } = route.params;
-    const TODAY_DATE = new Date().toISOString().split('T')[0];
+const route = useRoute<RouteProp<ProjectEngineerStackParamList, 'PETicketList'>>();
+const { foremanId, date } = route.params; // `date` exists here from your navigation param
+
 
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
@@ -79,22 +79,22 @@ const PETicketList = () => {
     const [saving, setSaving] = useState(false);
     const [formData, setFormData] = useState<Partial<Ticket>>({});
 
-    const loadTickets = useCallback(async () => {
-    try {
-        setLoading(true);
-        const res = await apiClient.get(
-            `/api/review/pe/tickets?foreman_id=${foremanId}&date=${TODAY_DATE}`
-        );
-        console.log('Tickets from API:', res.data);  // <--- add this
-        setTickets(res.data);
-    } catch (error: any) {
-        console.error('Failed to load tickets:', error);
-        Alert.alert('Error', 'Failed to load tickets');
-    } finally {
-        setLoading(false);
-    }
-}, [foremanId, TODAY_DATE]);
+const loadTickets = useCallback(async () => {
+  try {
+    setLoading(true);
 
+    const res = await apiClient.get(
+      `/api/review/pe/tickets?foreman_id=${foremanId}&date=${date}`
+    );
+
+    setTickets(res.data);
+  } catch (error: any) {
+    console.error('Failed to load tickets:', error);
+    Alert.alert('Error', 'Failed to load tickets');
+  } finally {
+    setLoading(false);
+  }
+}, [foremanId, date]);
 
     useEffect(() => {
         loadTickets();

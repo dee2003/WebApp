@@ -623,6 +623,15 @@ def login(
     }
 
     print("LOGIN USER DATA →", user_data)
+    log_action(
+        db=db,
+        user_id=user.id,
+        action="LOGIN_SUCCESS",
+        target_resource="USER",
+        target_resource_id=str(user.id),
+        details=f"User '{user.username}' logged in successfully."
+    )
+    db.commit()
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -657,6 +666,8 @@ def get_current_user(token: str = Depends(token.oauth2_scheme), db: Session = De
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
+            print("JWT ERROR:", e)
+
             raise credentials_exception
     except JWTError:
         raise credentials_exception
