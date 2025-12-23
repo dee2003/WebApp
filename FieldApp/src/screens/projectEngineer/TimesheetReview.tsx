@@ -1,3 +1,5 @@
+
+
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
@@ -88,7 +90,7 @@ const COL_SIMPLE_HOUR = 110;
 const COL_EQUIP = 110;
 const COL_TICKET = 110;
 const COL_TOTAL = 100;
-const COL_START_STOP = 70;
+
 const COL_UNIT = 80; // <--- ADDED: New constant for unit/material column
 const COL_MATERIAL_NAME = 120; // <--- ADDED: New constant for Material Name column
 
@@ -141,6 +143,8 @@ const PETimesheetReviewScreen = () => {
     const [vendorMaterialNames, setVendorMaterialNames] = useState<UnitState>({}); 
     const [dumpingSiteHours, setDumpingSiteHours] = useState<SimpleHourState>({});
     const [dumpingSiteTickets, setDumpingSiteTickets] = useState<SimpleHourState>({});
+const [approvedByName, setApprovedByName] = useState<string>('Not yet submitted');    // 🔹 2) Approved By (who actually submitted, from supervisor_submissions)
+
 
     // Total list of phase codes for validation (original list from job)
     const allJobPhaseCodes = timesheet?.data.job.phase_codes?.map((p: any) => (p?.code ?? p)) || [];
@@ -151,7 +155,6 @@ const [ticketsState, setTicketsState] = useState<SimpleHourState>({});
 // NEW: holds simple one-value tickets per entity (no phase key)
 const [ticketsLoadsState, setTicketsLoadsState] =
     useState<Record<string, string>>({});
-const [approvedByName, setApprovedByName] = useState<string>('Not yet submitted');
 
     // --- Helper function to clean numeric input and strip leading zeros (New) ---
     const cleanNumericInput = (value: string): string => {
@@ -222,39 +225,7 @@ const getEntityDisplayName = (entity: any, type: TableCategory): string => {
             const tsData = response.data;
             setTimesheet(tsData);
             
-const supervisorData = tsData.data.supervisor;
-    if (supervisorData && supervisorData.name) {
-      setSupervisorName(supervisorData.name.trim());
-    } else {
-      setSupervisorName('N/A');
-    }
-
-    // 🔹 2) Approved By (who actually submitted, from supervisor_submissions)
-    try {
-      const subRes = await apiClient.get(`/api/review/supervisor_submissions/by-date`, {
-        params: { date: tsData.date },
-      });
-
-      if (subRes.data && subRes.data.supervisor_id) {
-        const supRes = await apiClient.get(`/api/users/${subRes.data.supervisor_id}`);
-        const sup = supRes.data;
-        setApprovedByName(`${sup.first_name} ${sup.last_name}`.trim());
-      } else {
-        setApprovedByName('Not yet submitted');
-      }
-    } catch (err) {
-      console.warn('Supervisor submission fetch failed', err);
-      setApprovedByName('Not found');
-    }
-
-    // 🔹 existing job phase-codes logic
-    try {
-      const jobCode = tsData.data.job.job_code;
-      const resp = await apiClient.get(`/api/job-phases/${jobCode}/phase-codes-list`);
-      setFullJobPhaseCodes(resp.data.map((p: any) => p.code));
-    } catch (e) {
-      console.error('Failed to fetch full phase codes list', e);
-    }
+            // Fetch all phase codes for this job_code
             try {
                 // This line now correctly accesses tsData.data.job
                 const jobCode = tsData.data.job.job_code;
@@ -303,41 +274,45 @@ const supervisorData = tsData.data.supervisor;
     return state;
 };
 
+// Units for materials (from materials_trucking line items)
+const populateMaterialUnits = (materials: any[] = []): UnitState => {
+  const state: UnitState = {};
+  materials.forEach(e => {
+    const id = String(e.id);  // "123"
+    const unit =
+      e.unit ||                         // from materials_trucking
+      e.selectedMaterials?.[0]?.unit || // if metadata style
+      null;
+    state[id] = unit;
+  });
+  return state;
+};
 
-            // Original populateUnits (for materials from metadata)
-            const populateUnits = (entities: any[] = []): UnitState => {
-                const state: UnitState = {};
-                entities.forEach(e => {
-                    // e here is a metadata object from selected_material_items 
-                    const id = e.id || e.name || e.key; 
-                    const unit = e.selectedMaterials?.[0]?.unit || e.unit || null; 
-                    state[id] = unit;
-                });
-                return state;
-            };
-            
-            // NEW: Helper to extract units from the 'vendors' array line items (using unique key)
-            const populateVendorUnits = (entities: any[] = []): UnitState => {
-                const state: UnitState = {};
-                entities.forEach(e => {
-                    const id = getVendorUniqueKey(e); 
-                    const unit = e.unit || null; 
-                    state[id] = unit;
-                });
-                return state;
-            };
+// Units for vendors (use unique key vendor_id_material_id)
+const populateVendorUnits = (entities: any[] = []): UnitState => {
+  const state: UnitState = {};
+  entities.forEach(e => {
+    const id = getVendorUniqueKey(e);   // "91_2"
+    const unit = e.unit || null;        // from vendors array
+    state[id] = unit;
+  });
+  return state;
+};
 
-            // NEW: Helper to extract material name from the 'vendors' array line items (using unique key)
-            const populateVendorMaterialNames = (entities: any[] = []): UnitState => {
-                const state: UnitState = {};
-                entities.forEach(e => {
-                    // e here is an item from tsData.data.vendors, which contains material_name directly
-                    const id = getVendorUniqueKey(e); 
-                    const materialName = e.material_name || null; 
-                    state[id] = materialName;
-                });
-                return state;
-            };
+// Material name for vendors, also keyed by vendor_id_material_id
+const populateVendorMaterialNames = (entities: any[] = []): UnitState => {
+  const state: UnitState = {};
+  entities.forEach(e => {
+    const id = getVendorUniqueKey(e);
+    const materialName = e.material_name || null;
+    state[id] = materialName;
+  });
+  return state;
+};
+
+// ...
+
+
 
 
             const populateEmployeeComplex = (entities: any[] = []): EmployeeHourState => {
@@ -383,26 +358,24 @@ const supervisorData = tsData.data.supervisor;
                 });
                 return state;
             };
-            const formattedMaterials = tsData.data.materials_trucking || [];
-            const formattedVendors = tsData.data.vendors || [];
-            const formattedDumpingSites = tsData.data.dumping_sites || [];
-            setEmployeeHours(populateEmployeeComplex(tsData.data.employees));
-            setEquipmentHours(populateEquipmentComplex(tsData.data.equipment));
-            setMaterialHours(populateSimple(formattedMaterials, 'hours_per_phase', 'material')); 
-            setVendorHours(populateSimple(formattedVendors, 'hours_per_phase', 'vendor'));
-            setMaterialTickets(populateSimple(formattedMaterials, 'tickets_per_phase', 'material')); 
-            setVendorTickets(populateSimple(formattedVendors, 'tickets_per_phase', 'vendor')); // Uses unique key now
-            
-            const materialUnitsMetadata = Object.values(tsData.data.selected_material_items || {});
-            
-            setMaterialUnits(populateUnits(materialUnitsMetadata));
-            // UPDATED: Use the line item array for correct unit mapping for vendors
-            setVendorUnits(populateVendorUnits(formattedVendors));
-            // NEW: Populate Vendor Material Names (corrected logic)
-            setVendorMaterialNames(populateVendorMaterialNames(formattedVendors));
+         
+const formattedMaterials = tsData.data.materials_trucking || [];
+const formattedVendors = tsData.data.vendors || [];
+const formattedDumpingSites = tsData.data.dumping_sites || [];
 
-            setDumpingSiteHours(populateSimple(formattedDumpingSites, 'hours_per_phase', 'dumping_site'));
-            setDumpingSiteTickets(populateSimple(formattedDumpingSites, 'tickets_per_phase', 'dumping_site'));
+setEmployeeHours(populateEmployeeComplex(tsData.data.employees));
+setEquipmentHours(populateEquipmentComplex(tsData.data.equipment));
+setMaterialHours(populateSimple(formattedMaterials, 'hours_per_phase', 'material'));
+setVendorHours(populateSimple(formattedVendors, 'hours_per_phase', 'vendor'));
+setMaterialTickets(populateSimple(formattedMaterials, 'tickets_per_phase', 'material'));
+setVendorTickets(populateSimple(formattedVendors, 'tickets_per_phase', 'vendor'));
+
+setMaterialUnits(populateMaterialUnits(formattedMaterials));      // <- from materials_trucking
+setVendorUnits(populateVendorUnits(formattedVendors));            // <- from vendors
+setVendorMaterialNames(populateVendorMaterialNames(formattedVendors));
+
+setDumpingSiteHours(populateSimple(formattedDumpingSites, 'hours_per_phase', 'dumping_site'));
+setDumpingSiteTickets(populateSimple(formattedDumpingSites, 'tickets_per_phase', 'dumping_site'));
             if (tsData.data.total_quantities) {
                 const q: QuantityState = {};
                 for (const phase in tsData.data.total_quantities) {
@@ -413,11 +386,30 @@ const supervisorData = tsData.data.supervisor;
             // Fetch Foreman Name (Existing Logic)
             const userRes = await apiClient.get(`/api/users/${tsData.foreman_id}`);
             setForemanName(`${userRes.data.first_name} ${userRes.data.last_name}`.trim());
+            const supervisorData = tsData.data.supervisor;
             if (supervisorData && supervisorData.name) {
                  setSupervisorName(supervisorData.name.trim());
             } else {
-                 setSupervisorName('N/A');
+               
+                setSupervisorName('N/A');
             }
+                // 🔹 2) Approved By (who actually submitted, from supervisor_submissions)
+    try {
+      const subRes = await apiClient.get(`/api/review/supervisor_submissions/by-date`, {
+        params: { date: tsData.date },
+      });
+
+      if (subRes.data && subRes.data.supervisor_id) {
+        const supRes = await apiClient.get(`/api/users/${subRes.data.supervisor_id}`);
+        const sup = supRes.data;
+        setApprovedByName(`${sup.first_name} ${sup.last_name}`.trim());
+      } else {
+        setApprovedByName('Not yet submitted');
+      }
+    } catch (err) {
+      console.warn('Supervisor submission fetch failed', err);
+      setApprovedByName('Not found');
+    }
         } catch (error) {
             console.error('Failed to load timesheet:', error);
             Alert.alert('Error', 'Failed to load timesheet data.');
@@ -1073,682 +1065,760 @@ const getTicketsFromEntity = (entity: any) => {
 };
 
 
-    // --- Table Renderer Component (Unchanged structure, relies on updated helpers) ---
-    const renderTableBlock = (
-        title: string,
-        entities: any[],
-        hoursState: SimpleHourState | ComplexHourState | EmployeeHourState,
-        ticketsState: SimpleHourState | undefined,
-        type: TableCategory,
-        unitState: UnitState | undefined,
-        // NEW PARAMETER: Added state for Vendor Material Name
-        materialNameState: UnitState | undefined, 
-    ) => {
-        // Now entities is guaranteed to be an array due to fix below
-        if (!entities || entities.length === 0) return null;
+const renderTableBlock = (
+  title: string,
+  entities: any[],
+  hoursState: SimpleHourState | ComplexHourState | EmployeeHourState,
+  ticketsState: SimpleHourState | undefined,
+  type: TableCategory,
+  unitState: UnitState | undefined,
+  materialNameState: UnitState | undefined,
+) => {
+  if (!entities || entities.length === 0) return null;
 
-        const isEmployee = type === 'employee';
-        const isEquipment = type === 'equipment';
-        const isMaterial = type === 'material';
-        const isVendor = type === 'vendor'; // NEW constant
-        const isSimple = isMaterial || isVendor || type === 'dumping_site'; // Updated isSimple
+  const isEmployee = type === 'employee';
+  const isEquipment = type === 'equipment';
+  const isMaterial = type === 'material';
+  const isVendor = type === 'vendor';
+  const isSimple = isMaterial || isVendor || type === 'dumping_site';
 
-        // USE THE NEW DERIVED LIST OF PHASE CODES
-       // USE THE NEW DERIVED LIST OF PHASE CODES
-const phaseCodes = allActivePhaseCodes.filter(
-  (p) => p !== 'start_hours' && p !== 'stop_hours' && p !== 'total'
-);
-
-
-        if (phaseCodes.length === 0) return null; 
-
-        // --- Totals Calculation ---
-        let employeePhaseTotals: Record<string, number> = {};
-let equipmentPhaseTotals: Record<string, number>;
-        let simplePhaseTotals: Record<string, number> = {};
-        let grandTotal = 0;
-
-        if (isEmployee) {
-            phaseCodes.forEach(phase => {
-                employeePhaseTotals[phase] = calculateEmployeePhaseTotal(hoursState as EmployeeHourState, phase);
-            });
-            grandTotal = entities.reduce((sum, e) => sum + calculateTotalEmployeeHours(hoursState as EmployeeHourState, e.id), 0);
-        } else if (isEquipment) {
-  equipmentPhaseTotals = calculateComplexPhaseTotalsCombined(
-    hoursState as ComplexHourState,
-    phaseCodes
+  const phaseCodes = allActivePhaseCodes.filter(
+    p => p !== 'start_hours' && p !== 'stop_hours' && p !== 'total'
   );
-  grandTotal = entities.reduce(
-    (sum, e) =>
-      sum + calculateTotalComplexHours(hoursState as ComplexHourState, e.id),
-    0
-  );
-}
- else if (isSimple) {
-            simplePhaseTotals = calculateSimplePhaseTotals(hoursState as SimpleHourState, phaseCodes);
-            grandTotal = entities.reduce((sum, e) => {
-                let entityId;
-                if (type === 'material') {
-    entityId = String(e.id);   // ALWAYS numeric ID
-}
- else if (type === 'vendor') { // <--- USE THE UNIQUE KEY FOR TOTALS CALCULATION
-                    entityId = getVendorUniqueKey(e);
-                } else {
-                    entityId = e.id || e.name || e.key || e.vendor_id;
-                }
-                return sum + calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
-            }, 0);
+  if (phaseCodes.length === 0) return null;
+
+  // ---- Totals ----
+  let employeePhaseTotals: Record<string, number> = {};
+  let equipmentPhaseTotals: Record<string, number> = {};
+  let simplePhaseTotals: Record<string, number> = {};
+  let grandTotal = 0;
+
+  if (isEmployee) {
+    phaseCodes.forEach(phase => {
+      employeePhaseTotals[phase] = calculateEmployeePhaseTotal(
+        hoursState as EmployeeHourState,
+        phase
+      );
+    });
+    grandTotal = entities.reduce(
+      (sum, e) =>
+        sum + calculateTotalEmployeeHours(hoursState as EmployeeHourState, e.id),
+      0
+    );
+  } else if (isEquipment) {
+    equipmentPhaseTotals = calculateComplexPhaseTotalsCombined(
+      hoursState as ComplexHourState,
+      phaseCodes
+    );
+    grandTotal = entities.reduce(
+      (sum, e) =>
+        sum + calculateTotalComplexHours(hoursState as ComplexHourState, e.id),
+      0
+    );
+  } else if (isSimple) {
+    simplePhaseTotals = calculateSimplePhaseTotals(
+      hoursState as SimpleHourState,
+      phaseCodes
+    );
+    grandTotal = entities.reduce((sum, e) => {
+      let entityId: string;
+      if (type === 'material') {
+        entityId = String(e.id);
+      } else if (type === 'vendor') {
+        entityId = getVendorUniqueKey(e);
+      } else {
+        entityId = e.id || e.name || e.key || e.vendor_id;
+      }
+      return sum + calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
+    }, 0);
+  }
+
+  // ---- Widths ----
+  const phaseGroupWidth = getPhaseGroupWidth(type);
+  let fixedWidth = COL_NAME + COL_TOTAL;
+
+  if (isEmployee) {
+    fixedWidth += COL_ID + COL_CLASS;
+  } else if (isEquipment) {
+    fixedWidth += COL_ID;
+  } else if (isSimple) {
+    fixedWidth += COL_ID;
+    if (isVendor) fixedWidth += COL_MATERIAL_NAME;
+    fixedWidth += COL_UNIT;   // Unit (once)
+    fixedWidth += COL_TICKET; // Tickets
+  }
+
+  const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
+
+  // ---- Simple setters ----
+  const getSimpleStateSetter = (
+    targetType: 'hours' | 'tickets'
+  ): React.Dispatch<React.SetStateAction<SimpleHourState>> => {
+    if (targetType === 'hours') {
+      if (type === 'material') return setMaterialHours;
+      if (type === 'vendor') return setVendorHours;
+      if (type === 'dumping_site') return setDumpingSiteHours;
+    } else {
+      if (type === 'material') return setMaterialTickets;
+      if (type === 'vendor') return setVendorTickets;
+      if (type === 'dumping_site') return setDumpingSiteTickets;
+    }
+    return (() => {}) as React.Dispatch<React.SetStateAction<SimpleHourState>>;
+  };
+
+  const simpleHoursSetter = getSimpleStateSetter('hours');
+  const simpleTicketsSetter = getSimpleStateSetter('tickets');
+
+  // ---- Employee body (unchanged math, but border‑clean) ----
+  const renderEmployeeTableBody = () => {
+    return entities.flatMap((entity, idxRow) => {
+      const entityId = entity.id;
+      const entityName = getEntityDisplayName(entity, type);
+      const total = calculateTotalEmployeeHours(
+        hoursState as EmployeeHourState,
+        entityId
+      );
+      const showReason = total === 0 && entity.reason;
+
+      const classCodesUsed: Set<string> = new Set();
+      phaseCodes.forEach(phase => {
+        const phaseHours = (hoursState as EmployeeHourState)[entityId]?.[phase];
+        if (phaseHours) {
+          Object.keys(phaseHours).forEach(code => {
+            if (parseFloat(phaseHours[code] || '0') > 0) classCodesUsed.add(code);
+          });
         }
-        // -------------------------------------------------------------------------
+      });
+      if (entity.class_1) classCodesUsed.add(entity.class_1);
+      if (entity.class_2) classCodesUsed.add(entity.class_2);
 
-       const phaseGroupWidth = getPhaseGroupWidth(type);
+      const classCodesToDisplay = Array.from(classCodesUsed).sort();
+      if (classCodesToDisplay.length === 0) classCodesToDisplay.push('N/A');
 
-let fixedWidth = COL_NAME + COL_TOTAL;
-
-// EMPLOYEE: Name + EMP# + Class + Total
-if (isEmployee) {
-  fixedWidth += COL_ID + COL_CLASS;
-} 
-// EQUIPMENT: Name + EQUIP + Start + Stop + Total
-else if (isEquipment) {
-  fixedWidth += COL_ID + (COL_START_STOP * 2);
-} 
-// SIMPLE TABLES: ID + Name + (Material Name) + Unit + Tickets + Total
-else if (isSimple) {
-  fixedWidth += COL_ID; 
-
-  if (isVendor) { // <--- NEW: Add Material Name width for Vendors
-      fixedWidth += COL_MATERIAL_NAME;
-  }
-
-  if (isMaterial || isVendor) { // <--- Include Unit width for Materials and Vendors
-      fixedWidth += COL_UNIT;
-  }
-  fixedWidth += COL_TICKET;
-}
-
-// Final content width
-const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
-
-        // Helper to determine the correct state setter for Simple types
-        const getSimpleStateSetter = (targetType: 'hours' | 'tickets'): React.Dispatch<React.SetStateAction<SimpleHourState>> => {
-            if (targetType === 'hours') {
-                if (type === 'material') return setMaterialHours;
-                if (type === 'vendor') return setVendorHours;
-                if (type === 'dumping_site') return setDumpingSiteHours;
-            } else if (targetType === 'tickets') {
-                if (type === 'material') return setMaterialTickets;
-                if (type === 'vendor') return setVendorTickets;
-                if (type === 'dumping_site') return setDumpingSiteTickets;
-            }
-            return (() => {}) as React.Dispatch<React.SetStateAction<SimpleHourState>>; 
-        };
-        const simpleHoursSetter = getSimpleStateSetter('hours');
-        const simpleTicketsSetter = getSimpleStateSetter('tickets');
-
-
-        // Custom Employee Table Renderer
-        const renderEmployeeTableBody = () => {
-            return entities.flatMap((entity, index) => {
-                const entityId = entity.id;
-                // Use the new helper here
-                const entityName = getEntityDisplayName(entity, type);
-
-                const grandTotal = calculateTotalEmployeeHours(hoursState as EmployeeHourState, entityId);
-                const showReason = grandTotal === 0 && entity.reason
-                const classCodesUsed: Set<string> = new Set();
-
-                // Collect all class codes that have data for any phase
-                phaseCodes.forEach(phase => {
-                    const phaseHours = (hoursState as EmployeeHourState)[entityId]?.[phase];
-                    if (phaseHours) {
-                        Object.keys(phaseHours).forEach(code => {
-                            if (parseFloat(phaseHours[code] || '0') > 0) {
-                                classCodesUsed.add(code);
-                            }
-                        });
-                    }
-                });
-
-                // Include all predefined class codes from the entity
-                if (entity.class_1) classCodesUsed.add(entity.class_1);
-                if (entity.class_2) classCodesUsed.add(entity.class_2);
-
-                const classCodesToDisplay = Array.from(classCodesUsed).sort();
-                if (classCodesToDisplay.length === 0) classCodesToDisplay.push('N/A'); // Default row
-
-                return classCodesToDisplay.map((classCode, classIndex) => {
-                    const isFirstClassRow = classIndex === 0;
-
-                    return (
-                        <View key={`${entityId}-${classCode}`} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
-                            {/* Fixed Columns */}
-<View
-  style={[
-    styles.dataCell,
-    styles.colName,
-    styles.borderRight,                     // always keep border to maintain grid
-  ]}
->
-  {isFirstClassRow ? (
-    <>
-      <Text style={[styles.dataCell, { fontWeight: '500' }]} numberOfLines={2}>
-        {entityName}
-      </Text>
-
-      {showReason && (
-        <Text
-          style={{
-            fontSize: 12,
-            color: '#8a3434ff',
-            fontStyle: 'italic',
-            marginTop: 2,
-            paddingHorizontal: 2,
-            borderRadius: 4,
-          }}
-        >
-          Reason: {entity.reason}
-        </Text>
-      )}
-    </>
-  ) : (
-    <Text style={{ opacity: 0 }}>placeholder</Text>  
-    // invisible so height stays but name does NOT repeat
-  )}
-</View>
-
-
-                            <Text style={[styles.dataCell, styles.colId, styles.borderRight, isFirstClassRow ? null : styles.transparentCell]}>
-                                {isFirstClassRow ? entityId : ''}
-                            </Text>
-                            <Text style={[styles.dataCell, styles.colClassCode, styles.borderRight]}>{classCode === 'N/A' ? '' : classCode}</Text>
-
-                            {/* Dynamic Hours Columns per Phase */}
-                            {phaseCodes.map((phase, phaseIndex) => {
-                                const currentHours = classCode === 'N/A' 
-                                    ? '0' 
-                                    : ((hoursState as EmployeeHourState)[entityId]?.[phase]?.[classCode] || '0');
-                                const isLastPhase = phaseIndex === phaseCodes.length - 1;
-                                const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
-
-                                return (
-                                    <View 
-                                        key={phase} 
-                                        style={[
-                                            styles.dynamicPhaseColEmployee, 
-                                            phaseBorder,
-                                        ]}
-                                    > 
-                                        <View style={[styles.dataCell, { flex: 1 }, styles.lastCell]}>
-                                            {renderCellContent(currentHours, (text) => 
-                                                updateEmployeeState(entityId, phase, classCode, text)
-                                            )}
-                                        </View>
-                                    </View>
-                                );
-                            })}
-
-                            {/* Total Hours */}
-                            <Text style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft, isFirstClassRow ? null : styles.transparentCell]}>
-                                {isFirstClassRow ? grandTotal.toFixed(1) : ''}
-                            </Text>
-                        </View>
-                    );
-                });
-            });
-        };
-        // End of Custom Employee Table Renderer
-
+      return classCodesToDisplay.map((classCode, idxClass) => {
+        const isFirstClassRow = idxClass === 0;
 
         return (
-            <View style={styles.card}>
-                <Text style={styles.tableTitle}>{title}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={true}> 
-                    <View style={[styles.tableContainer, { minWidth: contentWidth }]}>
+          <View
+            key={`${entityId}_${classCode}`}
+            style={[
+              styles.tableRow,
+              idxRow % 2 === 1 && styles.tableRowAlternate,
+            ]}
+          >
+            {/* Name */}
+            <View style={[styles.dataCell, styles.colName, styles.borderRight]}>
+              {isFirstClassRow ? (
+                <>
+                  <Text>{entityName}</Text>
+                  {showReason && (
+                    <Text style={{ color: THEME.danger, fontSize: 10 }}>
+                      Reason: {entity.reason}
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <Text style={styles.transparentCell}>placeholder</Text>
+              )}
+            </View>
 
+            {/* EMP# */}
+            <View style={[styles.dataCell, styles.colId, styles.borderRight]}>
+              <Text>{isFirstClassRow ? entityId : ''}</Text>
+            </View>
 
-                        {/* -------------------- TABLE HEADER START (DYNAMIC) -------------------- */}
-                        <View style={styles.tableHeader}>
-                            
-                            {/* ID Column for Simple Tables (FIRST COLUMN) */}
-                            {isSimple && ( 
-                                <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>
-                                    {isVendor ? 'Vendor ID' : 'ID'}
-                                </Text>
-                            )}
+            {/* Class Code */}
+            <View style={[styles.dataCell, styles.colClassCode, styles.borderRight]}>
+              <Text>{classCode === 'N/A' ? '' : classCode}</Text>
+            </View>
+{/* Phase cells - DISPLAY ONLY, no editing for employee hours */}
+{phaseCodes.map((phase, phaseIndex) => {
+  const value =
+    classCode === 'N/A'
+      ? '0'
+      : ((hoursState as EmployeeHourState)[entityId]?.[phase]?.[classCode] ||
+         '0');
+  const isLastPhase = phaseIndex === phaseCodes.length - 1;
+  const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
 
-                            {/* Name Column */}
-                            <Text style={[styles.headerCell, styles.colName, styles.borderRight, !isEmployee && styles.headerCellBottomBorder]}>
-                                Name
-                            </Text>
+  const num = parseFloat(value) || 0;
 
-                            {/* ID/EQUIP# Column for Employee/Equipment (SECOND/THIRD COLUMN) */}
-                            {(isEmployee || isEquipment) && ( 
-                                <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>
-                                    {isEmployee ? 'EMP#' : isEquipment ? 'EQUIP #ER' : 'ID'}
-                                </Text>
-                            )}
-
-                            {isEquipment && (
-                                <>
-                                    <Text style={[styles.headerCell, styles.colStartStop, styles.borderRight, styles.headerCellBottomBorder]}>Start Hours</Text>
-                                    <Text style={[styles.headerCell, styles.colStartStop, styles.borderRight, styles.headerCellBottomBorder]}>Stop Hours</Text>
-                                </>
-                            )}
-
-                            {isEmployee && (
-                                <Text style={[styles.headerCell, styles.colClassCode, styles.borderRight, styles.headerCellBottomBorder]}>
-                                    Class Code
-                                </Text>
-                            )}
-
-                    {/* <--- NEW: Add Material Name Column for Vendors ---> */}
-                    {isVendor && (
-                        <Text 
-                            style={[
-                                styles.headerCell,
-                                { width: COL_MATERIAL_NAME },
-                                styles.borderRight,
-                                styles.headerCellBottomBorder
-                            ]}
-                        >
-                            Material Name
-                        </Text>
-                    )}
-
-
-                   
-
-                    {/* SINGLE TICKETS COLUMN (before phases) */}
-{isSimple && (
-    <Text 
-        style={[
-            styles.headerCell,
-            styles.colTickets,
-            styles.borderRight,
-            styles.headerCellBottomBorder
-        ]}
+  return (
+    <View
+      key={`${entityId}_${classCode}_${phase}`}
+      style={[
+        styles.dataCell,
+        styles.dynamicPhaseColEmployee, // width only, no borderRight
+        phaseBorder,                    // single vertical border
+      ]}
     >
-        {type === 'dumping_site' ? '# Loads' : '# Tickets'}
-    </Text>
-)}
-
-                            {/* DYNAMIC PHASE COLUMNS - NOW EDITABLE */}
-                            {phaseCodes.map((phase, phaseIndex) => {
-                                const isLastPhase = phaseIndex === phaseCodes.length - 1;
-                                const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
-
-                                const dynamicPhaseStyle = isEquipment 
-                                    ? styles.dynamicPhaseColEquipment 
-                                    : isEmployee 
-                                        ? styles.dynamicPhaseColEmployee
-                                        : styles.dynamicPhaseColSimple;
-
-                                const isCurrentPhaseBeingEdited = isEditing && editingTablePhase?.table === type && editingTablePhase?.phase === phase;
-
-                                return (
-                                    <View 
-                                        key={phase} 
-                                        style={[dynamicPhaseStyle, phaseBorder]}
-                                    >
-
-                                        {/* Editable Phase Code Header Logic */}
-                                        <TouchableOpacity 
-                                            disabled={!isEditing}
-                                            onPress={() => {
-                                                setEditingTablePhase({ table: type, phase });
-                                                setTempNewPhaseCodeForTable(phase);
-                                            }}
-                                            style={[styles.phaseHeaderContainer, { height: 31, backgroundColor: THEME.tableHeaderBg }]}
-                                        >
-                                            <Text style={styles.phaseHeaderCellText}>{phase}</Text>
-                                        </TouchableOpacity>
-{/* Phase Edit Overlay for Tables */}
-{isCurrentPhaseBeingEdited && (
-    <View style={styles.phaseDropdownContainer}>
-
-        {/* Scrollable List */}
-        <ScrollView
-            style={styles.phaseDropdownList}
-            showsVerticalScrollIndicator={true}
-        >
-            {fullJobPhaseCodes.map((p) => (
-                <TouchableOpacity
-                    key={p}
-                    style={styles.phaseDropdownItem}
-                    onPress={() => {
-                        setTempNewPhaseCodeForTable(p);
-                        handlePhaseCodeRename(editingTablePhase!.phase, p);
-                    }}
-                >
-                    <Text style={styles.phaseDropdownItemText}>{p}</Text>
-                </TouchableOpacity>
-            ))}
-        </ScrollView>
-
-        {/* Close */}
-        <TouchableOpacity
-            style={styles.phaseDropdownClose}
-            onPress={() => setEditingTablePhase(null)}
-        >
-            <Text style={{ color: "#FFF", fontWeight: "bold" }}>✕</Text>
-        </TouchableOpacity>
+      <Text style={{ flex: 1, textAlign: 'center' }}>
+        {num.toFixed(1)}
+      </Text>
     </View>
-)}
+  );
+})}
 
-                                        {/* End Editable Phase Code Header Logic */}
 
+            {/* Total */}
+<View style={[styles.dataCell, styles.colTotal, styles.borderLeft]}>
+  <Text>{isFirstClassRow ? total.toFixed(1) : ''}</Text>
+</View>
 
-                                        {isEquipment ? (
-                                            <View style={styles.equipmentPhaseSubHeader}>
-                                                <Text style={[styles.headerCell, styles.colHoursEquipment, styles.equipmentSubHeaderCell, styles.borderRight, styles.headerCellBottomBorder]}>REG</Text>
-                                                <Text style={[styles.headerCell, styles.colHoursEquipment, styles.equipmentSubHeaderCell, styles.lastCell, styles.headerCellBottomBorder]}>S.B</Text>
-                                            </View>
-                                        ) : (
-                                            <>
-                                                <Text 
+          </View>
+        );
+      });
+    });
+  };
+
+  // ---- Main render ----
+  return (
+    <View style={styles.card}>
+      <Text style={styles.tableTitle}>{title}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={[styles.tableContainer, { width: contentWidth }]}>
+          {/* HEADER */}
+<View style={[styles.tableHeader, styles.headerCellBottomBorder]}>
+            {isSimple && (
+              <Text
+                style={[
+                  styles.headerCell,
+                  styles.colId,
+                  styles.headerCellBottomBorder,
+                  styles.borderRight,
+                ]}
+              >
+                {isVendor ? 'Vendor ID' : 'ID'}
+              </Text>
+            )}
+
+            <Text
+              style={[
+                styles.headerCell,
+                styles.colName,
+                styles.headerCellBottomBorder,
+                styles.borderRight,
+              ]}
+            >
+              Name
+            </Text>
+
+            {(isEmployee || isEquipment) && (
+              <Text
+                style={[
+                  styles.headerCell,
+                  styles.colId,
+                  styles.headerCellBottomBorder,
+                  styles.borderRight,
+                ]}
+              >
+                {isEmployee ? 'EMP#' : 'EQUIP #ER'}
+              </Text>
+            )}
+
+            {isEmployee && (
+              <Text
+                style={[
+                  styles.headerCell,
+                  styles.colClassCode,
+                  styles.headerCellBottomBorder,
+                  styles.borderRight,
+                ]}
+              >
+                Class Code
+              </Text>
+            )}
+
+            {isVendor && (
+              <Text
+                style={[
+                  styles.headerCell,
+                  { width: COL_MATERIAL_NAME },
+                  styles.headerCellBottomBorder,
+                  styles.borderRight,
+                ]}
+              >
+                Material Name
+              </Text>
+            )}
+
+            {isSimple && (
+              <Text
+                style={[
+                  styles.headerCell,
+                  { width: COL_UNIT },
+                  styles.headerCellBottomBorder,
+                  styles.borderRight,
+                ]}
+              >
+                Unit
+              </Text>
+            )}
+
+            {isSimple && (
+              <Text
+                style={[
+                  styles.headerCell,
+                  styles.colTickets,
+                  styles.headerCellBottomBorder,
+                  styles.borderRight,
+                ]}
+              >
+                {type === 'dumping_site' ? '# Loads' : '# Tickets'}
+              </Text>
+            )}
+
+{phaseCodes.map((phase, phaseIndex) => {
+  const isLastPhase = phaseIndex === phaseCodes.length - 1;
+  const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
+  const dynamicPhaseStyle = isEquipment
+    ? styles.dynamicPhaseColEquipment
+    : isEmployee
+    ? styles.dynamicPhaseColEmployee
+    : styles.dynamicPhaseColSimple;
+
+  const isCurrentPhaseBeingEdited =
+    isEditing &&
+    editingTablePhase?.table === type &&
+    editingTablePhase?.phase === phase;
+
+              return (
+<View
+  key={phase}
+  style={[
+    styles.dataCell,
+    dynamicPhaseStyle,
+    phaseBorder,
+    styles.phaseHeaderCell,   // 👈 new
+  ]}
+>
+
+                  {/* header label + overlay kept same as before */}
+                  <TouchableOpacity
+                    disabled={!isEditing}
+                    onPress={() => {
+                      if (!isEditing) return;
+                      setEditingTablePhase({ table: type, phase });
+                      setTempNewPhaseCodeForTable(phase);
+                    }}
                     style={[
-                        styles.headerCell,
-                        isEmployee ? { flex: 1 } : styles.colHoursSimple,
-                        styles.lastCell,  // ← Single cell spans full phase width
-                        styles.headerCellBottomBorder
+                      styles.phaseHeaderContainer,
+                      { height: 31, backgroundColor: THEME.tableHeaderBg },
                     ]}
-                >
-                    {isEmployee ? 'Hours' : 
-                     type === 'material' ? 'Hours/Qty' : 
-                     type === 'dumping_site' ? 'Quantity' : 'Hours'}
-                </Text>
+                  >
+                    <Text style={styles.phaseHeaderCellText}>{phase}</Text>
+                    {isCurrentPhaseBeingEdited && (
+                      <View style={styles.phaseDropdownContainer}>
+                        <ScrollView style={styles.phaseDropdownList}>
+                          {fullJobPhaseCodes.map((p) => (
+                            <TouchableOpacity
+                              key={p}
+                              style={styles.phaseDropdownItem}
+                              onPress={() => {
+                                setTempNewPhaseCodeForTable(p);
+                                handlePhaseCodeRename(editingTablePhase!.phase, p);
+                              }}
+                            >
+                              <Text style={styles.phaseDropdownItemText}>{p}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                        <TouchableOpacity
+                          style={styles.phaseDropdownClose}
+                          onPress={() => setEditingTablePhase(null)}
+                        >
+                          <Text style={{ color: '#FFF', fontWeight: '700' }}>
+                            Close
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </TouchableOpacity>
 
-                                               
-                                            </>
-                                        )}
-                                    </View>
-                                );
-                            })}
+                  {!isEquipment && (
+                    <Text style={[styles.dataCell, styles.transparentCell]}>
+                      {isEmployee
+                        ? 'Hours'
+                        : type === 'dumping_site'
+                        ? 'Quantity'
+                        : 'Hours/Qty'}
+                    </Text>
+                  )}
 
-                            <Text style={[styles.headerCell, styles.colTotal, styles.lastCell, styles.borderLeft, styles.headerCellBottomBorder]}>Total</Text>
-                        </View>
-                        {/* -------------------- TABLE HEADER END -------------------- */}
-
-
-
-                        {/* -------------------- TABLE BODY START (DYNAMIC) -------------------- */}
-                        {isEmployee ? (
-                            renderEmployeeTableBody()
-                        ) : (
-                            (() => {
-                                let sortedEntities = entities;
-                                let lastVendorId: string | number | null = null;
-
-                                // 1. Sort entities by vendor_id for correct grouping
-                                if (isVendor) {
-                                    sortedEntities = [...entities].sort((a, b) => {
-                                        const idA = a.vendor_id || '';
-                                        const idB = b.vendor_id || '';
-                                        return idA.toString().localeCompare(idB.toString());
-                                    });
-                                }
-
-                                return sortedEntities.map((entity, index) => {
-                                    let entityId;
-                            if (type === 'material') {
-    entityId = String(entity.id);   // ALWAYS use numeric ID
-}
- else if (type === 'vendor') { 
-                                        entityId = getVendorUniqueKey(entity);
-                                    } else {
-                                        entityId = entity.id || entity.name || entity.key || entity.vendor_id;
-                                    }
-
-                                    // Vendor Grouping Logic
-                                    let isFirstRowForVendor = true;
-                                    if (isVendor) {
-                                        const currentVendorId = entity.vendor_id;
-                                        if (currentVendorId === lastVendorId) {
-                                            isFirstRowForVendor = false;
-                                        }
-                                        lastVendorId = currentVendorId; // Update for the next iteration
-                                    }
-
-                                    // 💡 CRITICAL FIX: Use the new helper function for robust name retrieval
-                                    const entityName = getEntityDisplayName(entity, type);
-                                    
-                                    const totalHours = isEquipment 
-                                        ? calculateTotalComplexHours(hoursState as ComplexHourState, entityId)
-                                        : calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
-
-                                    const currentTickets =
-                                        ticketsLoadsState?.[entityId] ??
-                                        getTicketsFromEntity(entity);
-
-                                    return (
-                                        <View key={entityId} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlternate]}>
-                                            
-                                            {/* ID Column for Simple Tables (FIRST COLUMN) */}
-                                            {isSimple && (
-                                                <Text 
-                                                    style={[
-                                                        styles.dataCell, 
-                                                        styles.colId, 
-                                                        styles.borderRight, 
-                                                        isVendor && !isFirstRowForVendor ? styles.transparentCell : null
-                                                    ]}
-                                                >
-                                                    {isVendor ? (isFirstRowForVendor ? entity.vendor_id : '') : entityId}
-                                                </Text>
-                                            )}
-                                            
-                                            {/* Name Column */}
-                                            <Text 
-                                                style={[
-                                                    styles.dataCell, 
-                                                    styles.colName, 
-                                                    styles.borderRight,
-                                                    isVendor && !isFirstRowForVendor ? styles.transparentCell : null
-                                                ]} 
-                                                numberOfLines={2}
-                                            >
-                                                {isVendor ? (isFirstRowForVendor ? entityName : entity.vendor_name) : entityName}
-                                            </Text>
-
-                                            {/* ID/EQUIP# Column for Employee/Equipment (SECOND/THIRD COLUMN) */}
-                                            {(isEquipment || isEmployee) && (
-                                                <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{entityId}</Text>
-                                            )}
-                                            {/* <--- END MODIFIED ID BLOCK ---> */}
-
-
-                                            {isEquipment && (
-                                                <>
-                                                    <Text style={[styles.dataCell, styles.colStartStop, styles.borderRight]}>
-                                                        {entity.start_hours || ''} 
-                                                    </Text>
-                                                    <Text style={[styles.dataCell, styles.colStartStop, styles.borderRight]}>
-                                                        {entity.stop_hours || ''}
-                                                    </Text>
-                                                </>
-                                            )}
-
-{/* <--- NEW: Material Name Column Body for Vendors ---> */}
-{isVendor && (
-    <Text 
-        style={[
-            styles.dataCell, 
-            { width: COL_MATERIAL_NAME }, 
-            styles.borderRight
-        ]} 
-        numberOfLines={2}
-    >
-        {materialNameState?.[entityId] || ''} {/* <--- USES CORRECT UNIQUE KEY */}
-    </Text>
-)}
-
-
-
-{/* SINGLE TICKETS COLUMN */}
-{isSimple && (
-  <View style={[styles.dataCell, styles.colTickets, styles.borderRight]}>
-    {renderTicketCellContent(
-      currentTickets, // string
-      (text) => {
-        setTicketsLoadsState(prev => ({
-          ...prev,
-          [entityId]: text,   // store per-entity tickets, now with the correct unique key
-        }));
-      }
-    )}
-  </View>
-)}
-
-
-                                            {/* Dynamic Phase Columns */}
-                                            {phaseCodes.map((phase, phaseIndex) => {
-                                                const isLastPhase = phaseIndex === phaseCodes.length - 1;
-                                                const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
-
-                                                return (
-                                                    <View key={phase} style={[
-                                                        isEquipment ? styles.dynamicPhaseColEquipment : styles.dynamicPhaseColSimple,
-                                                        phaseBorder,
-                                                    ]}>
-                                                        {isEquipment ? (
-                                                            // Equipment: REG and S.B.
-                                                            <>
-                                                                <View style={[styles.dataCell, styles.colHoursEquipment, styles.borderRight]}>
-                                                                    {renderCellContent(
-                                                                        ((hoursState as ComplexHourState)[entityId]?.[phase]?.REG ?? '0').toString(),
-                                                                        (text) => updateEquipmentState(entityId, phase, 'REG', text)
-                                                                    )}
-                                                                </View>
-                                                                <View style={[styles.dataCell, styles.colHoursEquipment, styles.lastCell]}>
-                                                                    {renderCellContent(
-                                                                        ((hoursState as ComplexHourState)[entityId]?.[phase]?.['S.B'] ?? '0').toString(),
-                                                                        (text) => updateEquipmentState(entityId, phase, 'S.B', text)
-                                                                    )}
-                                                                </View>
-                                                            </>
-                                                        ) : (
-                                                            // Simple Logic (Material/Vendor/Dumping)
-                                                            <View style={[styles.dataCell, styles.colHoursSimple, styles.lastCell]}>
-                        {renderCellContent(
-                            ((hoursState as SimpleHourState)[entityId]?.[phase] ?? '0').toString(),
-                            (text) => updateSimpleState(simpleHoursSetter, entityId, phase, text)
-                        )}
-                    </View>
-                                                        )}
-                                                    </View>
-                                                )
-                                            })}
-
-                                            <Text style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft]}>{totalHours.toFixed(1)}</Text>
-                                        </View>
-                                    );
-                                });
-                            })()
-                        )}
-                        {/* -------------------- TABLE BODY END -------------------- */}
-
-
-                        {/* -------------------- PHASE TOTALS ROW (DYNAMIC) -------------------- */}
-                        <View style={[styles.tableRow, styles.phaseTotalRow]}>
-                            
-                            {/* ID Placeholder for Simple Tables (FIRST COLUMN) */}
-                            {isSimple && ( 
-                                <View style={[styles.dataCell, styles.colId]} /> 
-                            )}
-                            
-                            {/* Name Total Column */}
-                            <Text style={[styles.dataCell, styles.colName, styles.phaseTotalText]}>Phase Total</Text>
-
-                            {/* ID/EQUIP# Placeholder for Employee/Equipment (SECOND/THIRD COLUMN) */}
-                            {(isEmployee || isEquipment) && ( 
-                                <View style={[styles.dataCell, styles.colId]} /> 
-                            )}
-
-                            {isEquipment && (
-                                <>
-                                    <View style={[styles.dataCell, styles.colStartStop]} /> 
-                                    <View style={[styles.dataCell, styles.colStartStop]} /> 
-                                </>
-                            )}
-
-                            {isEmployee && (
-                                <View style={[styles.dataCell, styles.colClassCode]} /> 
-                            )}
-
-                            {/* NEW: Material Name Placeholder for Vendors */}
-                            {isVendor && ( 
-                                <View style={[styles.dataCell, { width: COL_MATERIAL_NAME }]} />
-                            )}
-
-                       
-                            
-                              {isSimple && (
-                                <View style={[styles.dataCell, styles.colTickets]} />
-                            )}
-                            {phaseCodes.map((phase, phaseIndex) => {
-                                const isLastPhase = phaseIndex === phaseCodes.length - 1;
-                                // const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
-                                 const isEmployeeSecondPhase = isEmployee && phaseIndex === 1; 
-                                const phaseBorder =
-        isEmployeeSecondPhase
-            ? styles.phaseGroupBorderRight      // border after 2nd phase
-            : isLastPhase
-                ? {}                             // no extra border on last
-                : styles.phaseGroupBorderRight;
-                                const dynamicPhaseStyle = isEquipment 
-                                    ? styles.dynamicPhaseColEquipment 
-                                    : isEmployee 
-                                        ? styles.dynamicPhaseColEmployee 
-                                        : styles.dynamicPhaseColSimple;
-
-                                return (
-                                    <View 
-                                        key={phase} 
-                                        style={[dynamicPhaseStyle, phaseBorder]}
-                                    >
-                                        {isEmployee ? (
-                                            <View style={styles.phaseTotalSubRow}>
-                                                <Text style={[styles.dataCell, { flex: 1 }, styles.phaseTotalText, styles.lastCell]}>
-                                                    {(employeePhaseTotals[phase] || 0).toFixed(1)}
-                                                </Text>
-                                            </View>
-                                        ) : isEquipment ? (
-  <View style={styles.phaseTotalSubRow}>
+{isEquipment && (
+  <View style={styles.equipmentPhaseSubHeader}>
     <Text
       style={[
         styles.dataCell,
-        styles.colHoursEquipment,
-        styles.phaseTotalText,
-        styles.lastCell,
+        styles.equipmentSubHeaderCell,
+        styles.borderRight,      // vertical line between REG and S.B
       ]}
     >
-      {(equipmentPhaseTotals[phase] ?? 0).toFixed(1)}
+      REG
+    </Text>
+    <Text
+      style={[
+        styles.dataCell,
+        styles.equipmentSubHeaderCell,
+      ]}
+    >
+      S.B
     </Text>
   </View>
-) :
- isSimple ? (
-                                            <View style={styles.phaseTotalSubRow}>
-                                                <Text style={[styles.dataCell, styles.colHoursSimple, styles.phaseTotalText, styles.borderRight]}>
-                                                    {(simplePhaseTotals[phase] || 0).toFixed(1)}
-                                                </Text>
-                                               
-                                            </View>
-                                        ) : null}
-                                    </View>
-                                );
-                            })}
+)}
 
-                            
-                        </View>
-                        {/* -------------------- PHASE TOTALS ROW END -------------------- */}
+                </View>
+              );
+            })}
 
+<Text
+  style={[
+    styles.headerCell,
+    styles.colTotal,
+    styles.headerCellBottomBorder,
+    styles.borderLeft,            // ← add this
+  ]}
+>
+  Total
+</Text>
 
+          </View>
+
+          {/* BODY */}
+          {isEmployee ? (
+            renderEmployeeTableBody()
+          ) : (
+            (() => {
+              let sortedEntities = entities;
+              let lastVendorId: string | number | null = null;
+
+              if (isVendor) {
+                sortedEntities = [...entities].sort((a, b) => {
+                  const idA = a.vendor_id || '';
+                  const idB = b.vendor_id || '';
+                  return idA.toString().localeCompare(idB.toString());
+                });
+              }
+
+              return sortedEntities.map((entity, index) => {
+                let entityId: string;
+                if (type === 'material') {
+                  entityId = String(entity.id);
+                } else if (type === 'vendor') {
+                  entityId = getVendorUniqueKey(entity);
+                } else {
+                  entityId =
+                    entity.id || entity.name || entity.key || entity.vendor_id;
+                }
+
+                let isFirstRowForVendor = true;
+                if (isVendor) {
+                  const currentVendorId = entity.vendor_id;
+                  if (currentVendorId === lastVendorId) isFirstRowForVendor = false;
+                  lastVendorId = currentVendorId;
+                }
+
+                const entityName = getEntityDisplayName(entity, type);
+                const totalHours = isEquipment
+                  ? calculateTotalComplexHours(hoursState as ComplexHourState, entityId)
+                  : calculateTotalSimpleHours(hoursState as SimpleHourState, entityId);
+
+                const currentTickets =
+                  ticketsLoadsState?.[entityId] ?? getTicketsFromEntity(entity);
+
+                return (
+                  <View
+                    key={entityId + '_' + index}
+                    style={[
+                      styles.tableRow,
+                      index % 2 === 1 && styles.tableRowAlternate,
+                    ]}
+                  >
+                    {/* ID */}
+                    {isSimple && (
+                      <View
+                        style={[
+                          styles.dataCell,
+                          styles.colId,
+                          styles.borderRight,
+                        ]}
+                      >
+                        <Text>
+                          {isVendor
+                            ? isFirstRowForVendor
+                              ? entity.vendor_id
+                              : ''
+                            : entityId}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Name */}
+                    <View
+                      style={[
+                        styles.dataCell,
+                        styles.colName,
+                        styles.borderRight,
+                      ]}
+                    >
+                      <Text numberOfLines={2}>
+                        {isVendor
+                          ? isFirstRowForVendor
+                            ? entityName
+                            : entity.vendor_name
+                          : entityName}
+                      </Text>
                     </View>
-                </ScrollView>
+
+                    {/* Equip ID */}
+                    {isEquipment && (
+                      <View
+                        style={[
+                          styles.dataCell,
+                          styles.colId,
+                          styles.borderRight,
+                        ]}
+                      >
+                        <Text>{entityId}</Text>
+                      </View>
+                    )}
+
+                    {/* Vendor material name */}
+                    {isVendor && (
+                      <View
+                        style={[
+                          styles.dataCell,
+                          { width: COL_MATERIAL_NAME },
+                          styles.borderRight,
+                        ]}
+                      >
+                        <Text numberOfLines={2}>
+                          {materialNameState?.[entityId] || ''}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Unit */}
+                    {isSimple && (
+                      <View
+                        style={[
+                          styles.dataCell,
+                          { width: COL_UNIT },
+                          styles.borderRight,
+                        ]}
+                      >
+                        <Text>{unitState?.[entityId] || ''}</Text>
+                      </View>
+                    )}
+
+                    {/* Tickets */}
+                    {isSimple && (
+                      <View
+                        style={[
+                          styles.dataCell,
+                          styles.colTickets,
+                          styles.borderRight,
+                        ]}
+                      >
+                        {renderTicketCellContent(currentTickets, (text) => {
+                          setTicketsLoadsState(prev => ({
+                            ...prev,
+                            [entityId]: text,
+                          }));
+                          updateSimpleState(simpleTicketsSetter, entityId, 'total', text);
+                        })}
+                      </View>
+                    )}
+
+      {phaseCodes.map((phase, phaseIndex) => {
+  const isLastPhase = phaseIndex === phaseCodes.length - 1;
+  const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
+
+  return (
+    <View
+      key={`${entityId}_${phase}`}
+      style={[
+        styles.dataCell,
+        isEquipment
+          ? styles.dynamicPhaseColEquipment
+          : styles.dynamicPhaseColSimple,
+        phaseBorder,
+      ]}
+    >
+      {isEquipment ? (
+        // Equipment: REG | S.B side by side with vertical line between
+        <View style={{ flexDirection: 'row', width: '100%' }}>
+          <View
+            style={[
+              styles.dataCell,
+              styles.colHoursEquipment,
+              styles.borderRight,   // vertical line between REG and S.B
+            ]}
+          >
+            {renderCellContent(
+              (
+                (hoursState as ComplexHourState)[entityId]?.[phase]?.REG ??
+                '0'
+              ).toString(),
+              (text) =>
+                updateEquipmentState(entityId, phase, 'REG', text)
+            )}
+          </View>
+          <View
+            style={[
+              styles.dataCell,
+              styles.colHoursEquipment,
+            ]}
+          >
+            {renderCellContent(
+              (
+                (hoursState as ComplexHourState)[entityId]?.[phase]?.['S.B'] ??
+                '0'
+              ).toString(),
+              (text) =>
+                updateEquipmentState(entityId, phase, 'S.B', text)
+            )}
+          </View>
+        </View>
+      ) : (
+        // Simple (material/vendor/dumping): single cell
+        renderCellContent(
+          (
+            (hoursState as SimpleHourState)[entityId]?.[phase] ??
+            '0'
+          ).toString(),
+          (text) =>
+            updateSimpleState(simpleHoursSetter, entityId, phase, text)
+        )
+      )}
+    </View>
+  );
+})}
+
+<View style={[styles.dataCell, styles.colTotal, styles.borderLeft]}>
+  <Text>{totalHours.toFixed(1)}</Text>
+</View>
+
+                  </View>
+                );
+              });
+            })()
+          )}
+
+          {/* PHASE TOTALS ROW */}
+          <View style={[styles.tableRow, styles.phaseTotalRow]}>
+            {isSimple && (
+              <View
+                style={[
+                  styles.dataCell,
+                  styles.colId,
+                  styles.borderRight,
+                ]}
+              />
+            )}
+
+            <View
+              style={[
+                styles.dataCell,
+                styles.colName,
+                styles.borderRight,
+              ]}
+            >
+              <Text style={styles.phaseTotalText}>Phase Total</Text>
             </View>
-        );
-    };
+
+            {(isEmployee || isEquipment) && (
+              <View
+                style={[
+                  styles.dataCell,
+                  styles.colId,
+                  styles.borderRight,
+                ]}
+              />
+            )}
+
+            {isEmployee && (
+              <View
+                style={[
+                  styles.dataCell,
+                  styles.colClassCode,
+                  styles.borderRight,
+                ]}
+              />
+            )}
+
+            {isVendor && (
+              <View
+                style={[
+                  styles.dataCell,
+                  { width: COL_MATERIAL_NAME },
+                  styles.borderRight,
+                ]}
+              />
+            )}
+
+            {isSimple && (
+              <View
+                style={[
+                  styles.dataCell,
+                  { width: COL_UNIT },
+                  styles.borderRight,
+                ]}
+              />
+            )}
+
+            {isSimple && (
+              <View
+                style={[
+                  styles.dataCell,
+                  styles.colTickets,
+                  styles.borderRight,
+                ]}
+              />
+            )}
+
+            {phaseCodes.map((phase) => {
+              const value = isEmployee
+                ? employeePhaseTotals[phase] || 0
+                : isEquipment
+                ? equipmentPhaseTotals[phase] ?? 0
+                : simplePhaseTotals[phase] || 0;
+
+              const dynamicPhaseStyle = isEquipment
+                ? styles.dynamicPhaseColEquipment
+                : isEmployee
+                ? styles.dynamicPhaseColEmployee
+                : styles.dynamicPhaseColSimple;
+
+              return (
+                <View
+                  key={`total_${phase}`}
+                  style={[
+                    styles.dataCell,
+                    dynamicPhaseStyle,
+                    styles.phaseGroupBorderRight,
+                  ]}
+                >
+                  <Text style={styles.phaseTotalText}>
+                    {value.toFixed(1)}
+                  </Text>
+                </View>
+              );
+            })}
+
+<View style={[styles.dataCell, styles.colTotal, styles.borderLeft]}>
+  <Text style={styles.phaseTotalText}>{grandTotal.toFixed(1)}</Text>
+</View>
+
+
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  );
+};
+
+
 
 
     if (loading) return <ActivityIndicator size="large" style={styles.centered} />;
@@ -1768,62 +1838,7 @@ const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
 
 const count = overEmployees.length;
 const label = count === 1 ? "employee" : "employees";
-const handlePESaveAndExport = async () => {
-    setLoading(true);
-    try {
-        // 1. Rebuild the data from state back into the backend format
-        const finalPayload = {
-            // Rebuilds employee hours from your local state maps
-            employees: rebuildEmployeeData(), 
-            
-            // Rebuilds equipment hours (REG/SB)
-            equipment: rebuildEquipmentData(),
-            
-            // Rebuilds materials, vendors, and dumping sites
-            materials_trucking: rebuildSimpleEntityData(
-                timesheet?.data.materials_trucking || [], 
-                materialHours, 
-                materialTickets, 
-                'material'
-            ),
-            vendors: rebuildSimpleEntityData(
-                timesheet?.data.vendors || [], 
-                vendorHours, 
-                vendorTickets, 
-                'vendor'
-            ),
-            
-            // Notes and Job details
-            notes: notes,
-            job_name: timesheet?.data.job_name,
-            job_id: timesheet?.data.job?.job_code,
-            total_quantities: totalQuantities,
-        };
 
-        // 2. Call the specific PE endpoint
-        const response = await apiClient.patch(
-            `/api/timesheets/${timesheetId}/pe-review`, 
-            finalPayload
-        );
-
-        if (response.status === 200) {
-            // The backend returns the updated timesheet which includes the new Excel URL
-            Alert.alert(
-                "Success", 
-                "Timesheet approved and a new version of the Excel has been generated.",
-                [{ text: "OK", onPress: () => setIsEditing(false) }]
-            );
-            
-            // Refresh the local data to show the new file in the history list
-            if (fetchData) await fetchData(); 
-        }
-    } catch (error) {
-        console.error("PE Save Error:", error);
-        Alert.alert("Error", "Failed to save edits and generate the Excel report.");
-    } finally {
-        setLoading(false);
-    }
-};
     return (
         <SafeAreaView style={styles.safeArea}>
             <ScrollView contentContainerStyle={{ padding: THEME.SPACING, paddingBottom: 50 }}>
@@ -1841,10 +1856,9 @@ const handlePESaveAndExport = async () => {
                             
                             {/* Supervisor Field, which uses the directly accessed supervisorName */}
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Supervisor</Text><Text style={styles.infoValue}>{supervisorName}</Text></View>
-                            <View style={styles.infoItem}>
-  <Text style={styles.infoLabel}>Approved By</Text>
-  <Text style={styles.infoValue}>{approvedByName}</Text>
-</View>
+                            <View style={styles.infoItem}><Text style={styles.infoLabel}>Approved By</Text>  <Text style={styles.infoValue}>{approvedByName}</Text></View>
+
+
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Project Engineer</Text><Text style={styles.infoValue}>{data.project_engineer || 'N/A'}</Text></View>
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Day/Night</Text><Text style={styles.infoValue}>{data.time_of_day || 'N/A'}</Text></View>
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Location</Text><Text style={styles.infoValue}>{data.location || 'N/A'}</Text></View>
@@ -1882,20 +1896,6 @@ const handlePESaveAndExport = async () => {
                             </TouchableOpacity>
                         )}
                     </View>
-                    {/* Replace or add to your existing Footer/Action Bar */}
-<View style={styles.peActionContainer}>
-    <TouchableOpacity 
-        style={[styles.actionButton, { backgroundColor: '#2E7D32' }]} 
-        onPress={handlePESaveAndExport}
-        disabled={loading}
-    >
-        {loading ? (
-            <ActivityIndicator color="#FFF" />
-        ) : (
-            <Text style={styles.actionButtonText}>APPROVE & GENERATE EXCEL</Text>
-        )}
-    </TouchableOpacity>
-</View>
                 </View>
 
 {overEmployees.length > 0 && (
@@ -2147,7 +2147,6 @@ const styles = StyleSheet.create({
   colHoursEquipment: { width: COL_EQUIP },
   colTickets: { width: COL_TICKET },
   colTotal: { width: COL_TOTAL },
-  colStartStop: { width: COL_START_STOP }, 
   // ADDED: Unit width style is added inline in renderTableBlock
 
   dynamicPhaseColEmployee: { 
@@ -2224,24 +2223,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0, 
   },
 
-  // NEW STYLES FOR EDITABLE PHASE HEADER
-  phaseHeaderContainer: {
+phaseHeaderContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
-    width: '100%',
-    right: 0,
+    right: 0, // Ensure it stretches from far left to far right
     zIndex: 1,
     borderBottomWidth: 1,
     borderBottomColor: THEME.border,
     justifyContent: 'center',
     alignItems: 'center',
+    // Ensure no paddingHorizontal here
   },
-
-  phaseHeaderCellText: {
-    // Removed absolute positioning logic and put it on the container
+phaseHeaderCellText: {
     width: '100%',
     paddingVertical: 4,
+    paddingHorizontal: 8, // This keeps text away from edges without breaking the line
     fontWeight: '700',
     color: THEME.text,
     fontSize: 12, 
@@ -2251,14 +2248,18 @@ const styles = StyleSheet.create({
   equipmentPhaseSubHeader: {
     flexDirection: 'row',
     flex: 1,
-    marginTop: 31, 
-    minHeight: 24,
+    marginTop: 5, 
+    minHeight: 25,
+      width: '100%',
+
   },
 
   equipmentSubHeaderCell: {
     flex: 1,
     borderTopWidth: 0,
-    paddingVertical: 5, 
+    paddingVertical: 9, 
+      textAlign: 'center',
+
   },
 
   transparentCell: {
@@ -2501,15 +2502,11 @@ phaseDropdownClose: {
     paddingHorizontal: 10,
     borderRadius: 6,
 },
-peActionContainer: {
-        padding: 16,
-        backgroundColor: '#FFF',
-        borderTopWidth: 1,
-        borderTopColor: '#EEE',
-        paddingBottom: 30, // Extra padding for bottom safe area
-    },
+phaseHeaderCell: {
+  paddingTop: 32,   // ⬅️ height of phase header
+},
+
 });
 
 
 export default PETimesheetReviewScreen;
-

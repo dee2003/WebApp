@@ -535,67 +535,118 @@ def update_pe_ticket(
     return ticket
 
 # In your schemas.py or at the top of your router file:
-class BulkApprovalPayload(BaseModel):
-    foreman_id: int
-    date: str  # Date string from frontend, e.g., "2025-11-20"
-    supervisor_id: int
+
 from datetime import datetime
 from ..models import SubmissionStatus # Assuming you have an Enum for statuses
 
 # ---------------- Supervisor Bulk Approval (NEW ENDPOINT) ----------------
+# @router.post("/mark-timesheets-reviewed-bulk", status_code=204)
+# def mark_timesheets_reviewed_bulk(payload: BulkApprovalPayload, db: Session = Depends(get_db)):
+#     """
+#     Supervisor marks timesheets for a foreman/date as REVIEWED, 
+#     changing the status from SUBMITTED to REVIEWED_BY_SUPERVISOR.
+#     """
+#     try:
+#         target_date = datetime.strptime(payload.date, "%Y-%m-%d").date()
+#     except ValueError:
+#         raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD.")
+
+#     # --- Define the Intermediate Status ---
+#     NEW_STATUS = models.SubmissionStatus.REVIEWED_BY_SUPERVISOR
+    
+#     # Select timesheets that are SUBMITTED and haven't been reviewed yet
+#     timesheets_to_review = (
+#         db.query(models.Timesheet)
+#         .filter(
+#             models.Timesheet.foreman_id == payload.foreman_id,
+#             models.Timesheet.date == target_date,
+#             models.Timesheet.status == models.SubmissionStatus.SUBMITTED # Target SUBMITTED
+#         )
+#         .all()
+#     )
+
+#     if not timesheets_to_review:
+#         raise HTTPException(status_code=404, detail="No pending timesheets found to mark as reviewed.")
+
+#     reviewed_count = 0
+    
+#     for ts in timesheets_to_review:
+#         # Update Status
+#         ts.status = NEW_STATUS
+#         # Record who reviewed it (optional but recommended)
+#         ts.supervisor_id = payload.supervisor_id 
+#         reviewed_count += 1
+        
+#         # Create Workflow Entry for auditing the review action
+#         workflow = models.TimesheetWorkflow(
+#             timesheet_id=ts.id,
+#             supervisor_id=payload.supervisor_id,
+#             action="Reviewed", # New action type
+#             by_role="Supervisor",
+#             timestamp=datetime.utcnow(),
+#             comments="Timesheet marked as reviewed in bulk by Supervisor.",
+#         )
+#         db.add(workflow)
+
+#     db.commit()
+
+#     if reviewed_count == 0:
+#         # This handles a potential race condition
+#         raise HTTPException(status_code=400, detail="No timesheets required marking as reviewed.")
+
+#     # Return 204 No Content (as used in the provided mock)
+#     return
+
+class BulkApprovalPayload(BaseModel):
+    foreman_id: int
+    date: str
+    supervisor_id: int
+    # ✅ Add this line to fix the AttributeError
+    timesheet_ids: List[int]
+
 @router.post("/mark-timesheets-reviewed-bulk", status_code=204)
 def mark_timesheets_reviewed_bulk(payload: BulkApprovalPayload, db: Session = Depends(get_db)):
-    """
-    Supervisor marks timesheets for a foreman/date as REVIEWED, 
-    changing the status from SUBMITTED to REVIEWED_BY_SUPERVISOR.
-    """
     try:
         target_date = datetime.strptime(payload.date, "%Y-%m-%d").date()
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD.")
+        raise HTTPException(status_code=400, detail="Invalid date format.")
 
-    # --- Define the Intermediate Status ---
-    NEW_STATUS = models.SubmissionStatus.REVIEWED_BY_SUPERVISOR
-    
-    # Select timesheets that are SUBMITTED and haven't been reviewed yet
-    timesheets_to_review = (
+    # Fetch only the specific timesheets sent by the frontend
+    timesheets = (
         db.query(models.Timesheet)
         .filter(
-            models.Timesheet.foreman_id == payload.foreman_id,
-            models.Timesheet.date == target_date,
-            models.Timesheet.status == models.SubmissionStatus.SUBMITTED # Target SUBMITTED
+            models.Timesheet.id.in_(payload.timesheet_ids),
+            models.Timesheet.foreman_id == payload.foreman_id
         )
         .all()
     )
 
-    if not timesheets_to_review:
-        raise HTTPException(status_code=404, detail="No pending timesheets found to mark as reviewed.")
+    if not timesheets:
+        raise HTTPException(status_code=404, detail="No matching timesheets found.")
 
-    reviewed_count = 0
-    
-    for ts in timesheets_to_review:
-        # Update Status
-        ts.status = NEW_STATUS
-        # Record who reviewed it (optional but recommended)
+    for ts in timesheets:
+        # --- TOGGLE LOGIC ---
+        if ts.status == models.SubmissionStatus.SUBMITTED:
+            ts.status = models.SubmissionStatus.REVIEWED_BY_SUPERVISOR
+            action_text = "Reviewed"
+        elif ts.status == models.SubmissionStatus.REVIEWED_BY_SUPERVISOR:
+            ts.status = models.SubmissionStatus.SUBMITTED
+            action_text = "Review Revoked"
+        else:
+            continue # Skip if status is already beyond 'Reviewed'
+
         ts.supervisor_id = payload.supervisor_id 
-        reviewed_count += 1
         
-        # Create Workflow Entry for auditing the review action
+        # Add a record to the workflow history
         workflow = models.TimesheetWorkflow(
             timesheet_id=ts.id,
             supervisor_id=payload.supervisor_id,
-            action="Reviewed", # New action type
+            action=action_text,
             by_role="Supervisor",
             timestamp=datetime.utcnow(),
-            comments="Timesheet marked as reviewed in bulk by Supervisor.",
+            comments=f"Status changed to {ts.status}"
         )
         db.add(workflow)
 
     db.commit()
-
-    if reviewed_count == 0:
-        # This handles a potential race condition
-        raise HTTPException(status_code=400, detail="No timesheets required marking as reviewed.")
-
-    # Return 204 No Content (as used in the provided mock)
     return

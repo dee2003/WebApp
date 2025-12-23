@@ -154,21 +154,53 @@ def get_timesheets_by_foreman(foreman_id: int, db: Session = Depends(get_db)):
 
 from datetime import date as date_type
 from sqlalchemy import cast, Date
+# @router.get("/for-supervisor", response_model=List[schemas.Timesheet])
+# def get_timesheets_for_supervisor(
+#     db: Session = Depends(get_db),
+#     foreman_id: Optional[int] = Query(None),
+#     date: Optional[str] = Query(None),
+# ):
+#     """
+#     Returns all SUBMITTED timesheets for supervisors to review.
+#     Filters by foreman_id and/or work date (timesheet.date).
+#     """
+#     # Use "status" instead of "sent"
+#     query = (
+#         db.query(models.Timesheet)
+#         .options(joinedload(models.Timesheet.files))
+#         .filter(models.Timesheet.status == "SUBMITTED")
+#     )
+
+#     if foreman_id is not None:
+#         query = query.filter(models.Timesheet.foreman_id == foreman_id)
+
+#     if date:
+#         try:
+#             target_date = date_type.fromisoformat(date)
+#             query = query.filter(cast(models.Timesheet.date, Date) == target_date)
+#         except ValueError:
+#             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+#     # Optional: latest submitted first
+#     timesheets = query.order_by(models.Timesheet.updated_at.desc()).all()
+
+#     return timesheets
 @router.get("/for-supervisor", response_model=List[schemas.Timesheet])
 def get_timesheets_for_supervisor(
     db: Session = Depends(get_db),
     foreman_id: Optional[int] = Query(None),
     date: Optional[str] = Query(None),
 ):
-    """
-    Returns all SUBMITTED timesheets for supervisors to review.
-    Filters by foreman_id and/or work date (timesheet.date).
-    """
-    # Use "status" instead of "sent"
+    # Change the filter to allow both SUBMITTED and REVIEWED statuses
     query = (
         db.query(models.Timesheet)
         .options(joinedload(models.Timesheet.files))
-        .filter(models.Timesheet.status == "SUBMITTED")
+        .filter(
+            models.Timesheet.status.in_([
+                "SUBMITTED", 
+                "REVIEWED_BY_SUPERVISOR"
+            ])
+        )
     )
 
     if foreman_id is not None:
@@ -179,12 +211,10 @@ def get_timesheets_for_supervisor(
             target_date = date_type.fromisoformat(date)
             query = query.filter(cast(models.Timesheet.date, Date) == target_date)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+            raise HTTPException(status_code=400, detail="Invalid date format.")
 
-    # Optional: latest submitted first
-    timesheets = query.order_by(models.Timesheet.updated_at.desc()).all()
+    return query.order_by(models.Timesheet.updated_at.desc()).all()
 
-    return timesheets
 
 from ..schemas import TimesheetWorkflowSchema
 from ..models import TimesheetWorkflow
@@ -420,7 +450,7 @@ def update_timesheet(
             create_df(data.get("vendors", [])).to_excel(writer, index=False, sheet_name="Vendors")
             create_dumping_site_df(data.get("dumping_sites", [])).to_excel(writer, index=False, sheet_name="DumpingSites")
         
-        NGROK_BASE_URL = "https://950225c2f149.ngrok-free.app"
+        NGROK_BASE_URL = "https://e8545574dcae.ngrok-free.app"
         file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
         # :white_check_mark: Save file info in DB
         file_record = models.TimesheetFile(
