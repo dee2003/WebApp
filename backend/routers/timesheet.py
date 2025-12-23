@@ -478,9 +478,9 @@ from sqlalchemy import func
 def send_timesheet(
     timesheet_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(oauth2.get_current_user)  # capture user
+    current_user: models.User = Depends(oauth2.get_current_user)
 ):
-    # --- Fetch timesheet ---
+    # 1. Fetch timesheet
     ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
     if not ts:
         raise HTTPException(status_code=404, detail="Timesheet not found")
@@ -488,42 +488,66 @@ def send_timesheet(
     if ts.status == SubmissionStatus.SUBMITTED:
         raise HTTPException(status_code=400, detail="Timesheet already sent")
 
-    # --- Update timesheet ---
-    ts.sent = True
-    ts.sent_date = datetime.utcnow()
-    ts.status = SubmissionStatus.SUBMITTED  # fixed value
+    try:
+        # 2. Process Linked Tickets from the 'data' JSON field
+        # We extract all ticket IDs that the foreman linked in the UI
+        linked_tickets_map = ts.data.get("linked_tickets", {})
+        
+        all_ticket_ids = []
+        if isinstance(linked_tickets_map, dict):
+            for row_id, ticket_ids in linked_tickets_map.items():
+                if isinstance(ticket_ids, list):
+                    all_ticket_ids.extend(ticket_ids)
 
-    # --- Log workflow action ---
-    workflow = models.TimesheetWorkflow(
-        timesheet_id=ts.id,
-        foreman_id=ts.foreman_id,
-        action="Sent",
-        by_role="Foreman",
-        timestamp=datetime.utcnow(),
-        comments="Sent to supervisor",
-    )
-    db.add(workflow)
+        # 3. Mark Tickets as SUBMITTED and link to this Timesheet ID
+        if all_ticket_ids:
+            # Remove duplicates just in case
+            unique_ids = list(set(all_ticket_ids))
+            
+            db.query(models.Ticket)\
+                .filter(models.Ticket.id.in_(unique_ids))\
+                .update(
+                    {
+                        "status": SubmissionStatus.SUBMITTED, 
+                        "timesheet_id": ts.id
+                    }, 
+                    synchronize_session=False
+                )
 
-    # --- Commit changes ---
-    db.commit()
-    db.refresh(ts)
+        # 4. Update Timesheet Status
+        ts.sent = True
+        ts.sent_date = datetime.utcnow()
+        ts.status = SubmissionStatus.SUBMITTED
 
-    # --- Audit log ---
-    log_action(
-        db=db,
-        user_id=current_user.id,
-        action="TIMESHEET_SENT",
-        target_resource="TIMESHEET",
-        target_resource_id=str(ts.id),
-        details=(
-            f"Timesheet '{ts.timesheet_name}' (ID: {ts.id}, Date: {ts.date}) "
-            f"was sent by {current_user.role.value} ({current_user.username})."
+        # 5. Workflow Logging
+        workflow = models.TimesheetWorkflow(
+            timesheet_id=ts.id,
+            foreman_id=ts.foreman_id,
+            action="Sent",
+            by_role="Foreman",
+            timestamp=datetime.utcnow(),
+            comments=f"Sent to supervisor with {len(all_ticket_ids)} linked tickets",
         )
-    )
-    db.commit()
+        db.add(workflow)
 
-    return ts
+        # 6. Audit Log
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            action="TIMESHEET_SENT",
+            target_resource="TIMESHEET",
+            target_resource_id=str(ts.id),
+            details=f"Timesheet {ts.id} sent. {len(all_ticket_ids)} tickets updated to SUBMITTED."
+        )
 
+        db.commit()
+        db.refresh(ts)
+        return ts
+
+    except Exception as e:
+        db.rollback()
+        print(f"Submission Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error processing ticket submission")
 # -------------------------------
 # DELETE a timesheet
 # -------------------------------

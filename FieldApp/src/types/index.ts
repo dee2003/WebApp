@@ -95,7 +95,7 @@ supervisor?: string | { id: number; name: string } | null;
   updated_at?: string;   // ← Add this
   created_at?: string;
     supervisorid?: string;
-
+linked_tickets?: { [rowId: string]: number[] }; // Add this line
 
 }
 

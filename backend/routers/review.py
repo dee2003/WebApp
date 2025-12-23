@@ -108,23 +108,99 @@ def get_ticket_submission_date_column():
 #             )
 
 #     return notifications
+# @router.get("/notifications", response_model=List[schemas.Notification])
+# def get_notifications_for_supervisor(db: Session = Depends(get_db)):
+#     """
+#     Show all foremen who have submitted Timesheets or Tickets, 
+#     grouped by the actual SUBMISSION DATE, but including the WORK DATE.
+#     """
+#     TIMESHEET_DASHBOARD_STATUSES = ["SUBMITTED", "REVIEWED_BY_SUPERVISOR"]
+    
+#     ts_submission_date_col = get_timesheet_submission_date_column()
+#     tk_submission_date_col = get_ticket_submission_date_column()
+
+#     # 1. Update query to include the WORK DATE (models.Timesheet.date)
+#     submitted_timesheet_groups = (
+#         db.query(
+#             models.Timesheet.foreman_id,
+#             ts_submission_date_col.label("submission_date"),
+#             models.Timesheet.date.label("actual_work_date") # <--- Added this
+#         )
+#         .filter(models.Timesheet.status.in_(TIMESHEET_DASHBOARD_STATUSES))
+#         .distinct()
+#         .all()
+#     )
+
+#     notifications = []
+    
+#     # 2. Unpack the actual_work_date from the query results
+#     for foreman_id, submission_date, actual_work_date in submitted_timesheet_groups:
+#         foreman = db.query(models.User).filter(models.User.id == foreman_id).first()
+#         if not foreman:
+#             continue
+
+#         # 3. Count timesheets for this specific Foreman, Submission Date, AND Work Date
+#         timesheet_count = (
+#             db.query(func.count(models.Timesheet.id))
+#             .filter(
+#                 models.Timesheet.foreman_id == foreman_id,
+#                 ts_submission_date_col == submission_date,
+#                 models.Timesheet.date == actual_work_date, # Filter by work date
+#                 models.Timesheet.status.in_(TIMESHEET_DASHBOARD_STATUSES),
+#             )
+#             .scalar() or 0
+#         )
+
+#         # 4. Count tickets (linked by the same submission date)
+#         ticket_count = (
+#             db.query(func.count(models.Ticket.id))
+#             .filter(
+#                 models.Ticket.foreman_id == foreman_id,
+#                 models.Ticket.status == SubmissionStatus.SUBMITTED.value,
+#                 tk_submission_date_col == submission_date 
+#             )
+#             .scalar() or 0
+#         )
+        
+#         if timesheet_count > 0 or ticket_count > 0:
+#             notifications.append(
+#                 schemas.Notification(
+#                     # Unique ID combining Foreman, Submission, and Work date
+#                     id=int(f"{foreman_id}{submission_date.strftime('%m%d')}{actual_work_date.strftime('%m%d')}"),
+#                     foreman_id=foreman.id,
+#                     foreman_name=f"{foreman.first_name} {foreman.last_name}".strip(),
+#                     foreman_email=foreman.email,
+#                     date=submission_date, # Used for Dashboard Grouping
+#                     work_date=actual_work_date, # Used for the API Filter on the next screen
+#                     timesheet_count=timesheet_count,
+#                     ticket_count=ticket_count,
+#                     job_code=None,
+#                 )
+#             )
+
+#     return notifications
+
+
+
 @router.get("/notifications", response_model=List[schemas.Notification])
 def get_notifications_for_supervisor(db: Session = Depends(get_db)):
     """
     Show all foremen who have submitted Timesheets or Tickets, 
     grouped by the actual SUBMISSION DATE, but including the WORK DATE.
     """
+    # Define statuses that should appear on the supervisor dashboard
     TIMESHEET_DASHBOARD_STATUSES = ["SUBMITTED", "REVIEWED_BY_SUPERVISOR"]
     
-    ts_submission_date_col = get_timesheet_submission_date_column()
-    tk_submission_date_col = get_ticket_submission_date_column()
+    # Helpers to get the date part of the submission timestamp (sent_date or created_at)
+    ts_submission_date_col = func.date(models.Timesheet.sent_date)
+    tk_submission_date_col = func.date(models.Ticket.created_at)
 
-    # 1. Update query to include the WORK DATE (models.Timesheet.date)
+    # 1. Fetch unique combinations of Foreman, Submission Date, and Work Date
     submitted_timesheet_groups = (
         db.query(
             models.Timesheet.foreman_id,
             ts_submission_date_col.label("submission_date"),
-            models.Timesheet.date.label("actual_work_date") # <--- Added this
+            models.Timesheet.date.label("actual_work_date")
         )
         .filter(models.Timesheet.status.in_(TIMESHEET_DASHBOARD_STATUSES))
         .distinct()
@@ -133,53 +209,68 @@ def get_notifications_for_supervisor(db: Session = Depends(get_db)):
 
     notifications = []
     
-    # 2. Unpack the actual_work_date from the query results
     for foreman_id, submission_date, actual_work_date in submitted_timesheet_groups:
         foreman = db.query(models.User).filter(models.User.id == foreman_id).first()
         if not foreman:
             continue
 
-        # 3. Count timesheets for this specific Foreman, Submission Date, AND Work Date
+        # 2. Count timesheets for this specific Foreman, Submission Date, AND Work Date
         timesheet_count = (
             db.query(func.count(models.Timesheet.id))
             .filter(
                 models.Timesheet.foreman_id == foreman_id,
                 ts_submission_date_col == submission_date,
-                models.Timesheet.date == actual_work_date, # Filter by work date
+                models.Timesheet.date == actual_work_date,
                 models.Timesheet.status.in_(TIMESHEET_DASHBOARD_STATUSES),
             )
             .scalar() or 0
         )
 
-        # 4. Count tickets (linked by the same submission date)
-        ticket_count = (
+        # 3. FIXED TICKET COUNT: Count tickets linked to the timesheets for this specific date
+        # We use a JOIN to ensure tickets are attributed to the correct work date grouping
+        linked_ticket_count = (
+            db.query(func.count(models.Ticket.id))
+            .join(models.Timesheet, models.Ticket.timesheet_id == models.Timesheet.id)
+            .filter(
+                models.Ticket.foreman_id == foreman_id,
+                models.Ticket.status == "SUBMITTED",
+                models.Timesheet.date == actual_work_date
+            )
+            .scalar() or 0
+        )
+        
+        # 4. Count standalone tickets (not linked to a timesheet) for the same submission date
+        standalone_ticket_count = (
             db.query(func.count(models.Ticket.id))
             .filter(
                 models.Ticket.foreman_id == foreman_id,
-                models.Ticket.status == SubmissionStatus.SUBMITTED.value,
+                models.Ticket.status == "SUBMITTED",
+                models.Ticket.timesheet_id == None,
                 tk_submission_date_col == submission_date 
             )
             .scalar() or 0
         )
         
-        if timesheet_count > 0 or ticket_count > 0:
+        total_ticket_count = linked_ticket_count + standalone_ticket_count
+        
+        # 5. Only add to list if there is actually something to review
+        if timesheet_count > 0 or total_ticket_count > 0:
             notifications.append(
                 schemas.Notification(
-                    # Unique ID combining Foreman, Submission, and Work date
+                    # Generate a unique ID for the frontend SectionList
                     id=int(f"{foreman_id}{submission_date.strftime('%m%d')}{actual_work_date.strftime('%m%d')}"),
                     foreman_id=foreman.id,
                     foreman_name=f"{foreman.first_name} {foreman.last_name}".strip(),
                     foreman_email=foreman.email,
-                    date=submission_date, # Used for Dashboard Grouping
-                    work_date=actual_work_date, # Used for the API Filter on the next screen
+                    date=submission_date,      # Used for Dashboard Grouping
+                    work_date=actual_work_date, # Used for the Detail View Filter
                     timesheet_count=timesheet_count,
-                    ticket_count=ticket_count,
+                    ticket_count=total_ticket_count,
                     job_code=None,
                 )
             )
 
     return notifications
-
 # ---------------- Submit all for date ----------------
 class SubmitDatePayload(BaseModel):
     date: str

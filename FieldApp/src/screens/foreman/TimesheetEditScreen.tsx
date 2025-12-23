@@ -12,6 +12,12 @@ import WeatherLocationCard from '../WeatherLocationCard';
 import Feather from "react-native-vector-icons/Feather";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useFocusEffect } from '@react-navigation/native';
+import Pdf from 'react-native-pdf';
+import { Image } from 'react-native';
+
+import API_URL from "../../config";
+
+const API_BASE_URL = API_URL;
 
 // ---------------- THEME ----------------
 const THEME = {
@@ -38,7 +44,24 @@ type ClassCode = string;
 type HourType = 'REG' | 'SB';
 
 // --- MOVE THESE TO TOP OF TimesheetEditScreen ---
+const getImageUri = (ticket: any): string | null => {
+  if (!ticket) return null;
 
+  // 🔍 Use the exact key from your debug log: image_path
+  const path = ticket.image_path || ticket.image_url || ticket.file_url;
+  
+  if (!path) {
+    console.log("❌ DEBUG: No path found in ticket object:", ticket);
+    return null;
+  }
+
+  // If the path is already a full URL, return it
+  if (path.startsWith("http")) return path;
+
+  // Otherwise, combine with your API_BASE_URL
+  // Note: Ensure API_BASE_URL does NOT end with a slash if path starts with one
+  return `${API_BASE_URL}${path}`;
+};
 const TimesheetEditScreen = ({ route, navigation }: Props) => {
     const timesheetId = route?.params?.timesheetId;
   const [loading, setLoading] = useState(true);
@@ -49,9 +72,11 @@ const TimesheetEditScreen = ({ route, navigation }: Props) => {
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
   const [notes, setNotes] = useState('');
   const [foremanName, setForemanName] = useState('');
-  // const [isClassModalVisible, setIsClassModalVisible] = useState(false);
-  // const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
-  // states for inputs
+// --- Ticket Linking States ---
+const [availableScannedTickets, setAvailableScannedTickets] = useState<any[]>([]);
+const [ticketModalVisible, setTicketModalVisible] = useState(false);
+const [linkingRowId, setLinkingRowId] = useState<string | null>(null);
+const [selectedTicketIds, setSelectedTicketIds] = useState<{ [rowId: string]: number[] }>({});
   const [employeeHours, setEmployeeHours] = useState<EmployeeHourState>({});
   const [equipmentHours, setEquipmentHours] = useState<ComplexHourState>({});
   const [materialHours, setMaterialHours] = useState<SimpleHourState>({});
@@ -69,7 +94,9 @@ const TimesheetEditScreen = ({ route, navigation }: Props) => {
   const [tempClassValues, setTempClassValues] = useState<Record<string, string>>({});
   const [showEmployeePicker, setShowEmployeePicker] = useState(false);
   const [search, setSearch] = useState("");
-
+// --- New States for PDF Viewing ---
+const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+const [isPdfFullScreen, setIsPdfFullScreen] = useState(false);
   const [employeesList, setEmployeesList] = useState<any[]>([]);
   const [jobPhaseCodes, setJobPhaseCodes] = useState<string[]>([]);
   const [showEquipmentPicker, setShowEquipmentPicker] = useState(false);
@@ -103,7 +130,25 @@ const [showDumpingPicker, setShowDumpingPicker] = useState(false);
 const [dumpingSearch, setDumpingSearch] = useState("");
 const [dumpingList, setDumpingList] = useState<any[]>([]);
 // ... all your existing state declarations (selectedPhases, phaseModalVisible, etc.)
+const getActiveCategory = () => {
+  if (!linkingRowId) return null;
 
+  // Check which state array contains the current ID
+  if (workPerformed.some(v => String(v.id) === String(linkingRowId))) return 'Materials';
+  if (materialsTrucking.some(t => String(t.id) === String(linkingRowId))) return 'Trucking';
+  if (dumpingSites.some(d => String(d.id) === String(linkingRowId))) return 'Dumping Site';
+
+  return null;
+};
+
+const activeCategory = getActiveCategory();
+
+// Filter based ONLY on the Category column in your database
+const filteredTickets = availableScannedTickets.filter(ticket => {
+  const ticketCat = (ticket.category || "").toLowerCase().trim();
+  const currentCat = (activeCategory || "").toLowerCase().trim();
+  return ticketCat === currentCat;
+});
 const savePhasesImmediately = useCallback(
   async (phases: string[]) => {
     console.log('[PHASE AUTOSAVE] called with phases:', phases);
@@ -284,6 +329,10 @@ const restoreProcessedDraft = (draft: any, server: Timesheet | null) => {
       acc[k] = String(d.ticketsLoads[k] ?? '');
       return acc;
     }, {}));
+  }
+  if (d.linked_tickets) {
+    setSelectedTicketIds(d.linked_tickets);
+    console.log('✅ Restored ticket links from draft:', d.linked_tickets);
   }
   if (d.notes) setNotes(d.notes)
   // 2) restore selected phases (server & draft may differ)
@@ -491,13 +540,24 @@ d.vendors.forEach((v: any, index: number) => {
       try {
         const res = await apiClient.get(`/api/timesheets/${timesheetId}`);
         const ts: Timesheet = res.data;
-        setTimesheet(ts);
+try {
+const ticketsRes = await apiClient.get(`/api/tickets/${timesheetId}/scanned-tickets`);      console.log("Tickets received:", ticketsRes.data); // DEBUG: Check your console
+      setAvailableScannedTickets(ticketsRes.data || []);
+    } catch (e) { 
+      console.warn("Failed to load scanned tickets", e); 
+    }
+
+    // 2. Restore links (using 'as any' to prevent the property error)
+    const timesheetData = ts.data as any;
+    if (timesheetData?.linked_tickets) {
+      setSelectedTicketIds(timesheetData.linked_tickets);
+    }
+
+    setTimesheet(ts);
         setTimesheetDate(ts.date ? new Date(ts.date) : new Date());
         setNotes(ts.data?.notes || '');
 
-        // normalize arrays
-      // ---------- NORMALIZE VENDORS: merge grouped + flat rows ----------
-// TimesheetEditScreen.tsx (Approx. Line 416 - inside fetchData logic)
+       
 
 const wp: any[] = [];
 
@@ -886,7 +946,7 @@ useEffect(() => {
         ...processedData,
         selectedPhases: selectedPhases,
           ticketsLoads, // 🔥 REQUIRED
-
+linked_tickets: selectedTicketIds,
       };
 
       const draft = {
@@ -933,6 +993,7 @@ console.log('🎫 DRAFT CONTENTS:', JSON.parse(verifyDraft!).data.ticketsLoads);
   phaseEntryQuantities,
   workPerformed,
   dumpingSites,
+  selectedTicketIds, // ✅ ADD THIS HERE
 ]);
 const buildUpdatedData = () => {
   if (!timesheet) return {};
@@ -1018,7 +1079,7 @@ location: locationData,
     workPerformed,
  selected_vendor_materials: groupedVendorMaterials,
     // VENDORS
-// VENDORS - FIXED ticketsLoads mapping
+linked_tickets: selectedTicketIds,
 vendors: (workPerformed || []).map((r) => ({
     // ✅ FIX: Use r.id, which correctly holds the unique key (vendor_id_material_id)
     id: r.id, 
@@ -2523,6 +2584,9 @@ const renderEntityTable = (
     <View style={[tableStyles.headerCellFixed, { width: 120 }]}>
       <Text style={tableStyles.headerText}># TICKETS</Text>
     </View>
+    <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
+      <Text style={tableStyles.headerText}>LINK TICKETS</Text>
+    </View>
   </>
 ) : (
   <>
@@ -2530,20 +2594,25 @@ const renderEntityTable = (
     <View style={[tableStyles.headerCellFixed, { width: 200 }]}>
       <Text style={tableStyles.headerText}>{isEquipment ? 'EQUIPMENT NAME' : title.toUpperCase()}</Text>
     </View>
-   {/* Start Hours (equipment only) */}
-{/* ADDED UNIT COLUMN HEADER HERE */}
+ 
     {!isEquipment && (
       <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
         <Text style={tableStyles.headerText}>UNIT</Text>
       </View>
+      
+      
     )}
-    {type !== 'equipment' && (
-      <View style={[tableStyles.headerCellFixed, { width: 140 }]}>
-        <Text style={tableStyles.headerText}>
-          {type === 'dumping_site' ? '# OF TICKETS' : '# OF TICKETS'}
-        </Text>
-      </View>
-    )}
+{type !== 'equipment' && (
+  <>
+    <View style={[tableStyles.headerCellFixed, { width: 140 }]}>
+      <Text style={tableStyles.headerText}># TICKETS</Text>
+    </View>
+    {/* NEW HEADER FOR TRUCKING & DUMPING */}
+    <View style={[tableStyles.headerCellFixed, { width: 100 }]}>
+      <Text style={tableStyles.headerText}>LINK TICKETS</Text>
+    </View>
+  </>
+)}
   </>
 )}
 
@@ -2647,6 +2716,7 @@ const renderEntityTable = (
 </View>
 
 
+
     {/* Material */}
     <View style={[tableStyles.cellFixed, { width: 180 }]}>
       <Text style={tableStyles.cellText}>{ent.material_name}</Text>
@@ -2674,6 +2744,20 @@ const renderEntityTable = (
     validateHours={false}
   />
     </View>
+    <View style={[tableStyles.cellFixed, { width: 100 }]}>
+      <TouchableOpacity 
+        onPress={() => {
+          setLinkingRowId(ent.id);
+          setTicketModalVisible(true);
+        }}
+        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f7ff', padding: 4, borderRadius: 4 }}
+      >
+        <Feather name="paperclip" size={14} color="#137fec" />
+        <Text style={{ fontSize: 12, color: "#137fec", marginLeft: 4 }}>
+          {selectedTicketIds[ent.id]?.length || 0} Linked
+        </Text>
+      </TouchableOpacity>
+    </View>
     
   </>
   
@@ -2692,31 +2776,42 @@ const renderEntityTable = (
     )}
 
 {type !== "equipment" && (
-  <View style={[tableStyles.cellFixed, { width: 140 }]}>
-    <InlineEditableNumber 
-      value={ticketsLoads[String(ent.id)] ?? ""} 
-      onChange={(v) => {
-        const clean = v.replace(/[^0-9]/g, "");
-        const rowId = String(ent.id);
-        console.log('🎟️ TICKET INPUT CHANGE', { rowId, rawValue: v, cleanedValue: clean, });
-
-        setTicketsLoads(prev => {
-          const updated = {
-            ...prev,
-            [rowId]: clean,
-          };
-          console.log('🎟️ ticketsLoads STATE AFTER SET', updated);
-          return updated;
-        });
-        
-        // 🔥 FIX: Trigger immediate autosave after state change
-        autoSaveDraft(); 
-      }}
-      placeholder={type === "dumping_site" ? "0" : "0"}
-    />
-  </View>
+  <>
+    <View style={[tableStyles.cellFixed, { width: 140 }]}>
+      <InlineEditableNumber 
+        value={ticketsLoads[String(ent.id)] ?? ""} 
+        onChange={(v) => {
+          const clean = v.replace(/[^0-9]/g, "");
+          const rowId = String(ent.id);
+          setTicketsLoads(prev => ({ ...prev, [rowId]: clean }));
+          autoSaveDraft(); 
+        }}
+        placeholder="0"
+      />
+    </View>
+    {/* NEW LINK BUTTON FOR TRUCKING & DUMPING */}
+    <View style={[tableStyles.cellFixed, { width: 100 }]}>
+      <TouchableOpacity 
+        onPress={() => {
+          setLinkingRowId(String(ent.id));
+          setTicketModalVisible(true);
+        }}
+        style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          backgroundColor: '#f0f7ff', 
+          padding: 4, 
+          borderRadius: 4 
+        }}
+      >
+        <Feather name="paperclip" size={14} color="#137fec" />
+        <Text style={{ fontSize: 12, color: "#137fec", marginLeft: 4 }}>
+          {selectedTicketIds[String(ent.id)]?.length || 0} Linked
+        </Text>
+      </TouchableOpacity>
+    </View>
+  </>
 )}
-
 
   </>
 )}
@@ -2882,14 +2977,7 @@ const getHourChangeHandler = () => {
           </View>
         </View>
 
-        {/* Phase selector */}
-        {/* <ScrollView horizontal style={{ marginVertical: 8 }} showsHorizontalScrollIndicator={false}>
-          {phaseCodes.map(p => (
-            <TouchableOpacity key={p} style={[styles.phaseBtn, selectedPhase === p && styles.phaseBtnSelected]} onPress={() => setSelectedPhase(p)}>
-              <Text style={[styles.phaseBtnText, selectedPhase === p && styles.phaseBtnTextSelected]}>{p}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView> */}
+
 
        <TouchableOpacity 
   style={styles.phaseSelectorBtn}
@@ -3186,6 +3274,153 @@ const getHourChangeHandler = () => {
           {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Draft</Text>}
         </TouchableOpacity>
       </View>
+    
+
+   {/* ===================== TICKET LIST MODAL ===================== */}
+<Modal visible={ticketModalVisible} transparent animationType="fade">
+  <View style={styles.modalBackdrop}>
+    <View style={[styles.modalContainer, { height: '70%' }]}>
+      <Text style={styles.modalTitle}>
+        Link {activeCategory} Tickets
+      </Text>
+
+      <View style={{ marginBottom: 10 }}>
+        <Text style={{ fontSize: 13, color: '#666' }}>
+          Showing all available tickets for the{' '}
+          <Text style={{ fontWeight: 'bold' }}>{activeCategory}</Text> category.
+        </Text>
+      </View>
+
+      <ScrollView>
+        {filteredTickets.length === 0 ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <Feather name="search" size={32} color="#ccc" />
+            <Text style={{ textAlign: 'center', marginTop: 10, color: '#999' }}>
+              No tickets found for category: {activeCategory}
+            </Text>
+          </View>
+        ) : (
+          filteredTickets.map(ticket => {
+            const tId = Number(ticket.id || ticket.ID);
+            const isSelected =
+              linkingRowId &&
+              selectedTicketIds[linkingRowId]?.includes(tId);
+
+            return (
+              <View
+                key={tId}
+                style={[
+                  styles.phaseItem,
+                  isSelected && {
+                    backgroundColor: '#eff6ff',
+                    borderColor: '#3b82f6',
+                  },
+                  { flexDirection: 'row', alignItems: 'center' },
+                ]}
+              >
+                {/* SELECT TICKET */}
+                <TouchableOpacity
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    if (!linkingRowId) return;
+                    setSelectedTicketIds(prev => {
+                      const current = prev[linkingRowId] || [];
+                      const next = current.includes(tId)
+                        ? current.filter(id => id !== tId)
+                        : [...current, tId];
+                      return { ...prev, [linkingRowId]: next };
+                    });
+                  }}
+                >
+                  <Text style={styles.phaseText}>
+                    Ticket #{ticket.ticket_number || tId}
+                  </Text>
+                  <Text style={tableStyles.smallText}>
+                    {ticket.date} | {ticket.vendor_name}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* VIEW PDF BUTTON */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedTicket(ticket);
+                    setIsPdfFullScreen(true);
+                  }}
+                  style={{ padding: 10 }}
+                >
+                  <Feather name="eye" size={20} color="#3b82f6" />
+                </TouchableOpacity>
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+
+      <TouchableOpacity
+        style={styles.doneBtn}
+        onPress={() => setTicketModalVisible(false)}
+      >
+        <Text style={styles.doneBtnText}>Close</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
+{/* ===================== FULLSCREEN PDF MODAL ===================== */}
+<Modal visible={isPdfFullScreen} transparent={false} animationType="slide">
+  <SafeAreaView style={styles.fullScreenPdfContainer}>
+    <View style={styles.fullScreenHeader}>
+      <Text style={styles.fullScreenTitle}>Ticket PDF</Text>
+      <TouchableOpacity onPress={() => setIsPdfFullScreen(false)}>
+        <Text style={styles.fullScreenDoneButtonText}>Done</Text>
+      </TouchableOpacity>
+    </View>
+
+    {selectedTicket && (() => {
+      // ✅ THIS IS THE KEY FIX — pass the whole ticket object
+      const fullUrl = getImageUri(selectedTicket);
+
+      console.log("🛠️ FINAL URL ATTEMPT:", fullUrl);
+
+      if (!fullUrl) {
+        return (
+          <Text style={{ color: 'white', textAlign: 'center' }}>
+            Path Missing
+          </Text>
+        );
+      }
+
+      const isImage = /\.(jpg|jpeg|png|gif)$/i.test(fullUrl);
+
+      if (isImage) {
+        return (
+          <View style={{ flex: 1, backgroundColor: '#000' }}>
+            <Image
+              source={{ uri: fullUrl }}
+              style={{ flex: 1, resizeMode: 'contain' }}
+            />
+          </View>
+        );
+      }
+
+      return (
+        <Pdf
+          source={{ uri: fullUrl, cache: true }}
+          style={styles.fullScreenPdf}
+          trustAllCerts={true}
+          onLoadComplete={(num) =>
+            console.log(`PDF Loaded: ${num} pages`)
+          }
+          onError={(err) =>
+            console.error("PDF Load Error:", err)
+          }
+        />
+      );
+    })()}
+  </SafeAreaView>
+</Modal>
+
+
     </SafeAreaView>
     
   );
@@ -3230,7 +3465,19 @@ bottomSheetOverlay: {
   zIndex: 999,   // VERY IMPORTANT
   elevation: 999 // For Android
 },
-
+fullScreenPdfContainer: { flex: 1, backgroundColor: "#1C1C1E" },
+fullScreenPdf: { flex: 1, width: "100%" },
+fullScreenHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  borderBottomWidth: 1,
+  borderBottomColor: "#333",
+},
+fullScreenTitle: { fontSize: 18, fontWeight: "600", color: "#fff" },
+fullScreenDoneButtonText: { fontSize: 16, fontWeight: "600", color: "#fff" },
 bottomSheet: {
   backgroundColor: "#fff",
   paddingBottom: 20,
@@ -3781,7 +4028,40 @@ const tableStyles = StyleSheet.create({
   color: "#333",
   textAlign: "center",
 },
+// Inside styles = StyleSheet.create({ ... })
+fullScreenPdfContainer: { 
+  flex: 1, 
+  backgroundColor: "#1C1C1E" 
+},
+fullScreenPdf: { 
+  flex: 1, 
+  width: "100%" 
+},
+fullScreenHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  borderBottomWidth: 1,
+  borderBottomColor: "#333",
+},
 
+fullScreenTitle: { 
+  fontSize: 18, 
+  fontWeight: "600", 
+  color: "#fff" 
+},
+fullScreenDoneButtonText: { 
+  fontSize: 16, 
+  fontWeight: "600", 
+  color: "#fff" 
+},
+fullScreenHeaderButton: { // This fixed the ts(2551) error
+    padding: 8,
+    minWidth: 60,
+    alignItems: "center",
+  },
 
 smallText: { fontSize: 12, color: THEME.textSecondary },
 
