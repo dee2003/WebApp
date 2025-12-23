@@ -7,6 +7,7 @@ import { apiClient, API_URL } from "../api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable"; // ✅ FIXED IMPORT
 import './Tickets.css';
+import DatePicker from "react-datepicker";
 
 // Remove /api suffix for file links
 const API_BASE_URL = API_URL.replace(/\/api\/?$/, '');
@@ -202,20 +203,21 @@ const Tickets = () => {
         }
     };
 
-    const handleSearchSubmit = (e) => {
-        e.preventDefault(); 
-        
-        const { ticket_number, haul_vendor, material, job_number, date_from, date_to } = searchFilters;
-        
-        const allTickets = ticketsByDate.flatMap(group => 
-            group.images.map(ticket => ({
-                ...ticket,
-                scanned_date: group.date 
-            }))
-        );
+const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    
+    const { ticket_number, haul_vendor, material, job_number, date_from, date_to } = searchFilters;
+    
+    const allTickets = ticketsByDate.flatMap(group => 
+        group.images.map(ticket => ({
+            ...ticket,
+            scanned_date: group.date 
+        }))
+    );
 
-        const fromTs = parseAnyDate(date_from);
-        const toTs = parseAnyDate(date_to);
+    // ✅ REVISED: DatePicker objects have a .getTime() method directly
+    const fromTs = date_from ? date_from.getTime() : null;
+    const toTs = date_to ? date_to.getTime() : null;
 
         const results = allTickets.filter(t => {
             const matchTicket = !ticket_number || (t.ticket_number && t.ticket_number.toLowerCase().includes(ticket_number.toLowerCase()));
@@ -225,15 +227,16 @@ const Tickets = () => {
 
             let matchDate = true;
             if (fromTs || toTs) {
-                const tDateTs = parseAnyDate(t.scanned_date);
-                if (!tDateTs) matchDate = false;
-                else {
-                    if (fromTs && tDateTs < fromTs) matchDate = false;
-                    if (toTs && tDateTs > toTs) matchDate = false;
-                }
+            const tDateTs = parseAnyDate(t.scanned_date);
+            if (!tDateTs) matchDate = false;
+            else {
+                if (fromTs && tDateTs < fromTs) matchDate = false;
+                // Set toTs to end of day to include tickets on that date
+                if (toTs && tDateTs > toTs) matchDate = false;
             }
-            return matchTicket && matchVendor && matchMaterial && matchJob && matchDate;
-        });
+        }
+        return matchTicket && matchVendor && matchMaterial && matchJob && matchDate;
+    });
 
         setSearchResults(results);
         setIsSearching(true);
@@ -533,7 +536,7 @@ const Tickets = () => {
             )}
 
             {/* SEARCH MODAL */}
-            {isSearchModalOpen && (
+            {/* {isSearchModalOpen && (
                 <div className="modal" style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                     <div className="modal-content" style={{width: '500px'}}>
                         <div className="modal-header">
@@ -593,7 +596,76 @@ const Tickets = () => {
                         </div>
                     </div>
                 </div>
-            )}
+            )} */}
+            {/* SEARCH MODAL */}
+{isSearchModalOpen && (
+    <div className="modal" style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+        <div className="modal-content" style={{width: '500px'}}>
+            <div className="modal-header">
+                <h3>Advanced Search</h3>
+                <button onClick={() => setIsSearchModalOpen(false)} className="btn-sm btn-outline">×</button>
+            </div>
+            <div className="modal-body" style={{padding: '20px'}}>
+                <form onSubmit={handleSearchSubmit}>
+                    <div className="form-group">
+    <label>Date Range (MM/DD/YYYY)</label>
+    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <DatePicker
+            selected={searchFilters.date_from}
+            onChange={(date) => setSearchFilters({...searchFilters, date_from: date})}
+            placeholderText="Start Date"
+            className="form-control"
+            dateFormat="MM/dd/yyyy" // ✅ US Format
+        />
+        <span>to</span>
+        <DatePicker
+            selected={searchFilters.date_to}
+            onChange={(date) => setSearchFilters({...searchFilters, date_to: date})}
+            placeholderText="End Date"
+            className="form-control"
+            dateFormat="MM/dd/yyyy" // ✅ US Format
+        />
+    </div>
+</div>
+                    {/* ... rest of the form fields (Ticket Number, Vendor, etc.) stay the same ... */}
+                    <div className="form-group">
+                        <label>Ticket Number</label>
+                        <input type="text" className="form-control" placeholder="e.g. 12345"
+                            value={searchFilters.ticket_number}
+                            onChange={e => setSearchFilters({...searchFilters, ticket_number: e.target.value})}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label>Vendor</label>
+                        <input type="text" className="form-control" placeholder="e.g. M Luis"
+                            value={searchFilters.haul_vendor}
+                            onChange={e => setSearchFilters({...searchFilters, haul_vendor: e.target.value})}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label>Material</label>
+                        <input type="text" className="form-control" placeholder="e.g. Asphalt"
+                            value={searchFilters.material}
+                            onChange={e => setSearchFilters({...searchFilters, material: e.target.value})}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label>Job Number</label>
+                        <input type="text" className="form-control" placeholder="e.g. J-2023"
+                            value={searchFilters.job_number}
+                            onChange={e => setSearchFilters({...searchFilters, job_number: e.target.value})}
+                        />
+                    </div>
+                    
+                    <div className="modal-footer">
+                        <button type="button" onClick={clearSearch} className="header-btn btn-outline">Reset</button>
+                        <button type="submit" className="header-btn btn-primary">Search</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+)}
         </div>
     );
 };

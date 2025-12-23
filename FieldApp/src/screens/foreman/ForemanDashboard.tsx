@@ -18,7 +18,7 @@ import {
 import { useAuth } from '../../context/AuthContext'; 
 import DocumentScanner from 'react-native-document-scanner-plugin';
 import RNFS from 'react-native-fs';
-import Icon from 'react-native-vector-icons/Feather';
+import Feather from 'react-native-vector-icons/Feather';
 
 import API_URL from "../../config";
 
@@ -195,7 +195,7 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
       </View>
       <View style={styles.headerRight}>
         <TouchableOpacity style={styles.headerButton} onPress={logout}>
-          <Icon name="log-out" size={24} color={theme.colors.contentLight} />
+          <Feather name="log-out" size={24} color={theme.colors.contentLight} />
         </TouchableOpacity>
       </View>
     </View>
@@ -240,7 +240,7 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
                 <Text style={styles.cardTitle}>{title}</Text>
                 <Text style={styles.cardSubtitle}>{subtitle}</Text>
               </View>
-              <Icon name="chevron-right" size={20} color={theme.colors.contentLight} />
+              <Feather name="chevron-right" size={20} color={theme.colors.contentLight} />
             </View>
           </View>
         </TouchableOpacity>
@@ -253,25 +253,25 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
       <View style={styles.navBar}>
         <TouchableOpacity style={styles.navItem}>
           <View style={styles.navIconContainer}>
-            <Icon name="home" size={24} color={theme.colors.primary} />
+            <Feather name="home" size={24} color={theme.colors.primary} />
           </View>
           <Text style={styles.navLabelActive}>Home</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={handleScanDocument}>
           <View style={styles.navIconContainer}>
-            <Icon name="camera" size={24} color={theme.colors.brandStone} />
+            <Feather name="camera" size={24} color={theme.colors.brandStone} />
           </View>
           <Text style={styles.navLabel}>Scan</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Review')}>
           <View style={styles.navIconContainer}>
-            <Icon name="file-text" size={24} color={theme.colors.brandStone} />
+            <Feather name="file-text" size={24} color={theme.colors.brandStone} />
           </View>
           <Text style={styles.navLabel}>Review</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('TimesheetList')}>
           <View style={styles.navIconContainer}>
-            <Icon name="calendar" size={24} color={theme.colors.brandStone} />
+            <Feather name="calendar" size={24} color={theme.colors.brandStone} />
           </View>
           <Text style={styles.navLabel}>Timesheets</Text>
         </TouchableOpacity>

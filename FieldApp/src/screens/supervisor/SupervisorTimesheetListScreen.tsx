@@ -14,7 +14,7 @@ import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import apiClient from '../../api/apiClient'; // Assuming this is your API client
 import { useAuth } from '../../context/AuthContext'; // Assuming you get user/supervisor ID here
-import Icon from 'react-native-vector-icons/Ionicons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import type { SupervisorStackParamList } from '../../navigation/AppNavigator'; // Assuming this is correct
 
 // Define the shape of a single Timesheet object for this list
@@ -188,7 +188,7 @@ const SupervisorTimesheetListScreen = () => {
                 <View style={styles.cardContent}>
                     <Text style={styles.cardTitle} numberOfLines={1}>{item.timesheet_name}</Text>
                     <Text style={[styles.statusText, { color: statusColor }]}>
-                        <Icon 
+                        <Ionicons 
                             name={iconName} 
                             size={14} 
                             color={statusColor} 
@@ -196,7 +196,7 @@ const SupervisorTimesheetListScreen = () => {
                         {' '} Status: {statusText}
                     </Text>
                 </View>
-                <Icon name="chevron-forward-outline" size={24} color={THEME.colors.subtleLight} />
+                <Ionicons name="chevron-forward-outline" size={24} color={THEME.colors.subtleLight} />
             </TouchableOpacity>
         );
     };
@@ -222,7 +222,7 @@ const SupervisorTimesheetListScreen = () => {
                     <ActivityIndicator color={THEME.colors.cardLight} size="small" />
                 ) : (
                     <Text style={styles.approveButtonText}>
-                        <Icon name="eye-outline" size={16} color={THEME.colors.cardLight} />
+                        <Ionicons name="eye-outline" size={16} color={THEME.colors.cardLight} />
                         {' '} Mark All Pending as Reviewed
                     </Text>
                 )}
@@ -255,7 +255,7 @@ const SupervisorTimesheetListScreen = () => {
                 }
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
-                        <Icon name="document-text-outline" size={60} color={THEME.colors.brandStone} />
+                        <Ionicons name="document-text-outline" size={60} color={THEME.colors.brandStone} />
                         <Text style={styles.emptyText}>No timesheets found for this date.</Text>
                         <Text style={styles.emptySubText}>The foreman has not submitted any timesheets yet.</Text>
                     </View>

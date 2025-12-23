@@ -298,54 +298,64 @@ def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
 from sqlalchemy.orm.attributes import flag_modified # Needed for JSONB updates
 @router.put("/{timesheet_id}", response_model=schemas.Timesheet)
 
+@router.put("/{timesheet_id}", response_model=schemas.Timesheet)
 def update_timesheet(
     timesheet_id: int,
     timesheet_update: schemas.TimesheetUpdate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user)
 ):
-    # --- Fetch timesheet ---
     ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
     if not ts:
         raise HTTPException(status_code=404, detail="Timesheet not found")
+
     payload = timesheet_update.dict(exclude_unset=True)
-    current_status = ts.status # <<-- Store the current status for the guardrail
-    def clean_legacy_tickets(data):
-        for entity_key in ["materials_trucking", "vendors", "dumping_sites"]:
-            if entity_key in data:
-                for entity in data[entity_key]:
-                    entity.pop("tickets_per_phase", None)  # Remove if exists
-        return data
+    current_status = ts.status 
+
+    # 1. Update Data (Always allowed for authorized users)
     if "data" in payload:
+        def clean_legacy_tickets(data):
+            for entity_key in ["materials_trucking", "vendors", "dumping_sites"]:
+                if entity_key in data:
+                    for entity in data[entity_key]:
+                        entity.pop("tickets_per_phase", None)
+            return data
+        
         ts.data = clean_legacy_tickets(payload["data"])
-        flag_modified(ts, "data")
-    PROTECTED_STATUSES = [
-            SubmissionStatus.SUBMITTED.value,
-            SubmissionStatus.REVIEWED_BY_SUPERVISOR.value,
-            SubmissionStatus.APPROVED_BY_SUPERVISOR.value,
-        ]
+        flag_modified(ts, "data") #
+
+    # 2. Status Guardrail Logic
+    # Define hierarchy order: higher index = more advanced status
+    STATUS_HIERARCHY = [
+        SubmissionStatus.DRAFT.value,
+        SubmissionStatus.PENDING.value,
+        SubmissionStatus.SUBMITTED.value,
+        SubmissionStatus.REVIEWED_BY_SUPERVISOR.value,
+        SubmissionStatus.APPROVED_BY_SUPERVISOR.value,
+        "APPROVED_BY_PE"
+    ]
+
     if "status" in payload:
-            new_status = payload["status"]
+        new_status = payload["status"]
+        
+        try:
+            current_idx = STATUS_HIERARCHY.index(current_status)
+            new_idx = STATUS_HIERARCHY.index(new_status)
             
-            # Scenario A: Timesheet is already submitted/reviewed (Supervisor editing data)
-            if current_status in PROTECTED_STATUSES:
-                
-                # If the new status is a reverting status (DRAFT/PENDING), IGNORE it.
-                if new_status not in PROTECTED_STATUSES:
-                    # Log the warning and prevent the status change
-                    print(f"⚠️ [WARNING] Status change from {current_status} to {new_status} blocked by guardrail in update_timesheet.")
-                    # The status is not updated, it remains current_status (ts.status = current_status is implicit)
-                    pass 
-                
-                # If the new status is a *forward* status (like REVIEWED_BY_SUPERVISOR) 
-                # or the same status, allow it. This handles the supervisor's 'Save & Review' action.
-                else:
-                    ts.status = new_status
-            
-            # Scenario B: Timesheet is in DRAFT/PENDING (Foreman is saving/submitting)
-            else:
-                # Allow any status change (e.g., DRAFT -> SUBMITTED)
+            # ALLOW if the status is moving forward or staying the same
+            if new_idx >= current_idx:
                 ts.status = new_status
+            else:
+                # BLOCK reversion (e.g., PE tries to save, but front-end sends 'SUBMITTED')
+                print(f"⚠️ [GUARDRAIL] Blocked reversion from {current_status} to {new_status}")
+                # We do not update ts.status, effectively keeping the current high-level status
+        except ValueError:
+            # If a status is not in our hierarchy, fall back to safe assignment or ignore
+            ts.status = new_status 
+
+    # ... sync job name, commit, and excel generation logic ...
+    db.commit()
+    db.refresh(ts)
     # --- Keep job name synced ---
     data_to_store = ts.data or {}
     job_name = (
@@ -758,92 +768,299 @@ def resend_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Failed to resend timesheet")
     
 
+import os
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from openpyxl import load_workbook
-@router.patch("/{timesheet_id}/pe-review", response_model=schemas.Timesheet)
+from openpyxl.cell.cell import MergedCell
+
+
+# ---------------- UTILS ----------------
+
+# def write_safe(ws, row, col, value):
+#     """
+#     Writes a value to a cell, handling merged cells correctly.
+#     Always writes to the top-left of a merged range.
+#     """
+#     cell = ws.cell(row=row, column=col)
+#     for merged_range in ws.merged_cells.ranges:
+#         if cell.coordinate in merged_range:
+#             top_left = merged_range.start_cell
+#             ws.cell(row=top_left.row, column=top_left.col_idx).value = value
+#             return
+#     cell.value = value
+
+# def clear_range(ws, start_row, end_row, start_col, end_col):
+#     """
+#     Clears values in a range but keeps formatting and merged cells.
+#     """
+#     for r in range(start_row, end_row + 1):
+#         for c in range(start_col, end_col + 1):
+#             cell = ws.cell(row=r, column=c)
+#             if isinstance(cell, MergedCell):
+#                 # Clear only top-left of merged cell
+#                 for merged_range in ws.merged_cells.ranges:
+#                     if cell.coordinate in merged_range:
+#                         top_left = merged_range.start_cell
+#                         ws.cell(row=top_left.row, column=top_left.col_idx).value = None
+#                         break
+#             else:
+#                 cell.value = None
+
+# # ---------------- ENDPOINT ----------------
+
+
+# @router.patch("/{timesheet_id}/pe-review")
+# def pe_review_and_generate_excel(
+#     timesheet_id: int,
+#     payload: dict,
+#     request: Request,
+#     db: Session = Depends(get_db),
+#     current_user: models.User = Depends(oauth2.get_current_user)
+# ):
+#     print("\n========== PE REVIEW START ==========")
+
+#     # 1. Fetch and Update DB 
+#     ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
+#     if not ts:
+#         raise HTTPException(status_code=404, detail="Timesheet not found")
+
+#     ts.data.update(payload)
+#     ts.status = "APPROVED_BY_PE"
+#     flag_modified(ts, "data")
+#     db.commit()
+
+#     # 2. File Path Setup
+#     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#     template_path = os.path.join(BASE_DIR, "assets", "Alfonso - Template.xlsx")
+#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+#     file_name = f"Final_TS_{ts.id}_{timestamp}.xlsx"
+#     output_path = os.path.join(BASE_DIR, "storage", "pe_reports", file_name)
+#     os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+#     # 3. Load Workbook
+#     wb = load_workbook(template_path)
+#     ws = wb["Timesheet"]
+
+#     # 4. Header Information
+#     write_safe(ws, 1, 4, str(ts.date))                       # Date (D1)
+#     write_safe(ws, 3, 21, ts.data.get("job_name", ""))       # Job Name (U3)
+#     write_safe(ws, 5, 21, ts.data.get("location", ""))       # Location (U5)
+#     write_safe(ws, 5, 17, ts.data.get("project_engineer", "")) # PE Name (Q5)
+#     write_safe(ws, 6, 17, current_user.username)             # Approved By (Q6)
+
+#     # 5. Phase Code Mapping 
+#     # Use selectedPhases from data to ensure columns match what was entered
+#     phase_codes = ts.data.get("selectedPhases", [])
+#     phase_col_map = {}
+#     start_col = 8  # Column H in Alfonso template for Phase headers
+#     for idx, phase in enumerate(phase_codes[:10]): # Limit to 10 phases as per template
+#         col = start_col + (idx * 2) # Phases are usually spaced (REG/SB groups)
+#         phase_col_map[str(phase)] = col
+#         write_safe(ws, 8, col, str(phase))
+
+#     # 6. Write Employees (Starts Row 11, step of 2) 
+#     row_idx = 11
+#     for emp in ts.data.get("employees", []):
+#         write_safe(ws, row_idx, 1, emp.get("id")) # EMP #
+#         name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
+#         write_safe(ws, row_idx, 2, name) # Name
+        
+#         # Handle Nested Hours: {"phase": {"class": hours}}
+#         hours_per_phase = emp.get("hours_per_phase", {})
+#         for phase, classes in hours_per_phase.items():
+#             col = phase_col_map.get(str(phase))
+#             if col and isinstance(classes, dict):
+#                 total_hours = sum(float(h) for h in classes.values())
+#                 write_safe(ws, row_idx, col, total_hours)
+#         row_idx += 2 # Alfonso template has a sub-row for classes, move to next employee slot
+
+#     # 7. Write Equipment (Starts Row 35) 
+#     eq_row = 35
+#     for eq in ts.data.get("equipment", []):
+#         write_safe(ws, eq_row, 1, eq.get("name"))
+#         write_safe(ws, eq_row, 2, eq.get("id"))
+        
+#         eq_hours = eq.get("hours_per_phase", {})
+#         for phase, vals in eq_hours.items():
+#             col = phase_col_map.get(str(phase))
+#             if col and isinstance(vals, dict):
+#                 write_safe(ws, eq_row, col, vals.get("REG", 0)) # REG column
+#                 write_safe(ws, eq_row, col + 1, vals.get("SB", 0)) # SB column
+#         eq_row += 1
+
+#     # 8. Vendors and Materials (Row 51+) 
+#     v_row = 51
+#     for v in ts.data.get("vendors", []):
+#         v_name = f"{v.get('vendor_name')} - {v.get('material_name')}"
+#         write_safe(ws, v_row, 1, v_name)
+        
+#         # Extract tickets from {"ID": value} dict
+#         tickets = v.get("tickets_loads", 0)
+#         if isinstance(tickets, dict):
+#             tickets = list(tickets.values())[0] if tickets else 0
+#         write_safe(ws, v_row, 4, tickets)
+        
+#         # Quantities per phase
+#         v_qty = v.get("hours_per_phase", {})
+#         for phase, qty in v_qty.items():
+#             col = phase_col_map.get(str(phase))
+#             if col:
+#                 write_safe(ws, v_row, col, float(qty))
+#         v_row += 1
+
+#     # 9. Save and Record
+#     wb.save(output_path)
+#     base_url = str(request.base_url).rstrip("/")
+#     file_url = f"{base_url}/storage/pe_reports/{file_name}"
+#     db.add(models.TimesheetFile(timesheet_id=ts.id, file_path=file_url))
+#     db.commit()
+
+#     print("✅ EXCEL SAVED:", output_path)
+#     return ts
+
+
+def write_safe(ws, row, col, value):
+    """
+    Writes a value to a cell, handling merged cells correctly.
+    Always writes to the top-left of a merged range.
+    """
+    if value is None:
+        value = ""
+        
+    cell = ws.cell(row=row, column=col)
+    for merged_range in ws.merged_cells.ranges:
+        if cell.coordinate in merged_range:
+            # Get top-left cell of the merged range
+            top_left_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
+            top_left_cell.value = value
+            return
+    cell.value = value
+
+# ---------------- ENDPOINT ----------------
+
+@router.patch("/{timesheet_id}/pe-review")
 def pe_review_and_generate_excel(
     timesheet_id: int,
-    payload: dict, # Receives the JSON data from your React Native frontend
+    payload: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(oauth2.get_current_user)
 ):
-    # 1. Fetch Timesheet from DB
+    print("\n========== PE REVIEW START ==========")
+
+    # 1. Fetch and Update DB 
     ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
     if not ts:
         raise HTTPException(status_code=404, detail="Timesheet not found")
 
-    # 2. Update Database with PE Edits
-    # This stores the edited numbers (employees, equipment, etc.) into the JSONB field
+    # Update the data field with the incoming payload (which matches your JSON structure)
     ts.data.update(payload)
-    ts.status = "APPROVED_BY_PE" # Set final status
+    ts.status = "APPROVED_BY_PE"
     flag_modified(ts, "data")
     db.commit()
 
-    # 3. Path Configuration
+    # 2. File Path Setup
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Change this line in your backend code:
-    template_path = os.path.join(BASE_DIR, "assets", "Alfonso - Template.xlsx")    
-    # Generate a UNIQUE filename using timestamp to avoid replacing existing files
+    template_path = os.path.join(BASE_DIR, "assets", "Alfonso - Template.xlsx")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f"TS_{ts.id}_{ts.date}_PE_FINAL_{timestamp}.xlsx"
+    file_name = f"Final_TS_{ts.id}_{timestamp}.xlsx"
+    output_path = os.path.join(BASE_DIR, "storage", "pe_reports", file_name)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    # 3. Load Workbook
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=404, detail="Excel template not found")
+        
+    wb = load_workbook(template_path)
+    ws = wb["Timesheet"]
+
+    # 4. Header Information
+    write_safe(ws, 1, 4, str(ts.date))                        # Date (D1)
+    write_safe(ws, 3, 21, ts.data.get("job_name", ""))        # Job Name (U3)
+    write_safe(ws, 5, 21, ts.data.get("location", ""))        # Location (U5)
+    write_safe(ws, 5, 17, ts.data.get("project_engineer", "")) # PE Name (Q5)
+    write_safe(ws, 6, 17, current_user.username)              # Approved By (Q6)
+
+    # 5. Phase Code Mapping (Selected Phases)
+    # Mapping codes like "110350" to specific columns in the template
+    phase_codes = ts.data.get("selectedPhases", [])
+    phase_col_map = {}
+    start_col = 8  # Column H 
     
-    storage_dir = os.path.join(BASE_DIR, "storage", "pe_reports")
-    os.makedirs(storage_dir, exist_ok=True)
-    final_output_path = os.path.join(storage_dir, file_name)
+    for idx, phase in enumerate(phase_codes[:10]): 
+        col = start_col + (idx * 2) 
+        p_code = str(phase).strip()
+        phase_col_map[p_code] = col
+        write_safe(ws, 8, col, p_code)
 
-    # 4. Fill the Template
-    try:
-        wb = load_workbook(template_path)
-        ws = wb["Timesheet"] # Ensure your sheet name matches exactly
-
-        # Mapping Header Data (Based on your CSV sample)
-        ws["D1"] = str(ts.date)            # Date
-        ws["U1"] = ts.data.get("job_id", "") # JOB#
-        ws["U3"] = ts.data.get("job_name", "")
+    # 6. Write Employees (Row 11, step of 2)
+    row_idx = 11
+    for emp in ts.data.get("employees", []):
+        write_safe(ws, row_idx, 1, emp.get("id")) 
+        full_name = f"{emp.get('first_name','')} {emp.get('last_name','')}".strip()
+        write_safe(ws, row_idx, 2, full_name) 
         
-        # Checking the PE Approval Box
-        ws["R3"] = "TRUE" # This marks the False box to True in your template
-        ws["X3"] = current_user.username # PE Name signature
+        # Parse nested hours: {"phase_code": {"class_code": hours}}
+        emp_hours = emp.get("hours_per_phase", {})
+        for p_code, class_data in emp_hours.items():
+            col = phase_col_map.get(str(p_code))
+            if col:
+                # Sum hours across all labor classes for this phase
+                if isinstance(class_data, dict):
+                    total_h = sum(float(h or 0) for h in class_data.values())
+                else:
+                    total_h = float(class_data or 0)
+                write_safe(ws, row_idx, col, total_h)
+        row_idx += 2 
 
-        # Mapping Employees (Starting Row 9)
-        # Note: Your template has a specific structure (Rows 9, 13, 17...)
-        row_idx = 9
-        for emp in ts.data.get("employees", []):
-            if row_idx > 50: break # Safety stop for template bounds
-            ws.cell(row=row_idx, column=1, value=emp.get("id"))
-            ws.cell(row=row_idx, column=2, value=f"{emp.get('first_name')} {emp.get('last_name')}")
-            
-            # Phase Hours Mapping
-            # (Requires specific column mapping based on your phase columns)
-            # Example: ws.cell(row=row_idx, column=5, value=emp.get('hours'))
-            
-            row_idx += 4 # Skip to next block in the Alfonso template
-
-        # Mapping Equipment
-        # Your CSV shows Equipment starts much lower (around Row 60+)
-        eq_row = 60 
-        for eq in ts.data.get("equipment", []):
-            ws.cell(row=eq_row, column=1, value=eq.get("name"))
-            ws.cell(row=eq_row, column=2, value=eq.get("id"))
-            eq_row += 1
-
-        # 5. Save the unique version
-        wb.save(final_output_path)
-
-        # 6. Save the file link to the database
-        NGROK_URL = "https://7c01582ddbc7.ngrok-free.app"
-        file_url = f"{NGROK_URL}/storage/pe_reports/{file_name}"
+    # 7. Write Equipment (Row 35)
+    eq_row = 35
+    for eq in ts.data.get("equipment", []):
+        write_safe(ws, eq_row, 1, eq.get("name"))
+        write_safe(ws, eq_row, 2, eq.get("id"))
         
-        file_record = models.TimesheetFile(
-            timesheet_id=ts.id,
-            file_path=file_url,
-            created_at=datetime.now()
-        )
-        db.add(file_record)
-        db.commit()
+        eq_hours = eq.get("hours_per_phase", {})
+        for p_code, vals in eq_hours.items():
+            col = phase_col_map.get(str(p_code))
+            if col and isinstance(vals, dict):
+                write_safe(ws, eq_row, col, float(vals.get("REG", 0)))
+                write_safe(ws, eq_row, col + 1, float(vals.get("SB", 0)))
+        eq_row += 1
 
-        return ts
+    # 8. Vendors and Materials (Row 51+)
+    v_row = 51
+    for v in ts.data.get("vendors", []):
+        v_display = f"{v.get('vendor_name', '')} - {v.get('material_name', '')}"
+        write_safe(ws, v_row, 1, v_display)
+        
+        # Handle tickets_loads: {"91_2": 2}
+        tickets_data = v.get("tickets_loads", 0)
+        if isinstance(tickets_data, dict):
+            # Extract first value from the dict
+            tickets_val = next(iter(tickets_data.values())) if tickets_data else 0
+        else:
+            tickets_val = tickets_data
+        write_safe(ws, v_row, 4, tickets_val)
+        
+        # Map quantities per phase
+        v_qty_per_phase = v.get("hours_per_phase", {})
+        for p_code, qty in v_qty_per_phase.items():
+            col = phase_col_map.get(str(p_code))
+            if col:
+                write_safe(ws, v_row, col, float(qty or 0))
+        v_row += 1
 
-    except Exception as e:
-        db.rollback()
-        print(f"Excel Generation Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to generate template-based Excel.")
+    # 9. Save and Record
+    wb.save(output_path)
+    base_url = str(request.base_url).rstrip("/")
+    file_url = f"{base_url}/storage/pe_reports/{file_name}"
+    
+    new_file_record = models.TimesheetFile(timesheet_id=ts.id, file_path=file_url)
+    db.add(new_file_record)
+    db.commit()
+
+    print("✅ EXCEL GENERATED AND SAVED:", output_path)
+    return {"status": "success", "file_url": file_url, "timesheet_id": ts.id}

@@ -305,3 +305,54 @@
     outline: 0; 
     box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); 
 }
+/* --- REACT DATEPICKER CUSTOM THEME --- */
+
+/* 1. Ensure the wrapper takes full width of the search container */
+.react-datepicker-wrapper {
+    width: 100%;
+}
+
+/* 2. Match the date input style to your .form-control */
+.react-datepicker__input-container input {
+    width: 100%; 
+    padding: 10px; 
+    border: 1px solid #ced4da; 
+    border-radius: 4px; 
+    font-size: 1rem; 
+    box-sizing: border-box; 
+    height: 42px; /* Match your global button/input height */
+    transition: all 0.2s;
+}
+
+.react-datepicker__input-container input:focus {
+    border-color: #00a8cc; /* Match your primary color */
+    outline: 0; 
+    box-shadow: 0 0 0 0.2rem rgba(0, 168, 204, 0.25); 
+}
+
+/* 3. Style the Calendar Header */
+.react-datepicker__header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* 4. Style the Selected Day to match your Primary Blue */
+.react-datepicker__day--selected, 
+.react-datepicker__day--keyboard-selected {
+    background-color: #00a8cc !important;
+    border-radius: 4px;
+    color: white !important;
+}
+
+/* 5. Hover state for days */
+.react-datepicker__day:hover {
+    background-color: #e2e6ea !important;
+    border-radius: 4px;
+}
+
+/* 6. Fix for the "to" span alignment in search modal */
+.form-group div[style*="display: flex"] span {
+    color: #6c757d;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
