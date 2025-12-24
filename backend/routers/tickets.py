@@ -177,6 +177,13 @@ def submit_tickets(payload: dict, db: Session = Depends(database.get_db)):
     db.commit()
     return {"message": "Tickets submitted successfully", "count": len(tickets)}
 
+@router.get("/{timesheet_id}/scanned-tickets")
+def get_scanned_tickets(timesheet_id: int, db: Session = Depends(get_db)):
+    # 🔍 Check: Is the filter looking for the correct column?
+    tickets = db.query(models.Ticket).filter(models.Ticket.timesheet_id == timesheet_id).all()
+    print(f"Found {len(tickets)} tickets for timesheet {timesheet_id}") # Check your server terminal
+    return tickets                  
+
 # ==========================================================
 # 🔹 5. Health Check
 # ==========================================================

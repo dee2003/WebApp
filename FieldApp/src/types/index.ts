@@ -94,7 +94,7 @@ export interface TimesheetData {
   approved_by?: string;
 supervisor?: string | { id: number; name: string } | null;
     supervisorid?: string;
-
+linked_tickets?: { [rowId: string]: number[] }; // Add this line
 
 }
 
