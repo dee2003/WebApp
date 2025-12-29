@@ -1426,6 +1426,7 @@ const handleToggleStatus = async (type, item, newStatus) => {
             { value: 'SUPERVISOR', label: 'Supervisor' },
             { value: 'PROJECT_ENGINEER', label: 'Project Engineer' },
             { value: 'ACCOUNTANT', label: 'Accountant' },
+             { value: 'EXECUTIVE', label: 'Executive' },
         ], required: true, defaultValue: 'ADMIN' },
 
         // --- ADD THIS OBJECT ---

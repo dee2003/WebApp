@@ -24,7 +24,7 @@ class UserRole(str, enum.Enum):
     SUPERVISOR = "SUPERVISOR"
     PROJECT_ENGINEER = "PROJECT_ENGINEER"
     ACCOUNTANT = "ACCOUNTANT"
-
+    EXECUTIVE = "EXECUTIVE"
 
 class ResourceStatus(str, enum.Enum):
     ACTIVE = "active"

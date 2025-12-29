@@ -15,6 +15,9 @@ from ..models import Timesheet,JobPhase   # <-- import your model
 from ..database import get_db
 from ..auditing import log_action
 from .. import oauth2
+
+import httpx
+
 load_dotenv()
 load_dotenv(r"D:\WebApp\backend\.env")  # Use raw string for Windows
 sender_email = os.getenv("SMTP_USER")
@@ -37,6 +40,160 @@ ENV_PATH = os.path.join(BASE_DIR, ".env")
 load_dotenv(dotenv_path=ENV_PATH)
 BASE_URL = os.getenv("BASE_URL")
 print("🔗 [Router] BASE_URL loaded:", BASE_URL)
+
+MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
+OFFICE_COORDS = {"lat": 38.9072, "lon": -77.0369}
+
+async def get_mapbox_distance(address: str):
+    """Securely calculates distance on the server side."""
+    if not address or address == "No Address":
+        return 0
+    try:
+        async with httpx.AsyncClient() as client:
+            geo_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{address}.json?access_token={MAPBOX_TOKEN}"
+            geo_res = await client.get(geo_url)
+            features = geo_res.json().get("features", [])
+            if not features: return 0
+            
+            dest_lon, dest_lat = features[0]["center"]
+
+            dir_url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{OFFICE_COORDS['lon']},{OFFICE_COORDS['lat']};{dest_lon},{dest_lat}?access_token={MAPBOX_TOKEN}"
+            dir_res = await client.get(dir_url)
+            routes = dir_res.json().get("routes", [])
+            return routes[0]["distance"] if routes else 0
+    except Exception:
+        return 0
+
+@router.get("/morning-brief")
+async def get_morning_brief(db: Session = Depends(get_db)):
+    """Enriched endpoint for Natalia's Dashboard."""
+    timesheets = db.query(models.Timesheet).filter(
+        models.Timesheet.status == "DRAFT"
+    ).options(joinedload(models.Timesheet.foreman)).all()
+    
+    results = []
+    for ts in timesheets:
+        f_name = f"{ts.foreman.first_name} {ts.foreman.last_name}" if ts.foreman else "Unknown"
+        
+        # Build nested data Category -> Vendor -> Materials
+        categorized_data = {"Concrete": {}, "Asphalt": {}, "Top Soil": {}, "Trucking": {}}
+        
+        # 1. Process Vendors
+        vendor_mats = ts.data.get("selected_vendor_materials", {})
+        for v_id, v_data in vendor_mats.items():
+            v_name = v_data.get("name", "Vendor")
+            cat = v_data.get("vendor_category", "General")
+            if "Asphalt" in cat: cat = "Asphalt"
+            
+            if cat in categorized_data:
+                if v_name not in categorized_data[cat]: categorized_data[cat][v_name] = []
+                for m in v_data.get("selectedMaterials", []):
+                    if m.get('detail'):
+                        categorized_data[cat][v_name].append({
+                            "important": m.get('detail').strip(),
+                            "material": m.get('material')
+                        })
+
+        # 2. Process Trucking
+        trucking = ts.data.get("selected_material_items", {})
+        for t_id, t_data in trucking.items():
+            t_name = t_data.get("name", "Hauler")
+            if t_data.get("notes"):
+                if t_name not in categorized_data["Trucking"]: categorized_data["Trucking"][t_name] = []
+                categorized_data["Trucking"][t_name].append({
+                    "important": t_data.get("notes").strip(),
+                    "material": "Trucking Services"
+                })
+
+        # Distance logic (Await async helper)
+        address = ts.data.get("location", "No Address")
+        dist_meters = await get_mapbox_distance(address)
+
+        results.append({
+            "id": ts.id,
+            "status": ts.status,
+            "date": str(ts.date),
+            "brief": {
+                "foreman": f_name,
+                "job_code": ts.data.get("job", {}).get("job_code", "N/A"),
+                "job_name": ts.data.get("job_name", "N/A"),
+                "categorized_data": categorized_data,
+                "address": address,
+                "distanceMeters": dist_meters,
+                "distanceMiles": round(dist_meters / 1609.34, 1) if dist_meters > 0 else "N/A"
+            }
+        })
+    return results
+
+    
+# def format_natalia_alert(ts_data: dict, foreman_name: str):
+#     # Initialize nested structure
+#     categorized_data = {
+#         "Concrete": {},
+#         "Asphalt": {},
+#         "Top Soil": {},
+#         "Trucking": {}
+#     }
+    
+#     # 1. Process Vendors
+#     vendor_materials = ts_data.get("selected_vendor_materials", {})
+#     for v_id, v_data in vendor_materials.items():
+#         v_name = v_data.get("name", "Vendor")
+#         cat_key = v_data.get("vendor_category", "General")
+#         # Normalize category keys
+#         if "Asphalt" in cat_key: cat_key = "Asphalt"
+        
+#         if cat_key in categorized_data:
+#             if v_name not in categorized_data[cat_key]:
+#                 categorized_data[cat_key][v_name] = []
+            
+#             for m in v_data.get("selectedMaterials", []):
+#                 if m.get('detail'):
+#                     categorized_data[cat_key][v_name].append({
+#                         "important": m.get('detail').strip(),
+#                         "material": m.get('material')
+#                     })
+
+#     # 2. Process Trucking
+#     trucking_items = ts_data.get("selected_material_items", {})
+#     for t_id, t_data in trucking_items.items():
+#         t_name = t_data.get("name", "Hauler")
+#         notes = t_data.get("notes", "")
+#         if notes:
+#             if t_name not in categorized_data["Trucking"]:
+#                 categorized_data["Trucking"][t_name] = []
+#             categorized_data["Trucking"][t_name].append({
+#                 "important": notes.strip(),
+#                 "material": "Trucking"
+#             })
+
+#     return {
+#         "foreman": foreman_name,
+#         "job_code": ts_data.get("job", {}).get("job_code", "N/A"),
+#         "job_name": ts_data.get("job_name", "N/A"),
+#         "categorized_data": categorized_data,
+#         "address": ts_data.get("location", "No Address")
+#     }
+
+# @router.get("/morning-brief")
+# def get_morning_brief(db: Session = Depends(get_db)):
+#     # Optimized to include status and exact date for Natalia's Dashboard
+#     timesheets = db.query(models.Timesheet).filter(
+#         models.Timesheet.status == "DRAFT" # Dispatcher's scheduled drafts
+#     ).options(joinedload(models.Timesheet.foreman)).all()
+    
+#     briefs = []
+#     for ts in timesheets:
+#         f_name = f"{ts.foreman.first_name} {ts.foreman.last_name}" if ts.foreman else "Unknown"
+#         briefs.append({
+#             "id": ts.id,
+#             "status": ts.status,
+#             "date": ts.date.strftime("%Y-%m-%d") if hasattr(ts.date, "strftime") else str(ts.date),
+#             "brief": format_natalia_alert(ts.data, f_name)
+#         })
+#     return briefs
+
+
 
 @router.get("/counts-by-status", response_model=schemas.TimesheetCountsResponse)
 def get_timesheet_counts_by_status(db: Session = Depends(get_db)):
@@ -73,6 +230,7 @@ def get_timesheet_counts_by_status(db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=schemas.Timesheet)
+
 def create_timesheet(
     timesheet: schemas.TimesheetCreate,
     db: Session = Depends(get_db)
@@ -127,6 +285,7 @@ def create_timesheet(
 
     db.commit()
     return db_ts
+
 
 @router.get("/by-foreman/{foreman_id}", response_model=List[schemas.Timesheet])
 def get_timesheets_by_foreman(foreman_id: int, db: Session = Depends(get_db)):
@@ -492,6 +651,22 @@ def send_timesheet(
     ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
     if not ts:
         raise HTTPException(status_code=404, detail="Timesheet not found")
+    # Trigger Natalia's Alert
+    try:
+        foreman_user = db.query(models.User).filter(models.User.id == ts.foreman_id).first()
+        f_name = foreman_user.first_name if foreman_user else "Foreman"
+        
+        alert_msg = format_natalia_alert(ts.data, f_name)
+        
+        # Use your existing notification schema and logic
+        notif = schemas.NotificationRequest(
+            email="manisha.rk04@gmail.com",
+            subject=f"📍 Site Alert: {ts.timesheet_name}",
+            message=alert_msg
+        )
+        send_notification(notif)
+    except Exception as e:
+        print(f"Failed to notify Natalia: {e}")
 
     if ts.status == SubmissionStatus.SUBMITTED:
         raise HTTPException(status_code=400, detail="Timesheet already sent")
@@ -1118,3 +1293,21 @@ def pe_review_and_generate_excel(
 
     print("✅ EXCEL GENERATED AND SAVED:", output_path)
     return {"status": "success", "file_url": file_url, "timesheet_id": ts.id}
+
+
+@router.post("/{timesheet_id}/notify-executive")
+def notify_natalia(timesheet_id: int, db: Session = Depends(get_db)):
+    ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
+    foreman = db.query(models.User).filter(models.User.id == ts.foreman_id).first()
+    
+    foreman_name = f"{foreman.first_name}"
+    alert_msg = format_natalia_alert(ts.data, foreman_name)
+    
+    # Logic to send push notification or update Natalia's Dashboard
+    # For now, we reuse your existing email notification
+    notification = NotificationRequest(
+        email="natalia@mluisconstruction.com", 
+        subject="📍 Site Activity Alert",
+        message=alert_msg
+    )
+    return send_notification(notification)

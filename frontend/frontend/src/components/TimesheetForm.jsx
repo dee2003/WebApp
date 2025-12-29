@@ -24,7 +24,7 @@ const TimesheetForm = ({ onClose, existingTimesheet, isResend }) => {
     const [jobName, setJobName] = useState("");
     const [timeOfDay, setTimeOfDay] = useState("");
    
-    const [locations, setLocations] = useState([]);   // list of all locations
+   
     const [location,setLocation] = useState(""); 
     const [projectEngineer, setProjectEngineer] = useState("");
     const [date, setDate] = useState(new Date()); // Changed from ISO string
@@ -67,6 +67,10 @@ const TimesheetForm = ({ onClose, existingTimesheet, isResend }) => {
     const [editingDumpingSite, setEditingDumpingSite] = useState(null);
     const [showDumpingModal, setShowDumpingModal] = useState(false);
     const [editedDumpingSites, setEditedDumpingSites] = useState({});
+    const [manualLocation, setManualLocation] = useState("");
+const [suggestions, setSuggestions] = useState([]);
+
+const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
 
     useEffect(() => {
         const fetchSectionCategories = async () => {
@@ -248,15 +252,6 @@ const TimesheetForm = ({ onClose, existingTimesheet, isResend }) => {
             });
     }, [selectedForemanId]);
 
-
-    useEffect(() => {
-    setLoading(true);
-    axios
-      .get(`${API_URL}/locations/`)
-      .then((res) => setLocations(res.data))
-      .catch((err) => console.error("Error fetching locations:", err))
-      .finally(() => setLoading(false));
-  }, []);
     // --- Load job details ---
     useEffect(() => {
         if (!selectedJobCode) {
@@ -471,7 +466,24 @@ const TimesheetForm = ({ onClose, existingTimesheet, isResend }) => {
 
         return result; // ✅ No trucking vendors here
     };
+const handleLocationChange = async (query) => {
+    setLocation(query);
 
+    if (query.length > 3) {
+        try {
+            const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+                query
+            )}.json?access_token=${MAPBOX_TOKEN}&country=us&types=address`;
+
+            const res = await axios.get(endpoint);
+            setSuggestions(res.data.features || []);
+        } catch (err) {
+            console.error("Autocomplete error:", err);
+        }
+    } else {
+        setSuggestions([]);
+    }
+};
     // ✅ Rename function to match the payload key
     const getSelectedMaterialItems = () => {  // Keep this name
         const result = {};
@@ -719,23 +731,40 @@ const TimesheetForm = ({ onClose, existingTimesheet, isResend }) => {
                             </select>
                         </div>
                         
-                        <div className="form-group">
-                            <label htmlFor="location">Location</label>
-                            <select
-                                id="location"
-                                className="form-input"
-                                value={location}
-                                onChange={(e) => setLocation(e.target.value)}
-                                disabled={loading}
-                            >
-                                <option value="">Select Location</option>
-                                {locations.map((loc) => (
-                                    <option key={loc.id} value={loc.name}>
-                                        {loc.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                      {/* Updated Location Field */}
+                    <div className="form-group address-autocomplete-container">
+    <label htmlFor="location">Site Location / Address</label>
+    <input
+        id="location"
+        type="text"
+        className="form-input"
+        placeholder="Search for a US Address..."
+        value={location}
+        onChange={(e) => handleLocationChange(e.target.value)}
+        disabled={loading}
+        required
+        autoComplete="off"
+    />
+
+    {suggestions.length > 0 && (
+        <ul className="address-suggestions-list">
+            {suggestions.map((s) => (
+                <li 
+                    key={s.id} 
+                    onClick={() => {
+                        setLocation(s.place_name);
+                        setSuggestions([]);
+                    }}
+                >
+                    {s.place_name}
+                </li>
+            ))}
+        </ul>
+    )}
+                       <small className="form-text text-muted" style={{ fontSize: '0.8rem', color: '#6c757d' }}>
+        Please select a verified address for the Executive Map link.
+    </small>
+                    </div>
                     </div>
                     {/* Foreman Selection */}
                     <div className="form-group">

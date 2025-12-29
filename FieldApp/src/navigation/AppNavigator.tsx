@@ -29,7 +29,7 @@ import PEDashboard from '../screens/projectEngineer/PEDashboard';
 import PETimesheetList from '../screens/projectEngineer/PETimesheetList';
 import PETicketList from '../screens/projectEngineer/PETicketList';
 import PDFViewerScreen from '../screens/supervisor/PDFViewerScreen';
-
+import ExecutiveDashboard from '../screens/executive/ExecutiveDashboard';
 // -------------------- Types --------------------
 // Foreman Stack
 export type ForemanStackParamList = {
@@ -59,6 +59,10 @@ export type ProjectEngineerStackParamList = {
   PDFViewer: { uri: string }; // ✅ Add this
 
 };
+export type ExecutiveStackParamList = {
+  ExecutiveDashboard: undefined;
+};
+
 // --- Root Stack (combines all navigators) ---
 export type RootStackParamList = {
   Login: undefined;
@@ -68,6 +72,7 @@ export type RootStackParamList = {
   Foreman: NavigatorScreenParams<ForemanStackParamList>;
   Supervisor: NavigatorScreenParams<SupervisorStackParamList>;
   ProjectEngineer: NavigatorScreenParams<ProjectEngineerStackParamList>;
+  Executive: NavigatorScreenParams<ExecutiveStackParamList>; 
 };
 
 // -------------------- Navigators --------------------
@@ -154,6 +159,19 @@ const ProjectEngineerNavigator = () => (
     />
   </ProjectEngineerStack.Navigator>
 );
+
+// 2. Create the Navigator
+const ExecutiveStack = createStackNavigator<ExecutiveStackParamList>();
+const ExecutiveNavigator = () => (
+  <ExecutiveStack.Navigator>
+    <ExecutiveStack.Screen 
+      name="ExecutiveDashboard" 
+      component={ExecutiveDashboard} 
+      options={{ headerShown: false }} 
+    />
+  </ExecutiveStack.Navigator>
+);
+
 // -------------------- Root Navigator --------------------
 const RootStack = createStackNavigator<RootStackParamList>();
 const AppNavigator = () => {
@@ -215,7 +233,14 @@ const role = user?.role?.toLowerCase();
               options={{ headerShown: false }}
             />
           )}
-           {!["foreman", "supervisor", "project_engineer"].includes(role!) && (
+          {role === "executive" && (
+  <RootStack.Screen
+    name="Executive"
+    component={ExecutiveNavigator}
+    options={{ headerShown: false }}
+  />
+)}
+           {!["foreman", "supervisor", "project_engineer", "executive"].includes(role!) && (
             <RootStack.Screen name="Login" component={LoginScreen} />
           )}
         </>
