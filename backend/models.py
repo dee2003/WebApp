@@ -24,6 +24,7 @@ class UserRole(str, enum.Enum):
     SUPERVISOR = "SUPERVISOR"
     PROJECT_ENGINEER = "PROJECT_ENGINEER"
     ACCOUNTANT = "ACCOUNTANT"
+    EXECUTIVE = "EXECUTIVE"
 
 
 class ResourceStatus(str, enum.Enum):
@@ -447,6 +448,7 @@ class Ticket(Base):
     hours = Column(Float, nullable=True)
     created_at = Column(DateTime, default=func.now())
     status = Column(SQLAlchemyEnum(SubmissionStatus), default=SubmissionStatus.PENDING, nullable=False)
+    date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD format
 
     # Relationships
     foreman = relationship("User", back_populates="tickets")
@@ -457,7 +459,7 @@ class Ticket(Base):
     def as_dict(self):
         return {
             "id": self.id,
-            "date": str(self.date),
+            "date": self.date,
             "status": self.status,
             "foreman_name": f"{self.foreman.first_name} {self.foreman.last_name}" if self.foreman else None,
             "job_code": self.job_phase.job_code if self.job_phase else None,

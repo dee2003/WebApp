@@ -28,15 +28,15 @@ def create_job_phase(job_phase: schemas.JobPhaseCreate, db: Session = Depends(da
         status=job_phase.status
     )
 
-    # ✅ Attach Phase Codes
     if job_phase.phase_codes:
-        for code_str in job_phase.phase_codes:
+        for phase in job_phase.phase_codes:  # PhaseCodeInput objects
             new_phase = models.PhaseCode(
-                code=code_str,
-                description=f"Phase {code_str}",
-                unit="unit",
+                code=phase.code,
+                description=phase.description or f"Phase {phase.code}",
+                unit="unit"  # hardcoded default
             )
             new_job_phase.phase_codes.append(new_phase)
+
 
     db.add(new_job_phase)
     db.commit()
@@ -146,13 +146,17 @@ def update_job_phase_by_code(
     changed_fields = []
     phase_changes_details = ""
 
-    # Track phase_codes changes
+    # -------------------------------
+    # Handle phase_codes (OBJECTS)
+    # -------------------------------
     if "phase_codes" in update_data:
-        new_phase_codes = update_data.pop("phase_codes")
-        old_codes = [pc.code for pc in db_job.phase_codes]
+        new_phase_objs = update_data.pop("phase_codes")  # List[dict]
 
-        added = [c for c in new_phase_codes if c not in old_codes]
-        removed = [c for c in old_codes if c not in new_phase_codes]
+        old_codes = [pc.code for pc in db_job.phase_codes]
+        new_codes = [p["code"] for p in new_phase_objs]
+
+        added = [c for c in new_codes if c not in old_codes]
+        removed = [c for c in old_codes if c not in new_codes]
 
         if added or removed:
             changed_fields.append("phase_codes")
@@ -163,12 +167,20 @@ def update_job_phase_by_code(
                 parts.append(f"removed: {', '.join(removed)}")
             phase_changes_details = "; ".join(parts)
 
-        # Update phase codes
+        # Replace phase codes
         db_job.phase_codes.clear()
-        for code_str in new_phase_codes:
-            db_job.phase_codes.append(models.PhaseCode(code=code_str, description=f"Phase {code_str}", unit="unit"))
+        for phase in new_phase_objs:
+            db_job.phase_codes.append(
+                models.PhaseCode(
+                    code=phase["code"],
+                    description=phase.get("description") or f"Phase {phase['code']}",
+                    unit="unit"
+                )
+            )
 
-    # Track other fields
+    # -------------------------------
+    # Handle other fields
+    # -------------------------------
     for key, value in update_data.items():
         old_value = getattr(db_job, key, None)
         if old_value != value:
@@ -178,22 +190,29 @@ def update_job_phase_by_code(
     db.commit()
     db.refresh(db_job)
 
-    # Log audit only if changes exist
+    # -------------------------------
+    # Audit log
+    # -------------------------------
     if changed_fields:
         details_parts = [f"Fields changed: {', '.join(changed_fields)}"]
         if phase_changes_details:
             details_parts.append(f"Phase codes {phase_changes_details}")
+
         log_action(
             db=db,
             user_id=current_user.id,
             action="UPDATE",
             target_resource="JobPhase",
             target_resource_id=db_job.job_code,
-            details=f"JobPhase '{db_job.job_code}' updated by '{current_user.username}'. " + "; ".join(details_parts)
+            details=(
+                f"JobPhase '{db_job.job_code}' updated by "
+                f"'{current_user.username}'. " + "; ".join(details_parts)
+            )
         )
         db.commit()
 
     return db_job
+
 
 @router.get("/{job_code}/phase-codes-list", response_model=List[schemas.PhaseCode])
 def get_phase_codes_by_job_code(job_code: str, db: Session = Depends(get_db)):
@@ -215,3 +234,5 @@ def get_phase_codes_by_job_code(job_code: str, db: Session = Depends(get_db)):
         
     # models.JobPhase.phase_codes is the list of models.PhaseCode objects
     return job_phase.phase_codes
+
+

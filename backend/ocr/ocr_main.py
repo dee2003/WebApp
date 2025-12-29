@@ -657,7 +657,9 @@ def process_scan_in_background(
     foreman_id: int,
     timesheet_id: int,
     category: str,
-    sub_category: str
+    sub_category: str,
+    ticket_date: str  # ✅ NEW: Timesheet date for Ticket.date
+
 ):
     db = SessionLocal()
     try:
@@ -906,7 +908,8 @@ def process_scan_in_background(
             timesheet_id=timesheet.id,
             job_phase_id=timesheet.job_phase_id, 
             image_path=pdf_url_path,
-            
+            date=ticket_date,                    # ✅ NEW: Timesheet date (required)
+
             # ✅ SAVE CATEGORIES
             category=category,
             sub_category=sub_category,
@@ -964,57 +967,104 @@ def process_scan_in_background(
 
 @router.post("/scan")
 async def scan_ticket(
-    background_tasks: BackgroundTasks, 
+    background_tasks: BackgroundTasks,
     foreman_id: int = Form(...),
     files: List[UploadFile] = File(...),
     timesheet_id: int | None = Form(None),
-    category: str = Form(...), 
-    sub_category: str = Form(None),
+    category: str = Form(...),
+    sub_category: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    # ... (function is unchanged) ...
-    foreman = db.query(models.User).filter(models.User.id == foreman_id).first()
-    if not foreman: raise HTTPException(status_code=404, detail="Foreman not found")
+    # 1) Validate foreman
+    foreman = (
+        db.query(models.User)
+        .filter(models.User.id == foreman_id)
+        .first()
+    )
+    if not foreman:
+        raise HTTPException(status_code=404, detail="Foreman not found")
+
+    # 2) Resolve timesheet
     timesheet = None
+
     if timesheet_id:
-        timesheet = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
+        timesheet = (
+            db.query(models.Timesheet)
+            .filter(models.Timesheet.id == timesheet_id)
+            .first()
+        )
+
     if not timesheet:
-        today_str = datetime.utcnow().date()
+        today = datetime.utcnow().date()
         ts_list = (
             db.query(models.Timesheet)
             .filter(models.Timesheet.foreman_id == foreman_id)
             .order_by(models.Timesheet.date.desc())
             .all()
         )
+
         if ts_list:
+            # Prefer today's timesheet
             for ts in ts_list:
-                if ts.date == today_str: timesheet = ts; break
+                if ts.date == today:
+                    timesheet = ts
+                    break
+
+            # Otherwise use most recent <= today
             if not timesheet:
                 for ts in ts_list:
-                    if ts.date <= today_str: timesheet = ts; break
+                    if ts.date <= today:
+                        timesheet = ts
+                        break
+
+            # Final fallback: newest
             timesheet = timesheet or ts_list[0]
+
     if not timesheet:
-        raise HTTPException(status_code=404, detail="No timesheet available for this foreman")
-    file_contents_list = []
+        raise HTTPException(
+            status_code=404,
+            detail="No timesheet available for this foreman",
+        )
+
+    # 3) Extract timesheet date for Ticket.date (and ticket_date if you want the same initial value)
+    # timesheet.date is usually a date or datetime column
+    ticket_date = (
+        timesheet.date.isoformat()
+        if hasattr(timesheet.date, "isoformat")
+        else str(timesheet.date)
+    )  # e.g. "2025-12-26"
+
+    # 4) Collect valid image contents
+    file_contents_list: list[tuple[str, bytes]] = []
     for file_item in files:
         if file_item.content_type and file_item.content_type.startswith("image/"):
             content = await file_item.read()
             file_contents_list.append((file_item.filename, content))
+
     if not file_contents_list:
-        raise HTTPException(status_code=400, detail="No valid images were provided.")
+        raise HTTPException(
+            status_code=400,
+            detail="No valid images were provided.",
+        )
+
+    # 5) Schedule background OCR + ticket creation
     print(f"Scheduling background OCR task for foreman {foreman.id}...")
     background_tasks.add_task(
-        process_scan_in_background, 
-        file_contents_list, 
-        foreman.id, 
+        process_scan_in_background,
+        file_contents_list,
+        foreman.id,
         timesheet.id,
-        category,       # 👈 Pass to background
-        sub_category
+        category,
+        sub_category,
+        ticket_date,  # ← this will be used for Ticket.date
     )
+
+    # 6) Return response
     return {
         "message": "Upload successful. Ticket is being processed.",
         "detail": "The ticket will appear in your list shortly.",
         "timesheet_id": timesheet.id,
+        "ticket_date": ticket_date,
     }
 
 # ------------------------------------------------------------------- #

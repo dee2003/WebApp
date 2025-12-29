@@ -53,7 +53,7 @@ type Props = {
   navigation: LoginScreenNavigationProp;
 };
 
-const validRoles = ['foreman', 'supervisor', 'project_engineer'] as const;
+const validRoles = ['foreman', 'supervisor', 'project_engineer', 'executive'] as const;
 type ValidRole = (typeof validRoles)[number];
 
 function isValidRole(role: string): role is ValidRole {

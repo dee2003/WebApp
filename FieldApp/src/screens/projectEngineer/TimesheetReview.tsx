@@ -1,5 +1,8 @@
 
 
+
+
+
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
@@ -18,6 +21,13 @@ import apiClient from '../../api/apiClient';
 import type { SupervisorStackParamList } from '../../navigation/AppNavigator';
 import type { Timesheet } from '../../types';
 // --- Type Definitions ---
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import Feather from "react-native-vector-icons/Feather";
+import Pdf from 'react-native-pdf';
+import { Image, Modal, Platform } from 'react-native';
+import API_URL from "../../config";
+
+const API_BASE_URL = API_URL;
 type SimpleHourState = Record<string, Record<string, string>>;
 // EmployeeHourState is complex: { empId: { phaseCode: { classCode: '5' } } }
 type EmployeeHourState = Record<string, Record<string, Record<string, string>>>;
@@ -47,6 +57,7 @@ interface ExtendedTimesheetData {
     time_of_day?: string;
     temperature?: string;
     project_engineer?: string;
+    linked_tickets?: Record<string, number[]>; // 👈 Add this line
     location?: string;
     job_name?: string; // <--- ADDED: Fixes Property 'job_name' does not exist error
     job: {
@@ -93,7 +104,7 @@ const COL_TOTAL = 100;
 
 const COL_UNIT = 80; // <--- ADDED: New constant for unit/material column
 const COL_MATERIAL_NAME = 120; // <--- ADDED: New constant for Material Name column
-
+const COL_LINK = 60; // Define width for the link column
 // --- NEW HELPER FUNCTION TO GET UNIQUE KEY FOR VENDOR LINE ITEMS ---
 const getVendorUniqueKey = (entity: any): string => {
     // If it's a vendor line item from the 'vendors' array, the unique identifier is the combination.
@@ -145,17 +156,25 @@ const PETimesheetReviewScreen = () => {
     const [dumpingSiteTickets, setDumpingSiteTickets] = useState<SimpleHourState>({});
 const [approvedByName, setApprovedByName] = useState<string>('Not yet submitted');    // 🔹 2) Approved By (who actually submitted, from supervisor_submissions)
 
-
     // Total list of phase codes for validation (original list from job)
     const allJobPhaseCodes = timesheet?.data.job.phase_codes?.map((p: any) => (p?.code ?? p)) || [];
 const [overEmployees, setOverEmployees] = useState<string[]>([]);
 const [showWarnings, setShowWarnings] = useState(false);
 const [hoursState, setHoursState] = useState<SimpleHourState>({});
 const [ticketsState, setTicketsState] = useState<SimpleHourState>({});
-// NEW: holds simple one-value tickets per entity (no phase key)
+const [availableScannedTickets, setAvailableScannedTickets] = useState<any[]>([]);
+    const [selectedTicketIds, setSelectedTicketIds] = useState<{ [rowId: string]: number[] }>({});
+    const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+    const [isPdfFullScreen, setIsPdfFullScreen] = useState(false);
 const [ticketsLoadsState, setTicketsLoadsState] =
     useState<Record<string, string>>({});
-
+const getImageUri = (ticket: any): string | null => {
+        if (!ticket) return null;
+        const path = ticket.image_path || ticket.image_url || ticket.file_url;
+        if (!path) return null;
+        if (path.startsWith("http")) return path;
+        return `${API_BASE_URL}${path.startsWith('/') ? path : '/' + path}`;
+    };
     // --- Helper function to clean numeric input and strip leading zeros (New) ---
     const cleanNumericInput = (value: string): string => {
         // Remove all non-numeric and non-dot characters
@@ -219,21 +238,32 @@ const getEntityDisplayName = (entity: any, type: TableCategory): string => {
 
     const fetchData = useCallback(async () => {
         setLoading(true);
+ try {
+        const response = await apiClient.get<ExtendedTimesheet>(`/api/timesheets/${timesheetId}`);
+        const tsData = response.data;
+        setTimesheet(tsData);
+
+        // --- NEW: Fetch linked ticket metadata for the viewer ---
         try {
-            // USE THE EXTENDED TYPE HERE
-            const response = await apiClient.get<ExtendedTimesheet>(`/api/timesheets/${timesheetId}`);
-            const tsData = response.data;
-            setTimesheet(tsData);
-            
-            // Fetch all phase codes for this job_code
-            try {
-                // This line now correctly accesses tsData.data.job
-                const jobCode = tsData.data.job.job_code;
-                const resp = await apiClient.get(`/api/job-phases/${jobCode}/phase-codes-list`);
-                setFullJobPhaseCodes(resp.data.map((p: any) => p.code));
-            } catch (e) {
-                console.error("Failed to fetch full phase codes list", e);
-            }
+            const ticketsRes = await apiClient.get(`/api/tickets/${timesheetId}/scanned-tickets`);
+            setAvailableScannedTickets(ticketsRes.data || []);
+        } catch (e) {
+            console.warn("Failed to fetch tickets", e);
+        }
+
+        // --- NEW: Restore links from timesheet data JSON ---
+        if (tsData.data?.linked_tickets) {
+            setSelectedTicketIds(tsData.data.linked_tickets);
+        }
+
+        // Fetch all phase codes for this job_code
+        try {
+            const jobCode = tsData.data.job.job_code;
+            const resp = await apiClient.get(`/api/job-phases/${jobCode}/phase-codes-list`);
+            setFullJobPhaseCodes(resp.data.map((p: any) => p.code));
+        } catch (e) {
+            console.error("Failed to fetch full phase codes list", e);
+        }
             // Populate simple fields from tsData.data (JSONB)
             setNotes(tsData.data.notes || '');
 
@@ -633,7 +663,19 @@ if (total > 24) {
         });
         return newState;
     };
+const handleViewLinkedTicket = (rowId: string) => {
+    const linkedIds = selectedTicketIds[rowId];
+    if (!linkedIds || linkedIds.length === 0) return;
 
+    // Find the first matching ticket object to display in the viewer
+    const ticket = availableScannedTickets.find(t => linkedIds.includes(t.id || t.ID));
+    if (ticket) {
+        setSelectedTicket(ticket);
+        setIsPdfFullScreen(true);
+    } else {
+        Alert.alert("Error", "Ticket file not found.");
+    }
+};
     const handlePhaseCodeRename = (oldPhase: string, newPhase: string, isFromQuantityBlock: boolean = false) => {
         const cleanedNewPhase = newPhase.trim().toUpperCase();
 
@@ -1025,7 +1067,12 @@ const calculateComplexPhaseTotalsCombined = (
 
             );
         }
-        return <Text style={{ flex: 1, textAlign: 'center' }}>{displayValue}</Text>;
+        // return <Text style={{ flex: 1, textAlign: 'center' }}>{displayValue}</Text>;
+    return (
+        <View style={styles.innerSubCell}>
+            <Text style={styles.cellText}>{displayValue}</Text>
+        </View>
+    );
     };
 
     const renderTicketCellContent = (
@@ -1144,8 +1191,7 @@ const renderTableBlock = (
   } else if (isSimple) {
     fixedWidth += COL_ID;
     if (isVendor) fixedWidth += COL_MATERIAL_NAME;
-    fixedWidth += COL_UNIT;   // Unit (once)
-    fixedWidth += COL_TICKET; // Tickets
+    fixedWidth += COL_UNIT + COL_TICKET + COL_LINK;
   }
 
   const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
@@ -1199,6 +1245,7 @@ const renderTableBlock = (
         const isFirstClassRow = idxClass === 0;
 
         return (
+            
           <View
             key={`${entityId}_${classCode}`}
             style={[
@@ -1206,6 +1253,11 @@ const renderTableBlock = (
               idxRow % 2 === 1 && styles.tableRowAlternate,
             ]}
           >
+            {/* EMP# */}
+            <View style={[styles.dataCell, styles.colId, styles.borderRight]}>
+              <Text>{isFirstClassRow ? entityId : ''}</Text>
+            </View>
+
             {/* Name */}
             <View style={[styles.dataCell, styles.colName, styles.borderRight]}>
               {isFirstClassRow ? (
@@ -1218,47 +1270,42 @@ const renderTableBlock = (
                   )}
                 </>
               ) : (
-                <Text style={styles.transparentCell}>placeholder</Text>
+                <Text style={styles.transparentCell}></Text>
               )}
             </View>
 
-            {/* EMP# */}
-            <View style={[styles.dataCell, styles.colId, styles.borderRight]}>
-              <Text>{isFirstClassRow ? entityId : ''}</Text>
-            </View>
+            
 
             {/* Class Code */}
             <View style={[styles.dataCell, styles.colClassCode, styles.borderRight]}>
               <Text>{classCode === 'N/A' ? '' : classCode}</Text>
             </View>
-{/* Phase cells - DISPLAY ONLY, no editing for employee hours */}
-{phaseCodes.map((phase, phaseIndex) => {
-  const value =
-    classCode === 'N/A'
-      ? '0'
-      : ((hoursState as EmployeeHourState)[entityId]?.[phase]?.[classCode] ||
-         '0');
-  const isLastPhase = phaseIndex === phaseCodes.length - 1;
-  const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
 
-  const num = parseFloat(value) || 0;
+            {/* Phase cells */}
+            {phaseCodes.map((phase, phaseIndex) => {
+              const value =
+                classCode === 'N/A'
+                  ? '0'
+                  : ((hoursState as EmployeeHourState)[entityId]?.[phase]?.[classCode] ||
+                      '0');
+              const isLastPhase = phaseIndex === phaseCodes.length - 1;
+              const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
 
-  return (
-    <View
-      key={`${entityId}_${classCode}_${phase}`}
-      style={[
-        styles.dataCell,
-        styles.dynamicPhaseColEmployee, // width only, no borderRight
-        phaseBorder,                    // single vertical border
-      ]}
-    >
-      <Text style={{ flex: 1, textAlign: 'center' }}>
-        {num.toFixed(1)}
-      </Text>
-    </View>
-  );
-})}
-
+              return (
+                <View
+                  key={`${entityId}_${classCode}_${phase}`}
+                  style={[
+                    styles.dataCell,
+                    styles.dynamicPhaseColEmployee, // width only, no borderRight
+                    phaseBorder,                    // single vertical border
+                  ]}
+                >
+                  {renderCellContent(value, (text) =>
+                    updateEmployeeState(entityId, phase, classCode, text)
+                  )}
+                </View>
+              );
+            })}
 
             {/* Total */}
 <View style={[styles.dataCell, styles.colTotal, styles.borderLeft]}>
@@ -1278,7 +1325,7 @@ const renderTableBlock = (
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={[styles.tableContainer, { width: contentWidth }]}>
           {/* HEADER */}
-<View style={[styles.tableHeader, styles.headerCellBottomBorder]}>
+<View style={[styles.tableHeader]}>
             {isSimple && (
               <Text
                 style={[
@@ -1289,6 +1336,18 @@ const renderTableBlock = (
                 ]}
               >
                 {isVendor ? 'Vendor ID' : 'ID'}
+              </Text>
+            )}
+             {(isEmployee || isEquipment) && (
+              <Text
+                style={[
+                  styles.headerCell,
+                  styles.colId,
+                  styles.headerCellBottomBorder,
+                  styles.borderRight,
+                ]}
+              >
+                {isEmployee ? 'EMP#' : 'EQUIP #ER'}
               </Text>
             )}
 
@@ -1303,18 +1362,7 @@ const renderTableBlock = (
               Name
             </Text>
 
-            {(isEmployee || isEquipment) && (
-              <Text
-                style={[
-                  styles.headerCell,
-                  styles.colId,
-                  styles.headerCellBottomBorder,
-                  styles.borderRight,
-                ]}
-              >
-                {isEmployee ? 'EMP#' : 'EQUIP #ER'}
-              </Text>
-            )}
+           
 
             {isEmployee && (
               <Text
@@ -1353,9 +1401,12 @@ const renderTableBlock = (
               >
                 Unit
               </Text>
+              
             )}
 
+
             {isSimple && (
+              
               <Text
                 style={[
                   styles.headerCell,
@@ -1366,7 +1417,13 @@ const renderTableBlock = (
               >
                 {type === 'dumping_site' ? '# Loads' : '# Tickets'}
               </Text>
+              
             )}
+            {isSimple && (
+        <Text style={[styles.headerCell, { width: COL_LINK }, styles.headerCellBottomBorder, styles.borderRight]}>
+            Links
+        </Text>
+    )}
 
 {phaseCodes.map((phase, phaseIndex) => {
   const isLastPhase = phaseIndex === phaseCodes.length - 1;
@@ -1392,6 +1449,7 @@ const renderTableBlock = (
     styles.phaseHeaderCell,   // 👈 new
   ]}
 >
+
 
                   {/* header label + overlay kept same as before */}
                   <TouchableOpacity
@@ -1441,31 +1499,23 @@ const renderTableBlock = (
                         ? 'Hours'
                         : type === 'dumping_site'
                         ? 'Quantity'
-                        : 'Hours/Qty'}
+                        : 'Qty'}
                     </Text>
                   )}
 
 {isEquipment && (
   <View style={styles.equipmentPhaseSubHeader}>
-    <Text
-      style={[
-        styles.dataCell,
-        styles.equipmentSubHeaderCell,
-        styles.borderRight,      // vertical line between REG and S.B
-      ]}
-    >
+    <View style={styles.equipmentPhaseDivider} />
+
+    <Text style={[styles.dataCell, styles.equipmentSubHeaderCell]}>
       REG
     </Text>
-    <Text
-      style={[
-        styles.dataCell,
-        styles.equipmentSubHeaderCell,
-      ]}
-    >
+    <Text style={[styles.dataCell, styles.equipmentSubHeaderCell]}>
       S.B
     </Text>
   </View>
 )}
+
 
                 </View>
               );
@@ -1552,7 +1602,18 @@ const renderTableBlock = (
                         </Text>
                       </View>
                     )}
-
+                    {/* Equip ID */}
+                    {isEquipment && (
+                      <View
+                        style={[
+                          styles.dataCell,
+                          styles.colId,
+                          styles.borderRight,
+                        ]}
+                      >
+                        <Text>{entityId}</Text>
+                      </View>
+                    )}
                     {/* Name */}
                     <View
                       style={[
@@ -1570,18 +1631,7 @@ const renderTableBlock = (
                       </Text>
                     </View>
 
-                    {/* Equip ID */}
-                    {isEquipment && (
-                      <View
-                        style={[
-                          styles.dataCell,
-                          styles.colId,
-                          styles.borderRight,
-                        ]}
-                      >
-                        <Text>{entityId}</Text>
-                      </View>
-                    )}
+                    
 
                     {/* Vendor material name */}
                     {isVendor && (
@@ -1620,6 +1670,7 @@ const renderTableBlock = (
                           styles.borderRight,
                         ]}
                       >
+                        <View style={styles.innerSubCell}>
                         {renderTicketCellContent(currentTickets, (text) => {
                           setTicketsLoadsState(prev => ({
                             ...prev,
@@ -1628,7 +1679,25 @@ const renderTableBlock = (
                           updateSimpleState(simpleTicketsSetter, entityId, 'total', text);
                         })}
                       </View>
-                    )}
+                      </View>
+                    )
+                    }
+{isSimple && (
+    <View style={[
+        styles.dataCell, 
+        { width: COL_LINK }, 
+        styles.borderRight, // 👈 ADD THIS LINE back
+        { justifyContent: 'center' }
+    ]}>
+        {selectedTicketIds[entityId] && selectedTicketIds[entityId].length > 0 ? (
+            <TouchableOpacity onPress={() => handleViewLinkedTicket(entityId)}>
+                <Feather name="paperclip" size={18} color={THEME.primary} />
+            </TouchableOpacity>
+        ) : (
+            <Text style={{color: '#999'}}>-</Text>
+        )}
+    </View>
+)}
 
       {phaseCodes.map((phase, phaseIndex) => {
   const isLastPhase = phaseIndex === phaseCodes.length - 1;
@@ -1648,11 +1717,12 @@ const renderTableBlock = (
       {isEquipment ? (
         // Equipment: REG | S.B side by side with vertical line between
         <View style={{ flexDirection: 'row', width: '100%' }}>
+            <View style={styles.equipmentPhaseDivider} />
+
           <View
             style={[
               styles.dataCell,
               styles.colHoursEquipment,
-              styles.borderRight,   // vertical line between REG and S.B
             ]}
           >
             {renderCellContent(
@@ -1712,7 +1782,8 @@ const renderTableBlock = (
                 style={[
                   styles.dataCell,
                   styles.colId,
-                  styles.borderRight,
+                  
+                  
                 ]}
               />
             )}
@@ -1721,11 +1792,13 @@ const renderTableBlock = (
               style={[
                 styles.dataCell,
                 styles.colName,
-                styles.borderRight,
+              
               ]}
             >
-              <Text style={styles.phaseTotalText}>Phase Total</Text>
-            </View>
+<Text style={[styles.phaseTotalText, { width: '100%', textAlign: 'right', paddingRight: 10 }]}>
+            Phase Total
+        </Text>
+                    </View>
 
             {(isEmployee || isEquipment) && (
               <View
@@ -1752,7 +1825,7 @@ const renderTableBlock = (
                 style={[
                   styles.dataCell,
                   { width: COL_MATERIAL_NAME },
-                  styles.borderRight,
+                  
                 ]}
               />
             )}
@@ -1762,7 +1835,7 @@ const renderTableBlock = (
                 style={[
                   styles.dataCell,
                   { width: COL_UNIT },
-                  styles.borderRight,
+                 
                 ]}
               />
             )}
@@ -1772,11 +1845,19 @@ const renderTableBlock = (
                 style={[
                   styles.dataCell,
                   styles.colTickets,
-                  styles.borderRight,
                 ]}
               />
             )}
-
+{/* 👈 ADD THIS NEW SPACER FOR THE LINKS COLUMN */}
+{isSimple && (
+    <View
+        style={[
+            styles.dataCell,
+            { width: COL_LINK },
+            styles.borderRight,
+        ]}
+    />
+)}
             {phaseCodes.map((phase) => {
               const value = isEmployee
                 ? employeePhaseTotals[phase] || 0
@@ -1805,11 +1886,6 @@ const renderTableBlock = (
                 </View>
               );
             })}
-
-<View style={[styles.dataCell, styles.colTotal, styles.borderLeft]}>
-  <Text style={styles.phaseTotalText}>{grandTotal.toFixed(1)}</Text>
-</View>
-
 
           </View>
         </View>
@@ -1857,7 +1933,6 @@ const label = count === 1 ? "employee" : "employees";
                             {/* Supervisor Field, which uses the directly accessed supervisorName */}
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Supervisor</Text><Text style={styles.infoValue}>{supervisorName}</Text></View>
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Approved By</Text>  <Text style={styles.infoValue}>{approvedByName}</Text></View>
-
 
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Project Engineer</Text><Text style={styles.infoValue}>{data.project_engineer || 'N/A'}</Text></View>
                             <View style={styles.infoItem}><Text style={styles.infoLabel}>Day/Night</Text><Text style={styles.infoValue}>{data.time_of_day || 'N/A'}</Text></View>
@@ -2059,7 +2134,29 @@ const label = count === 1 ? "employee" : "employees";
                         <Text style={styles.notesText}>{notes || 'No notes provided.'}</Text>
                     )}
                 </View>
+                <Modal visible={isPdfFullScreen} transparent={false} animationType="slide">
+    <SafeAreaView style={styles.fullScreenPdfContainer}>
+        <View style={styles.fullScreenHeader}>
+            <Text style={styles.fullScreenTitle}>Ticket View</Text>
+            <TouchableOpacity onPress={() => setIsPdfFullScreen(false)}>
+                <Text style={{color: THEME.primary, fontSize: 16, fontWeight: '600'}}>Done</Text>
+            </TouchableOpacity>
+        </View>
+        {selectedTicket && (
+            (() => {
+                const uri = getImageUri(selectedTicket);
+                if (!uri) return <Text style={{color: '#fff', textAlign: 'center'}}>Path Error</Text>;
+                return uri.toLowerCase().endsWith('.pdf') ? (
+                    <Pdf source={{ uri, cache: true }} style={{flex: 1}} trustAllCerts={false} />
+                ) : (
+                    <Image source={{ uri }} style={{ flex: 1, resizeMode: 'contain' }} />
+                );
+            })()
+        )}
+    </SafeAreaView>
+</Modal>
             </ScrollView>
+            
         </SafeAreaView>
     );
 };
@@ -2096,6 +2193,33 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+fullScreenPdfContainer: {
+        flex: 1,
+        backgroundColor: "#000",
+    },
+    fullScreenHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: 16,
+        backgroundColor: '#1C1C1E',
+        borderBottomWidth: 1,
+        borderBottomColor: "#333",
+    },
+    fullScreenTitle: { // 👈 This was missing
+        fontSize: 18,
+        color: "#fff",
+        fontWeight: "bold",
+    },
+    fullScreenDoneButtonText: {
+        color: '#007AFF', // Or THEME.primary
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    fullScreenPdf: {
+        flex: 1,
+        width: "100%",
+    },
 
   jobTitle: { fontSize: 24, fontWeight: 'bold', color: THEME.text },
   jobCode: { fontSize: 16, color: THEME.textSecondary, marginTop: 4 },
@@ -2128,13 +2252,22 @@ const styles = StyleSheet.create({
   tableTitle: { fontSize: 20, fontWeight: 'bold', color: THEME.text, marginBottom: 12 },
 
   tableContainer: {
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 8,
-    overflow: 'visible', // IMPORTANT: Changed from 'hidden' to 'visible' to allow popover to render outside
-    position: 'relative', // Added position relative
+        borderWidth: 1,
+        borderColor: THEME.border,
+        backgroundColor: THEME.card,
+        borderRadius: 4,
+    },
+innerSubCell: {
+    flex: 1,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-
+  cellText: {
+    fontSize: 12,
+    color: THEME.text,
+    textAlign: 'center',
+  },
   // FIXED COLUMN WIDTH STYLES
   colName: { 
     width: COL_NAME, 
@@ -2193,20 +2326,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     borderRightColor: THEME.border,
     minHeight: 40,
+    
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: THEME.tableHeaderBg,
-    minHeight: 55, 
-    position: 'relative', // Ensure absolute children are positioned relative to this
-    zIndex: 2, // Keep headers above table rows
-  },
+        flexDirection: 'row',
+        backgroundColor: THEME.tableHeaderBg,
+        borderBottomWidth: 1,
+        borderBottomColor: THEME.border,
+    },
 
   headerCellBottomBorder: {
-      borderBottomWidth: 1,
+     
       borderBottomColor: THEME.border,
   },
 
@@ -2216,7 +2349,7 @@ const styles = StyleSheet.create({
     color: THEME.text,
     fontSize: 10,
     textAlign: 'center',
-    borderRightWidth: 1,
+   
     borderRightColor: THEME.border,
     paddingTop: 31, 
     minHeight: 55,
@@ -2345,19 +2478,16 @@ phaseHeaderCellText: {
   },
 
     // EDITING SPECIFIC STYLES
-    editableInput: {
-        paddingVertical: 2, 
-        paddingHorizontal: 5,
-        // REMOVED BORDER AND BACKGROUND to eliminate the "small box" appearance
-        borderWidth: 0, 
-        borderColor: 'transparent',
-        borderRadius: 4,
-        backgroundColor: 'transparent', 
-        // -------------------------------------------------------------------
-        color: THEME.text,
-        textAlign: 'center',
-        minHeight: 30,
-        fontSize: 12,
+   editableInput: {
+       width: '100%',
+    height: '100%',
+    textAlign: 'center',
+     paddingVertical: 0,
+      marginVertical: 0,
+    fontSize: 12,
+    color: THEME.text,
+    includeFontPadding: false, // 👈 Android specific fix
+    textAlignVertical: 'center',
     },
     totalInput: {
         flex: 1, 
@@ -2504,6 +2634,22 @@ phaseDropdownClose: {
 },
 phaseHeaderCell: {
   paddingTop: 32,   // ⬅️ height of phase header
+},
+equipmentPhaseDivider: {
+  position: 'absolute',
+  top: 0,
+  bottom: 0,
+  left: '50%',
+  width: 1,
+  backgroundColor: THEME.border,
+},
+equipmentRegSbDivider: {
+  position: 'absolute',
+  top: 0,
+  bottom: 0,
+  left: '50%',
+  width: 1,
+  backgroundColor: THEME.border,
 },
 
 });

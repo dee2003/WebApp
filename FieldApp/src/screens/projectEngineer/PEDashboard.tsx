@@ -58,28 +58,19 @@ const PEDashboard = () => {
 
 const loadDashboard = useCallback(async () => {
   if (!user?.id) return;
-
   try {
     setLoading(true);
-
-    console.log("🔄 Fetching PE dashboard...");
     const res = await apiClient.get("/api/project-engineer/dashboard", {
       params: { project_engineer_id: user.id }
     });
 
     const timesheets = res.data?.timesheets || [];
     const tickets = res.data?.tickets || [];
-
-    console.log("📌 Raw Timesheets from API:", timesheets);
-    console.log("📌 Raw Tickets from API:", tickets);
-
-    // ⭐ COMBINED MAP (foreman + date)
     const combinedMap: Record<string, ItemType> = {};
 
-    // ----- TIMESHEETS -----
+    // 1. Process Timesheets and their Linked Tickets
     timesheets.forEach((t: any) => {
       const key = `${t.date}-${t.foreman_id}`;
-
       if (!combinedMap[key]) {
         combinedMap[key] = {
           date: t.date,
@@ -89,19 +80,14 @@ const loadDashboard = useCallback(async () => {
           timesheet_count: 0,
           ticket_count: 0,
         };
-        console.log("🆕 Created entry:", combinedMap[key]);
       }
-
       combinedMap[key].timesheet_count += t.timesheet_count ?? 0;
-      console.log(
-        `➕ Added timesheets: key=${key}, added=${t.timesheet_count}, total=${combinedMap[key].timesheet_count}`
-      );
+      combinedMap[key].ticket_count += t.linked_ticket_count ?? 0; // ✅ Link aggregated
     });
 
-    // ----- TICKETS -----
+    // 2. Process Standalone Tickets
     tickets.forEach((tk: any) => {
       const key = `${tk.date}-${tk.foreman_id}`;
-
       if (!combinedMap[key]) {
         combinedMap[key] = {
           date: tk.date,
@@ -111,26 +97,15 @@ const loadDashboard = useCallback(async () => {
           timesheet_count: 0,
           ticket_count: 0,
         };
-        console.log("🆕 Created entry (ticket):", combinedMap[key]);
       }
-
-      combinedMap[key].ticket_count += tk.ticket_count ?? 0;
-      console.log(
-        `➕ Added tickets: key=${key}, added=${tk.ticket_count}, total=${combinedMap[key].ticket_count}`
-      );
+      combinedMap[key].ticket_count += tk.ticket_count ?? 0; // ✅ Summing totals
     });
 
-    // FINAL MERGED LIST
-    const finalData = Object.values(combinedMap);
-
-    console.log("✅ Final Combined Dashboard Data:", finalData);
-
-    setData(finalData);
+    setData(Object.values(combinedMap));
   } catch (err: any) {
     console.error("❌ Load PE dashboard error", err);
-
     if (err.response?.status !== 401) {
-      Alert.alert("Error", err.response?.data?.detail || "Failed to load dashboard data");
+      Alert.alert("Error", "Failed to load dashboard data");
     }
   } finally {
     setLoading(false);

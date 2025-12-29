@@ -212,29 +212,56 @@ const ForemanTimesheetViewScreen = ({ navigation, route }: any) => {
         };
         fetchData();
     }, [timesheetId]);
+// Inside ForemanTimesheetViewScreen.tsx
 
-    const handleSendTimesheet = async (id: number) => {
-        Alert.alert("Confirm Submission", "Are you sure you want to send this timesheet? Linked tickets will be submitted automatically.", [
-            { text: "Cancel", style: "cancel" },
-            {
-                text: "Send",
-                onPress: async () => {
-                    setLoading(true);
-                    try {
-                        await apiClient.post(`/api/timesheets/${id}/send`);
-                        Alert.alert("Success", "Timesheet and linked tickets submitted.");
-                        navigation.navigate("TimesheetList", { refresh: true });
-                    } catch (error: any) {
-                        Alert.alert("Error", error.response?.data?.detail || "Submission failed.");
-                    } finally {
-                        setLoading(false);
-                    }
-                },
-                style: "destructive",
+const handleSendTimesheet = async (id: number) => {
+    // 1. Get all ticket IDs that are currently linked to rows in the timesheet
+    const allLinkedTicketIds = Object.values(selectedTicketIds).flat();
+    
+    // 2. Filter the scanned tickets to find any that are NOT in the linked list
+    const unlinkedTickets = availableScannedTickets.filter(
+        ticket => !allLinkedTicketIds.includes(ticket.id || ticket.ID)
+    );
+
+    // 3. If there are unlinked tickets, block submission and show the warning
+    if (unlinkedTickets.length > 0) {
+        // Map through unlinked tickets to get their Ticket Numbers
+        const ticketList = unlinkedTickets
+            .map(t => t.ticket_number && t.ticket_number !== "" 
+                ? `Ticket #${t.ticket_number}` 
+                : `Unlabeled Ticket (ID: ${t.id || t.ID})`
+            )
+            .join('\n');
+        
+        Alert.alert(
+            "Unlinked Tickets Detected",
+            `The following tickets must be linked to a row before sending:\n\n${ticketList}`,
+            [{ text: "OK" }]
+        );
+        return; // Prevent the API call from executing
+    }
+
+    // 4. If validation passes, proceed with the existing submission alert
+    Alert.alert("Confirm Submission", "Are you sure you want to send this timesheet? All linked tickets will be submitted automatically.", [
+        { text: "Cancel", style: "cancel" },
+        {
+            text: "Send",
+            onPress: async () => {
+                setLoading(true);
+                try {
+                    await apiClient.post(`/api/timesheets/${id}/send`);
+                    Alert.alert("Success", "Timesheet and linked tickets submitted.");
+                    navigation.navigate("TimesheetList", { refresh: true });
+                } catch (error: any) {
+                    Alert.alert("Error", error.response?.data?.detail || "Submission failed.");
+                } finally {
+                    setLoading(false);
+                }
             },
-        ]);
-    };
-
+            style: "destructive",
+        },
+    ]);
+};
     const handleViewLinkedTicket = (rowId: string) => {
         const linkedIds = selectedTicketIds[rowId];
         if (!linkedIds || linkedIds.length === 0) return;

@@ -897,18 +897,7 @@ const ReviewTickets: React.FC = () => {
                          return group.date;
                       })()}
                    </Text>
-                   <TouchableOpacity
-                     style={[
-                       styles.submitButton,
-                       group.isFullySubmitted && { backgroundColor: THEME.colors.success },
-                     ]}
-                     onPress={() => handleSubmitTickets(group.date, group.unsubmittedTicketIds || [])}
-                     disabled={group.isFullySubmitted}
-                   >
-                     <Text style={styles.submitButtonText}>
-                       {group.isFullySubmitted ? "All Submitted" : "Submit Daily Log"}
-                     </Text>
-                   </TouchableOpacity>
+
                  </View>
  
                  {/* --- SEPARATE ROWS PER CATEGORY --- */}
