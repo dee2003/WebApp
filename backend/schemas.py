@@ -1079,6 +1079,9 @@ class DumpingSiteUpdate(BaseModel):
 from pydantic import BaseModel
 from typing import List, Optional
 from .models import ResourceStatus  # if you have this Enum
+class PhaseCodeInput(BaseModel):
+    code: str
+    description: Optional[str] = None
 
 
 # ✅ PhaseCode schema for nested response
@@ -1101,7 +1104,7 @@ class JobPhaseBase(BaseModel):
     project_engineer: Optional[str] = None
     location_id: Optional[int] = None  # ✅ replaced jurisdiction
     status: Optional[ResourceStatus] = ResourceStatus.ACTIVE
-    phase_codes: List[str] = []
+    phase_codes: List[PhaseCodeInput] = []  # <-- change here
 
 
 # ✅ Schema for creating a new job phase
@@ -1117,7 +1120,7 @@ class JobPhaseUpdate(BaseModel):
     project_engineer: Optional[str] = None
     location_id: Optional[int] = None  # ✅ replaced jurisdiction
     status: Optional[ResourceStatus] = None
-    phase_codes: Optional[List[str]] = None
+    phase_codes: Optional[List[PhaseCodeInput]] = None
 
 
 # ✅ Schema for returning data from the backend
@@ -1474,8 +1477,11 @@ class TicketSummary(BaseModel):
     job_number: Optional[str] = None
     zone: Optional[str] = None
     hours: Optional[float] = None
-    job_phase_id: Optional[int] = None
-
+    job_phase_id: Optional[int]   # 👈 ADD THIS
+    category: Optional[str] = None  # <--- ADD THIS LINE
+    material: Optional[str] = None
+    trucking:Optional[str]=None
+    # JSON Data
     table_data: Optional[Dict[str, Any] | List[Any]] = None
 
     phase_code_id: Optional[int] = None

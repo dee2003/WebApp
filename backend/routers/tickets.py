@@ -21,32 +21,35 @@ from sqlalchemy import func
 
 from datetime import datetime, date as date_type
 
+from fastapi import Request, HTTPException
+
 @router.get("/for-supervisor", response_model=List[schemas.TicketSummary])
 def get_tickets_for_supervisor(
-    foreman_id: int = Query(...),
-    date: str = Query(...),
+    request: Request,  # Get ALL query params
     db: Session = Depends(database.get_db),
 ):
-    try:
-        target_date = date_type.fromisoformat(date)
-    except:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
-
-    start = datetime.combine(target_date, datetime.min.time())
-    end = datetime.combine(target_date, datetime.max.time())
-
+    # Extract foreman_id from ANY param name (flexible)
+    foreman_id = int(request.query_params.get('foremanid') or 
+                    request.query_params.get('foreman_id') or 
+                    request.query_params.get('foremanId'))
+    
+    date = request.query_params.get('date')
+    
+    if not foreman_id or not date:
+        raise HTTPException(status_code=400, detail="foremanid/foreman_id and date required")
+    
     tickets = (
         db.query(models.Ticket)
         .filter(
             models.Ticket.foreman_id == foreman_id,
-            models.Ticket.created_at >= start,
-            models.Ticket.created_at <= end,
+            models.Ticket.date == date,  # ✅ Uses new date column
             models.Ticket.status == SubmissionStatus.SUBMITTED
         )
-        .order_by(models.Ticket.created_at.asc())
+        .order_by(models.Ticket.id.asc())
         .all()
     )
-
+    
+    print(f"✅ Found {len(tickets)} tickets for foreman {foreman_id} on {date}")
     return tickets
 
 # ==========================================================
@@ -78,6 +81,7 @@ def update_ticket(
     db.commit()
     db.refresh(ticket)
     return ticket
+
 
 # ==========================================================
 # 🔹 3. Project Engineer View (Approved Tickets)

@@ -98,7 +98,8 @@ const [selectedTicketIds, setSelectedTicketIds] = useState<{ [rowId: string]: nu
 const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
 const [isPdfFullScreen, setIsPdfFullScreen] = useState(false);
   const [employeesList, setEmployeesList] = useState<any[]>([]);
-  const [jobPhaseCodes, setJobPhaseCodes] = useState<string[]>([]);
+// Around line 84
+const [jobPhaseCodes, setJobPhaseCodes] = useState<any[]>([]);
   const [showEquipmentPicker, setShowEquipmentPicker] = useState(false);
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
   const [equipmentSearch, setEquipmentSearch] = useState("");
@@ -904,17 +905,17 @@ if (ts.data?.supervisor && typeof ts.data.supervisor === 'object' && 'name' in t
   setSupervisorName((ts.data.supervisor as { id: number; name: string }).name);
 }
 
- if (ts.data?.job?.job_code) {
+if (ts.data?.job?.job_code) {
     try {
-      const jobRes = await apiClient.get(
-        `/api/job-phases/${ts.data.job.job_code}`
-      );
-    const codes = (jobRes.data?.phase_codes || []).map((p: any) => p.code);
-      setJobPhaseCodes(codes);
+      const jobRes = await apiClient.get(`/api/job-phases/${ts.data.job.job_code}`);
+      // REMOVE: .map((p: any) => p.code)
+      // KEEP the full object to access .description later
+      const codes = jobRes.data?.phase_codes || [];
+      setJobPhaseCodes(codes); 
     } catch (e) {
       console.warn("Failed to load job phase codes", e);
     }
-  }
+}
       } catch (err) {
         console.error(err);
         Alert.alert('Error', 'Failed to load timesheet.');
@@ -1156,9 +1157,10 @@ useFocusEffect(
             
             console.log('Refetching phase codes on focus...');
             try {
-                const jobRes = await apiClient.get(`/api/job-phases/${currentJobCode}`);
-                const codes = (jobRes.data?.phase_codes || []).map((p: any) => p.code);
-                setJobPhaseCodes(codes);
+            const jobRes = await apiClient.get(`/api/job-phases/${currentJobCode}`);
+// Change this line to store the full array of objects
+const phases = jobRes.data?.phase_codes || [];
+setJobPhaseCodes(phases);
             } catch (e) {
                 console.warn("Failed to load job phase codes on focus", e);
             }
@@ -3002,49 +3004,54 @@ const getHourChangeHandler = () => {
 
       <Text style={styles.modalTitle}>Select Phase Codes</Text>
 
-      <ScrollView style={{ maxHeight: 350 }}>
-        {jobPhaseCodes.length === 0 ? (
-  <Text style={{ textAlign: 'center', color: '#999', marginTop: 20 }}>
-    No phase codes available
-  </Text>
-) : (
-        jobPhaseCodes.map(p => {
-          
-          const isSelected = selectedPhases.includes(p);
+<ScrollView style={{ maxHeight: 350 }}>
+  {jobPhaseCodes.length === 0 ? (
+    <Text style={{ textAlign: 'center', color: '#999', marginTop: 20 }}>
+      No phase codes available
+    </Text>
+  ) : (
+    jobPhaseCodes.map((phaseItem) => {
+      // Safely determine the code and description
+      // If phaseItem is an object, use its properties; if it's a string, fall back
+      const code = typeof phaseItem === 'object' ? phaseItem.code : phaseItem;
+      const description = typeof phaseItem === 'object' ? phaseItem.description : '';
+      const isSelected = selectedPhases.includes(code);
 
-          return (
-  <View
-    key={p}
-    style={styles.phaseItem}
-  >
-    <Text style={styles.phaseText}>{p}</Text>
+      return (
+        <View key={code} style={styles.phaseItem}>
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            {/* Phase Code Header */}
+            <Text style={styles.phaseText}>{code}</Text>
+            
+            {/* Phase Description Sub-text */}
+            {description ? (
+              <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                {description}
+              </Text>
+            ) : null}
+          </View>
 
-    {/* Checkbox press only */}
-<TouchableOpacity
-  onPress={() => {
-    setSelectedPhases(prev => {
-      const already = prev.includes(p);
-      const newPhases = already
-        ? prev.filter(x => x !== p)
-        : [...prev, p];
-
-      console.log('[PHASE TOGGLE] prev =', prev, 'clicked =', p, 'newPhases =', newPhases);
-      savePhasesImmediately(newPhases);
-      return newPhases;
-    });
-  }}
->
-
-
-      <View style={styles.checkbox}>
-        {selectedPhases.includes(p) && <Text style={styles.tick}>✓</Text>}
-      </View>
-    </TouchableOpacity>
-  </View>
- );
-  })
-)}
-      </ScrollView>
+          <TouchableOpacity
+            onPress={() => {
+              setSelectedPhases((prev) => {
+                const already = prev.includes(code);
+                const newPhases = already
+                  ? prev.filter((x) => x !== code)
+                  : [...prev, code];
+                savePhasesImmediately(newPhases);
+                return newPhases;
+              });
+            }}
+          >
+            <View style={styles.checkbox}>
+              {isSelected && <Text style={styles.tick}>✓</Text>}
+            </View>
+          </TouchableOpacity>
+        </View>
+      );
+    })
+  )}
+</ScrollView>
 
       <TouchableOpacity
         style={styles.doneBtn}

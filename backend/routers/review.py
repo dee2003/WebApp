@@ -328,7 +328,7 @@ def submit_all_for_date(payload: SupervisorSubmitPayload, db: Session = Depends(
             )
             .filter(
                 # CHANGE THIS LINE:
-                cast(models.Timesheet.sent_date, Date) == target_date, 
+                models.Timesheet.date == target_date, 
                 models.Timesheet.status == models.SubmissionStatus.REVIEWED_BY_SUPERVISOR
             )
         )
@@ -338,13 +338,13 @@ def submit_all_for_date(payload: SupervisorSubmitPayload, db: Session = Depends(
     timesheets_to_finalize = timesheets_query.all()
 
     tickets_to_finalize = (
-            db.query(models.Ticket)
-            .filter(
-                cast(models.Ticket.created_at, Date) == target_date,
-                models.Ticket.status == models.SubmissionStatus.SUBMITTED
-            )
-            .all()
+        db.query(models.Ticket)
+        .filter(
+            cast(models.Ticket.date, Date) == target_date,
+            models.Ticket.status == models.SubmissionStatus.SUBMITTED
         )
+        .all()
+    )
 
     if not timesheets_to_finalize and not tickets_to_finalize:
         db.rollback()
@@ -595,12 +595,14 @@ def get_pe_tickets(foreman_id: int, date: str, db: Session = Depends(database.ge
         db.query(models.Ticket)
         .filter(
             models.Ticket.foreman_id == foreman_id,
-            models.Ticket.ticket_date == target_date,
+            # ✅ FIXED: Use new date column + cast (TEXT column)
+            cast(models.Ticket.date, Date) == target_date,
             models.Ticket.status == models.SubmissionStatus.APPROVED_BY_SUPERVISOR
         )
         .all()
     )
 
+    print(f"✅ PE: Found {len(tickets)} tickets for foreman {foreman_id} on {date}")
     return tickets
 
 

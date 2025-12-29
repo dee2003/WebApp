@@ -17,6 +17,13 @@ import apiClient from '../../api/apiClient';
 import type { SupervisorStackParamList } from '../../navigation/AppNavigator';
 import type { Timesheet } from '../../types';
 // --- Type Definitions ---
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import Feather from "react-native-vector-icons/Feather";
+import Pdf from 'react-native-pdf';
+import { Image, Modal, Platform } from 'react-native';
+import API_URL from "../../config";
+
+const API_BASE_URL = API_URL;
 type SimpleHourState = Record<string, Record<string, string>>;
 // EmployeeHourState is complex: { empId: { phaseCode: { classCode: '5' } } }
 type EmployeeHourState = Record<string, Record<string, Record<string, string>>>;
@@ -46,6 +53,7 @@ interface ExtendedTimesheetData {
     time_of_day?: string;
     temperature?: string;
     project_engineer?: string;
+    linked_tickets?: Record<string, number[]>; // 👈 Add this line
     location?: string;
     job_name?: string; // <--- ADDED: Fixes Property 'job_name' does not exist error
     job: {
@@ -92,7 +100,7 @@ const COL_TOTAL = 100;
 
 const COL_UNIT = 80; // <--- ADDED: New constant for unit/material column
 const COL_MATERIAL_NAME = 120; // <--- ADDED: New constant for Material Name column
-
+const COL_LINK = 60; // Define width for the link column
 // --- NEW HELPER FUNCTION TO GET UNIQUE KEY FOR VENDOR LINE ITEMS ---
 const getVendorUniqueKey = (entity: any): string => {
     // If it's a vendor line item from the 'vendors' array, the unique identifier is the combination.
@@ -149,10 +157,19 @@ const [overEmployees, setOverEmployees] = useState<string[]>([]);
 const [showWarnings, setShowWarnings] = useState(false);
 const [hoursState, setHoursState] = useState<SimpleHourState>({});
 const [ticketsState, setTicketsState] = useState<SimpleHourState>({});
-// NEW: holds simple one-value tickets per entity (no phase key)
+const [availableScannedTickets, setAvailableScannedTickets] = useState<any[]>([]);
+    const [selectedTicketIds, setSelectedTicketIds] = useState<{ [rowId: string]: number[] }>({});
+    const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+    const [isPdfFullScreen, setIsPdfFullScreen] = useState(false);
 const [ticketsLoadsState, setTicketsLoadsState] =
     useState<Record<string, string>>({});
-
+const getImageUri = (ticket: any): string | null => {
+        if (!ticket) return null;
+        const path = ticket.image_path || ticket.image_url || ticket.file_url;
+        if (!path) return null;
+        if (path.startsWith("http")) return path;
+        return `${API_BASE_URL}${path.startsWith('/') ? path : '/' + path}`;
+    };
     // --- Helper function to clean numeric input and strip leading zeros (New) ---
     const cleanNumericInput = (value: string): string => {
         // Remove all non-numeric and non-dot characters
@@ -216,21 +233,32 @@ const getEntityDisplayName = (entity: any, type: TableCategory): string => {
 
     const fetchData = useCallback(async () => {
         setLoading(true);
+ try {
+        const response = await apiClient.get<ExtendedTimesheet>(`/api/timesheets/${timesheetId}`);
+        const tsData = response.data;
+        setTimesheet(tsData);
+
+        // --- NEW: Fetch linked ticket metadata for the viewer ---
         try {
-            // USE THE EXTENDED TYPE HERE
-            const response = await apiClient.get<ExtendedTimesheet>(`/api/timesheets/${timesheetId}`);
-            const tsData = response.data;
-            setTimesheet(tsData);
-            
-            // Fetch all phase codes for this job_code
-            try {
-                // This line now correctly accesses tsData.data.job
-                const jobCode = tsData.data.job.job_code;
-                const resp = await apiClient.get(`/api/job-phases/${jobCode}/phase-codes-list`);
-                setFullJobPhaseCodes(resp.data.map((p: any) => p.code));
-            } catch (e) {
-                console.error("Failed to fetch full phase codes list", e);
-            }
+            const ticketsRes = await apiClient.get(`/api/tickets/${timesheetId}/scanned-tickets`);
+            setAvailableScannedTickets(ticketsRes.data || []);
+        } catch (e) {
+            console.warn("Failed to fetch tickets", e);
+        }
+
+        // --- NEW: Restore links from timesheet data JSON ---
+        if (tsData.data?.linked_tickets) {
+            setSelectedTicketIds(tsData.data.linked_tickets);
+        }
+
+        // Fetch all phase codes for this job_code
+        try {
+            const jobCode = tsData.data.job.job_code;
+            const resp = await apiClient.get(`/api/job-phases/${jobCode}/phase-codes-list`);
+            setFullJobPhaseCodes(resp.data.map((p: any) => p.code));
+        } catch (e) {
+            console.error("Failed to fetch full phase codes list", e);
+        }
             // Populate simple fields from tsData.data (JSONB)
             setNotes(tsData.data.notes || '');
 
@@ -612,7 +640,19 @@ if (total > 24) {
         });
         return newState;
     };
+const handleViewLinkedTicket = (rowId: string) => {
+    const linkedIds = selectedTicketIds[rowId];
+    if (!linkedIds || linkedIds.length === 0) return;
 
+    // Find the first matching ticket object to display in the viewer
+    const ticket = availableScannedTickets.find(t => linkedIds.includes(t.id || t.ID));
+    if (ticket) {
+        setSelectedTicket(ticket);
+        setIsPdfFullScreen(true);
+    } else {
+        Alert.alert("Error", "Ticket file not found.");
+    }
+};
     const handlePhaseCodeRename = (oldPhase: string, newPhase: string, isFromQuantityBlock: boolean = false) => {
         const cleanedNewPhase = newPhase.trim().toUpperCase();
 
@@ -1128,8 +1168,7 @@ const renderTableBlock = (
   } else if (isSimple) {
     fixedWidth += COL_ID;
     if (isVendor) fixedWidth += COL_MATERIAL_NAME;
-    fixedWidth += COL_UNIT;   // Unit (once)
-    fixedWidth += COL_TICKET; // Tickets
+    fixedWidth += COL_UNIT + COL_TICKET + COL_LINK;
   }
 
   const contentWidth = fixedWidth + phaseGroupWidth * phaseCodes.length;
@@ -1339,9 +1378,12 @@ const renderTableBlock = (
               >
                 Unit
               </Text>
+              
             )}
 
+
             {isSimple && (
+              
               <Text
                 style={[
                   styles.headerCell,
@@ -1352,7 +1394,13 @@ const renderTableBlock = (
               >
                 {type === 'dumping_site' ? '# Loads' : '# Tickets'}
               </Text>
+              
             )}
+            {isSimple && (
+        <Text style={[styles.headerCell, { width: COL_LINK }, styles.headerCellBottomBorder, styles.borderRight]}>
+            Links
+        </Text>
+    )}
 
 {phaseCodes.map((phase, phaseIndex) => {
   const isLastPhase = phaseIndex === phaseCodes.length - 1;
@@ -1609,7 +1657,24 @@ const renderTableBlock = (
                         })}
                       </View>
                       </View>
-                    )}
+                    )
+                    }
+{isSimple && (
+    <View style={[
+        styles.dataCell, 
+        { width: COL_LINK }, 
+        styles.borderRight, // 👈 ADD THIS LINE back
+        { justifyContent: 'center' }
+    ]}>
+        {selectedTicketIds[entityId] && selectedTicketIds[entityId].length > 0 ? (
+            <TouchableOpacity onPress={() => handleViewLinkedTicket(entityId)}>
+                <Feather name="paperclip" size={18} color={THEME.primary} />
+            </TouchableOpacity>
+        ) : (
+            <Text style={{color: '#999'}}>-</Text>
+        )}
+    </View>
+)}
 
       {phaseCodes.map((phase, phaseIndex) => {
   const isLastPhase = phaseIndex === phaseCodes.length - 1;
@@ -1695,6 +1760,7 @@ const renderTableBlock = (
                   styles.dataCell,
                   styles.colId,
                   
+                  
                 ]}
               />
             )}
@@ -1706,8 +1772,10 @@ const renderTableBlock = (
               
               ]}
             >
-              <Text style={styles.phaseTotalText}>Phase Total</Text>
-            </View>
+<Text style={[styles.phaseTotalText, { width: '100%', textAlign: 'right', paddingRight: 10 }]}>
+            Phase Total
+        </Text>
+                    </View>
 
             {(isEmployee || isEquipment) && (
               <View
@@ -1754,11 +1822,19 @@ const renderTableBlock = (
                 style={[
                   styles.dataCell,
                   styles.colTickets,
-                  styles.borderRight,
                 ]}
               />
             )}
-
+{/* 👈 ADD THIS NEW SPACER FOR THE LINKS COLUMN */}
+{isSimple && (
+    <View
+        style={[
+            styles.dataCell,
+            { width: COL_LINK },
+            styles.borderRight,
+        ]}
+    />
+)}
             {phaseCodes.map((phase) => {
               const value = isEmployee
                 ? employeePhaseTotals[phase] || 0
@@ -2034,7 +2110,29 @@ const label = count === 1 ? "employee" : "employees";
                         <Text style={styles.notesText}>{notes || 'No notes provided.'}</Text>
                     )}
                 </View>
+                <Modal visible={isPdfFullScreen} transparent={false} animationType="slide">
+    <SafeAreaView style={styles.fullScreenPdfContainer}>
+        <View style={styles.fullScreenHeader}>
+            <Text style={styles.fullScreenTitle}>Ticket View</Text>
+            <TouchableOpacity onPress={() => setIsPdfFullScreen(false)}>
+                <Text style={{color: THEME.primary, fontSize: 16, fontWeight: '600'}}>Done</Text>
+            </TouchableOpacity>
+        </View>
+        {selectedTicket && (
+            (() => {
+                const uri = getImageUri(selectedTicket);
+                if (!uri) return <Text style={{color: '#fff', textAlign: 'center'}}>Path Error</Text>;
+                return uri.toLowerCase().endsWith('.pdf') ? (
+                    <Pdf source={{ uri, cache: true }} style={{flex: 1}} trustAllCerts={false} />
+                ) : (
+                    <Image source={{ uri }} style={{ flex: 1, resizeMode: 'contain' }} />
+                );
+            })()
+        )}
+    </SafeAreaView>
+</Modal>
             </ScrollView>
+            
         </SafeAreaView>
     );
 };
@@ -2071,6 +2169,33 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+fullScreenPdfContainer: {
+        flex: 1,
+        backgroundColor: "#000",
+    },
+    fullScreenHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: 16,
+        backgroundColor: '#1C1C1E',
+        borderBottomWidth: 1,
+        borderBottomColor: "#333",
+    },
+    fullScreenTitle: { // 👈 This was missing
+        fontSize: 18,
+        color: "#fff",
+        fontWeight: "bold",
+    },
+    fullScreenDoneButtonText: {
+        color: '#007AFF', // Or THEME.primary
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    fullScreenPdf: {
+        flex: 1,
+        width: "100%",
+    },
 
   jobTitle: { fontSize: 24, fontWeight: 'bold', color: THEME.text },
   jobCode: { fontSize: 16, color: THEME.textSecondary, marginTop: 4 },

@@ -285,33 +285,35 @@ return (
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div style={{ flex: 1 }}>
-              {field.type === "select" ? (
-                <select
-                  name={field.name}
-                  className="form-control"
-                  value={values[field.name] || ""}
-                  onChange={handleChange}
-                  required={field.required}
-                >
-                  <option value="">Select {field.label}</option>
-                  {field.options.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type={field.type || "text"}
-                  name={field.name}
-                  className="form-control"
-                  value={values[field.name] || ""}
-                  onChange={handleChange}
-                  required={field.required}
-                  readOnly={field.readOnly || false}
-                  autoComplete={field.type === "password" ? "new-password" : "off"}
-                />
-              )}
+             {field.type === "select" ? (
+  <select
+    name={field.name}
+    className="form-control"
+    value={values[field.name] || ""}
+    onChange={handleChange}
+    required={field.required}
+    // Use 'disabled' because 'readOnly' doesn't work on <select>
+    disabled={field.readOnly}
+  >
+    <option value="">Select {field.label}</option>
+    {field.options.map((opt) => (
+      <option key={opt.value} value={opt.value}>
+        {opt.label}
+      </option>
+    ))}
+  </select>
+) : (
+  <input
+    type={field.type || "text"}
+    name={field.name}
+    className="form-control"
+    value={values[field.name] || ""}
+    onChange={handleChange}
+    required={field.required}
+    readOnly={field.readOnly || false}
+    autoComplete={field.type === "password" ? "new-password" : "off"}
+  />
+)}
             </div>
             {/* Add New button if defined */}
             {field.onAddNew && (
@@ -345,15 +347,19 @@ return (
 // --- Job & Phases Components (Unchanged) ---
 const JobPhasesTable = ({ phases, onEdit, onDelete }) => (
     <table className="data-table">
-        <thead><tr><th>Phase Code</th><th>Actions</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Phase Code</th>
+                <th>Description</th>
+            </tr>
+        </thead>
         <tbody>
             {phases.map((p, i) => (
                 <tr key={`${p.phase_code}-${i}`}>
                     <td>{p.phase_code}</td>
-                    <td>
-                        <button onClick={() => onEdit(i)} className="btn btn-sm">Edit</button>
-                        <button onClick={() => onDelete(i)} className="btn btn-sm btn-outline">Delete</button>
-                    </td>
+                    {/* Ensure this matches the key 'description' used in handleAddPhase */}
+                    <td>{p.description || ""}</td>
+
                 </tr>
             ))}
         </tbody>
@@ -369,9 +375,10 @@ const [projectEngineer, setProjectEngineer] = useState(
 const [jurisdiction, setJurisdiction] = useState("");
 const [projectEngineerId, setProjectEngineerId] = useState('');
     const [status, setStatus] = useState(job?.status?.toLowerCase() || "active"); 
-    const [phaseCode, setPhaseCode] = useState("");
+  const [phaseCode, setPhaseCode] = useState("");
+    const [phaseDescription, setPhaseDescription] = useState(""); // NEW STATE
     const [phases, setPhases] = useState(job?.phases || []);
-    const [editIdx, setEditIdx] = useState(null);
+    const [editIdx, setEditIdx] = useState(null)
     const fixedPhases = ["Admin", "S&SL", "Vacation"];
     const [locations, setLocations] = useState([]);
  const [engineers, setEngineers] = useState([]);
@@ -444,61 +451,84 @@ useEffect(() => {
   console.log("📍 Locations:", locations);
   console.log("✅ Matched Jurisdiction ID:", matchedId);
 }, [job, locations]);
-    const handleAddPhase = () => {
-      if (!phaseCode.trim()) return showNotification("Please enter a phase code.");
-      if (phases.some((p, idx) => p.phase_code === phaseCode.trim() && idx !== editIdx))
-        return showNotification("This phase code already exists.");
-      if (editIdx !== null) {
-        setPhases(phases.map((p, i) => (i === editIdx ? { phase_code: phaseCode.trim() } : p)));
-        setEditIdx(null);
-      } else {
-        setPhases([...phases, { phase_code: phaseCode.trim() }]);
-      }
-      setPhaseCode("");
+const handleAddPhase = () => {
+    if (!phaseCode.trim()) return showNotification("Please enter a phase code.");
+    
+    // Create the object matching your local state structure
+    const newPhase = { 
+        phase_code: phaseCode.trim(), 
+        description: phaseDescription.trim() 
     };
+
+    // Check for duplicates
+    if (phases.some((p, idx) => p.phase_code === phaseCode.trim() && idx !== editIdx)) {
+        return showNotification("This phase code already exists.");
+    }
+
+    if (editIdx !== null) {
+        // Updating an existing row in the table
+        setPhases(phases.map((p, i) => (i === editIdx ? newPhase : p)));
+        setEditIdx(null);
+    } else {
+        // Adding a new row to the table
+        setPhases([...phases, newPhase]);
+    }
+
+    // Reset both input fields
+    setPhaseCode("");
+    setPhaseDescription("");
+};
     const handleEditPhase = (idx) => {
       setPhaseCode(phases[idx].phase_code);
+      setPhaseDescription(phases[idx].description || ""); // Load description for editing
       setEditIdx(idx);
     };
     const handleDeletePhase = (idx) => {
       setPhases(phases.filter((_, i) => i !== idx));
     };
-    const handleSubmit = () => {
-        if (!jobCode.trim()) return showNotification("Job code is a required field.");
-        const finalPhaseStrings = [...new Set([...phases.map(p => p.phase_code), ...fixedPhases])];
-const payload = {
-  job_code: jobCode.trim(),
-  contract_no: contractNo.trim(),
-  job_description: jobDescription.trim(),
-  project_engineer_id: projectEngineerId ? parseInt(projectEngineerId) : null,
-  location_id: jurisdiction ? parseInt(jurisdiction) : null,
-  project_engineer: projectEngineer, // keep name if your backend uses both
-  status: status.toLowerCase(),
-  phase_codes: finalPhaseStrings
-};        
-        onSave(payload);
-    };
+const handleSubmit = () => {
+  if (!jobCode.trim()) return showNotification("Job code is a required field.");
+
+  const editablePhases = phases.map(p => ({
+    code: p.phase_code,
+    description: p.description || ""
+  }));
+
+  const fixedPhasesObjects = fixedPhases.map(code => ({
+    code,
+    description: `${code} Phase`
+  }));
+
+  const combinedMap = new Map();
+  [...fixedPhasesObjects, ...editablePhases].forEach(obj => {
+    combinedMap.set(obj.code, obj);
+  });
+
+  setPhases(Array.from(combinedMap.values())); // UI only
+
+  const payload = {
+    job_code: jobCode.trim(),
+    contract_no: contractNo.trim(),
+    job_description: jobDescription.trim(),
+    project_engineer_id: projectEngineerId ? parseInt(projectEngineerId) : null,
+    project_engineer: projectEngineer,
+    status: status.toLowerCase(),
+    phase_codes: Array.from(combinedMap.values()).map(p => ({
+      code: p.code,
+      description: p.description || ""
+    })) // ✅ OBJECTS
+  };
+
+  onSave(payload);
+};
 
     return (
         <Modal title={mode === "edit" ? "Edit Job & Phases" : "Create Job & Phases"} onClose={onClose} size="large">
             <div className="form-grid">
                 <div className="form-group"><label>Job Code</label><input type="text" value={jobCode} onChange={(e) => setJobCode(e.target.value)} disabled={mode === "edit"} className="form-control" required /></div>
                 <div className="form-group"><label>Contract No.</label><input type="text" value={contractNo} onChange={(e) => setContractNo(e.target.value)} className="form-control" /></div>
-<div className="form-group">
-  <label>Location</label>
-<select
-  value={locationId || ""}  // <-- must be locationId, not jurisdiction
-  onChange={(e) => setLocationId(Number(e.target.value))}
-  className="form-control"
->
-    <option value="">Select Location</option>
-    {locations.map((loc) => (
-      <option key={loc.id} value={loc.id}>
-        {loc.name}
-      </option>
-    ))}
-  </select>
-</div>
+
+
 <div className="form-group">
   <label>Project Engineer</label>
  <select
@@ -542,11 +572,31 @@ const payload = {
             <h4>Editable Phases</h4>
             <div className="phases-table-wrapper"><JobPhasesTable phases={phases} onEdit={handleEditPhase} onDelete={handleDeletePhase} /></div>
             <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                <input type="text" value={phaseCode} onChange={(e) => setPhaseCode(e.target.value)} placeholder="New Phase Code" className="form-control" />
-                <button type="button" onClick={handleAddPhase} className="btn">{editIdx !== null ? "Update" : "Add"}</button>
-                {editIdx !== null && (<button type="button" onClick={() => { setEditIdx(null); setPhaseCode(""); }} className="btn btn-outline">Cancel</button>)}
+                <input 
+                    type="text" 
+                    value={phaseCode} 
+                    onChange={(e) => setPhaseCode(e.target.value)} 
+                    placeholder="Phase Code" 
+                    className="form-control" 
+                    style={{ flex: 1 }}
+                />
+                <input 
+                    type="text" 
+                    value={phaseDescription} 
+                    onChange={(e) => setPhaseDescription(e.target.value)} 
+                    placeholder="Phase Description (Optional)" 
+                    className="form-control" 
+                    style={{ flex: 2 }}
+                />
+                <button type="button" onClick={handleAddPhase} className="btn">
+                    {editIdx !== null ? "Update" : "Add"}
+                </button>
+                {editIdx !== null && (
+                    <button type="button" onClick={() => { setEditIdx(null); setPhaseCode(""); setPhaseDescription(""); }} className="btn btn-outline">
+                        Cancel
+                    </button>
+                )}
             </div>
-            <div style={{ marginTop: "16px" }}><h4>Fixed Phases</h4><ul className="fixed-phases-list">{fixedPhases.map(p => <li key={p}>{p}</li>)}</ul></div>
             <div className="modal-actions"><button onClick={handleSubmit} className="btn btn-primary">Save Job</button></div>
         </Modal>
     );
@@ -812,8 +862,7 @@ const [categoryNumbers, setCategoryNumbers] = useState([]);
 const [selectedCategoryId, setSelectedCategoryId] = useState("");
 const [selectedCategoryNumber, setSelectedCategoryNumber] = useState("");
 const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
-// In AdminDashboard.js
-// ... existing states
+const [equipmentDeptFilter, setEquipmentDeptFilter] = useState("MLCJobs");
 const [subModal, setSubModal] = useState({ shown: false, type: null, title: '' }); // <-- ADD THIS
 
 const [dumpingSiteOptions, setDumpingSiteOptions] = useState({
@@ -1245,31 +1294,68 @@ if (type === "dumping_sites") {
   return;
 }
 
-
-    if (type === 'equipment') {
-      // Validation
-      if (!formData.id || formData.id.trim() === '') {
-        setFieldErrors({ id: 'Equipment ID is required.' });
+if (type === 'equipment') {
+    // Validation - FIXED field names
+    if (!formData.categoryid) {  // ← NOW USE categoryid (real ID)
+        setFieldErrors({ categorynumber: 'Please select a valid category.' });
         return;
-      }
-      if (!formData.departmentId) {
+    }
+    if (!formData.departmentId) {
         setFieldErrors({ departmentId: 'Department is required.' });
         return;
-      }
-      if (!formData.categoryid) {
+    }
+    if (!formData.categorynumber) {  // ← FIXED: categorynumber, not categoryid
         setFieldErrors({ categorynumber: 'Category Number is required.' });
         return;
-      }
+    }
 
-      payload = {
+    // Duplicate check for ADD mode
+    if (mode === 'add') {
+        const newErrors = {};
+        if (data.equipment?.some(e => e.id === formData.id)) {
+            newErrors.id = 'Equipment ID already exists.';
+        }
+        if (Object.keys(newErrors).length > 0) {
+            setFieldErrors(newErrors);
+            return;
+        }
+    }
+
+    // Transform to API payload - FIXED field mapping
+    const payload = {
         id: formData.id,
         name: formData.name,
-        department_id: parseInt(formData.departmentId, 10),
-        category_id: parseInt(formData.categoryid, 10),
+        department_id: parseInt(formData.departmentId, 10),     // ✅ Matches your backend
+        category_id: parseInt(formData.categoryid, 10),  // ← USE categoryid, not categorynumber
         vin_number: formData.vinnumber || null,
-        status: (formData.status || 'Active').toLowerCase()
-      };
-    } else if (['user', 'dumpingsite'].includes(type)) {
+        status: (formData.status || 'Active').toLowerCase()     // ✅ active/inactive for API
+    };
+
+    console.log('🔥 Equipment payload:', payload);  // DEBUG
+
+    try {
+        let response;
+        if (mode === 'edit') {
+            const itemId = existingItem.id;
+            response = await apiClient.put(`equipment/${encodeURIComponent(itemId)}`, payload);
+            onUpdate('equipment', data.equipment.map(it => 
+                it.id === itemId ? response.data : it
+            ));
+        } else {
+            response = await apiClient.post('equipment/', payload);
+            onUpdate('equipment', [...data.equipment, response.data]);
+        }
+        
+        showNotification('Equipment saved successfully!');
+        closeMainModal();
+    } catch (error) {
+        console.error('💥 Equipment save error:', error);
+        const errorMessage = error.response?.data?.detail || 'Failed to save equipment';
+        showNotification(errorMessage);
+    }
+    return;  // ← CRITICAL: Exit after handling
+}
+ else if (['user', 'dumpingsite'].includes(type)) {
       // Ensure ID is numeric
       if (formData.id) {
         const numericId = parseInt(formData.id, 10);
@@ -1342,62 +1428,64 @@ if (type === "dumping_sites") {
 };
 
 const handleToggleStatus = async (type, item, newStatus) => {
-  const stateKey = typeToStateKey[type];
-  if (!stateKey) {
-    console.error("Could not find a state key for type:", type);
-    return;
-  }
+  const stateKey = typeToStateKey[type];
+  if (!stateKey) return;
 
-  const payload = { status: newStatus.toLowerCase() };
-  const oldStatus = item.status;
-  setData(prev => {
-    const currentList = prev[stateKey] || [];
-    const updatedList = currentList.map(it =>
-      it.id === item.id ? { ...it, status: payload.status } : it
-    );
-    return { ...prev, [stateKey]: updatedList };
-  });
+  const payload = { status: newStatus.toLowerCase() };
+  const oldStatus = item.status;
 
-  try {
-    let resourcePath = type.toLowerCase().includes('job') ? 'job-phases/by-id' : stateKey;
+  // 1. Determine if this is a Job resource
+  const isJob = type === 'job_phase' || type === 'job-phases';
+  
+  // 2. Select the correct identifier (job_code for jobs, id for others)
+  const identifier = isJob ? item.job_code : item.id;
 
-    if (resourcePath === 'materials_trucking') {
-        resourcePath = 'materials-trucking';
-    }
+  // 3. Optimistic UI Update (Update local state before API call)
+  setData(prev => {
+    const currentList = prev[stateKey] || [];
+    const updatedList = currentList.map(it => {
+        const isMatch = isJob ? it.job_code === identifier : it.id === identifier;
+        return isMatch ? { ...it, status: payload.status } : it;
+    });
+    return { ...prev, [stateKey]: updatedList };
+  });
 
-    const endpoint = `/${resourcePath}/${encodeURIComponent(item.id)}/`;
-    const method = type === "vendor" ? apiClient.patch : apiClient.put; // ✅ PATCH for vendor
+  try {
+    // 4. Set correct endpoint path
+    let resourcePath = isJob ? 'job-phases' : stateKey;
+    if (resourcePath === 'materials_trucking') resourcePath = 'materials-trucking';
+
+    // 5. Construct URL (e.g., /api/job-phases/PC-101/)
+    const endpoint = `/${resourcePath}/${encodeURIComponent(identifier)}`;
+    
+    // Vendors use PATCH (as per your existing logic), others use PUT
+    const method = type === "vendor" ? apiClient.patch : apiClient.put;
 
     const response = await method(endpoint, payload);
 
-    // Ensure frontend state matches backend response
-    setData(prev => {
-      const currentList = prev[stateKey] || [];
-      const updatedList = currentList.map(it =>
-        it.id === item.id ? response.data : it
-      );
-      return { ...prev, [stateKey]: updatedList };
-    });
+    // 6. Confirm state with backend response
+    setData(prev => {
+      const currentList = prev[stateKey] || [];
+      const updatedList = currentList.map(it => {
+          const isMatch = isJob ? it.job_code === identifier : it.id === identifier;
+          return isMatch ? response.data : it;
+      });
+      return { ...prev, [stateKey]: updatedList };
+    });
 
-    // Reset pagination if setting inactive
-    if (newStatus.toLowerCase() === 'inactive') {
-      setPagination(prev => ({ ...prev, [stateKey]: 1 }));
-    }
-  } catch (error) {
-    // Revert state on error
-    setData(prev => {
-      const currentList = prev[stateKey] || [];
-      const revertedList = currentList.map(it =>
-        it.id === item.id ? { ...it, status: oldStatus } : it
-      );
-      return { ...prev, [stateKey]: revertedList };
-    });
-
-    const errorDetail = error.response?.data?.detail;
-    const errorMessage = errorDetail ? JSON.stringify(errorDetail) : 'An unexpected error occurred.';
-    console.error(`Error updating status for ${type}:`, error);
-    alert(`Error updating status: ${errorMessage}`);
-  }
+  } catch (error) {
+    // 7. Revert state on error
+    setData(prev => ({
+      ...prev,
+      [stateKey]: (prev[stateKey] || []).map(it => {
+          const isMatch = isJob ? it.job_code === identifier : it.id === identifier;
+          return isMatch ? { ...it, status: oldStatus } : it;
+      })
+    }));
+    
+    const errorMsg = error.response?.data?.detail || "Failed to update status.";
+    alert(`Error: ${errorMsg}`);
+  }
 };
 
     const handleDeleteItem = async (type, itemId) => {
@@ -1436,40 +1524,42 @@ const handleToggleStatus = async (type, item, newStatus) => {
         ], required: true, defaultValue: 'active' }
     ];
             case "employee": return [ { name: "id", label: "Employee ID", required: true }, { name: "first_name", label: "First Name", required: true }, { name: "middle_name", label: "Middle Name" }, { name: "last_name", label: "Last Name", required: true }, { name: "class_1", label: "Class Code 1" }, { name: "class_2", label: "Class Code 2" }, { name: "status", label: "Status", type: "select", options: [ { value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" } ], required: true, defaultValue: "Active" } ];
-    case 'equipment':
-      return [
-        { name: 'id', label: 'Equipment ID', required: true },
-        { name: 'name', label: 'Equipment Name', required: true },
-        {
-          name: 'departmentId',
-          label: 'Department',
-          type: 'select',
-          required: true,
-          options: [
-           
-            ...departments.map(d => ({ value: d.id, label: d.name }))
-          ],
-          onAddNew: () => openSubModal('department', 'Add New Department') // <-- ADD THIS
-        },
-        {  
-            name: 'categorynumber',
-          label: 'Category Number',
-          type: 'select',
-          required: true,
-          options: [
-
-            ...categories.map(c => ({ value: c.number, label: c.number }))
-          ],
-          onAddNew: () => openSubModal('category', 'Add New Category') // <-- ADD THIS
-        },
-        { name: 'category', label: 'Category Name', type: 'text', readOnly: true },
-        { name: 'vinnumber', label: 'VIN Number' },
-        {
-          name: 'status', label: 'Status', type: 'select',
-          options: [{ value: 'Active', label: 'Active' }, { value: 'Inactive', label: 'Inactive' }],
-          required: true, defaultValue: 'Active'
-        }
-         ];
+case 'equipment':
+  return [
+    { name: 'id', label: 'Equipment ID', required: true, readOnly: modal.mode === 'edit' }, // Usually ID is also read-only
+    { name: 'name', label: 'Equipment Name', required: true },
+    {
+      name: 'departmentId',
+      label: 'Department',
+      type: 'select',
+      required: true,
+      // Logic: disable interaction if in edit mode
+      readOnly: modal.mode === 'edit', 
+      options: [
+        ...departments.map(d => ({ value: d.id, label: d.name }))
+      ],
+      onAddNew: modal.mode === 'edit' ? null : () => openSubModal('department', 'Add New Department')
+    },
+    {  
+      name: 'categorynumber',
+      label: 'Category Number',
+      type: 'select',
+      required: true,
+      // Logic: disable interaction if in edit mode
+      readOnly: modal.mode === 'edit',
+      options: [
+        ...categories.map(c => ({ value: c.number, label: c.number }))
+      ],
+      onAddNew: modal.mode === 'edit' ? null : () => openSubModal('category', 'Add New Category')
+    },
+    { name: 'category', label: 'Category Name', type: 'text', readOnly: true },
+    { name: 'vinnumber', label: 'VIN Number' },
+    {
+      name: 'status', label: 'Status', type: 'select',
+      options: [{ value: 'Active', label: 'Active' }, { value: 'Inactive', label: 'Inactive' }],
+      required: true, defaultValue: 'Active'
+    }
+  ];
 
     // Case for the sub-modal to add a new department
     case 'department':
@@ -1767,23 +1857,36 @@ const equipmentFields = useMemo(() => getEquipmentFormFields(), [
 
 // In AdminDashboard.js
 
+// const prepareJobForEditModal = (job) => {
+//     const fixedPhases = ["Admin", "S&SL", "Vacation"];
+//     // 'job.phase_codes' is now an array of objects: [{ id: 1, code: 'PC-01', ... }]
+//     const phaseCodeObjects = job.phase_codes || [];
+
+//     // ✅ FIX: Filter the objects by accessing their 'code' property
+//     const editablePhaseObjects = phaseCodeObjects.filter(
+//         p_obj => !fixedPhases.includes(p_obj.code)
+//     );
+    
+//     // ✅ FIX: Map the objects to the structure the modal's state expects: { phase_code: 'string' }
+// // Map both code AND description
+//     const phasesForModal = editablePhaseObjects.map(p_obj => ({ 
+//         phase_code: p_obj.code,
+//         description: p_obj.description || "" 
+//     }));
+//     // Return the job data, overwriting 'phases' with the correctly prepared array
+//     return { ...job, phases: phasesForModal };
+// };
 const prepareJobForEditModal = (job) => {
-    const fixedPhases = ["Admin", "S&SL", "Vacation"];
-    // 'job.phase_codes' is now an array of objects: [{ id: 1, code: 'PC-01', ... }]
     const phaseCodeObjects = job.phase_codes || [];
 
-    // ✅ FIX: Filter the objects by accessing their 'code' property
-    const editablePhaseObjects = phaseCodeObjects.filter(
-        p_obj => !fixedPhases.includes(p_obj.code)
-    );
+    // Simply map all existing objects to the modal's state structure
+    const phasesForModal = phaseCodeObjects.map(p_obj => ({ 
+        phase_code: p_obj.code,
+        description: p_obj.description || "" 
+    }));
     
-    // ✅ FIX: Map the objects to the structure the modal's state expects: { phase_code: 'string' }
-    const phasesForModal = editablePhaseObjects.map(p_obj => ({ phase_code: p_obj.code }));
-
-    // Return the job data, overwriting 'phases' with the correctly prepared array
     return { ...job, phases: phasesForModal };
 };
-
 
     const formatRole = (role) => {
         if (!role) return "";
@@ -1818,8 +1921,7 @@ const makeTableWithPagination = (type, title, headers, rowRender, extra = null) 
     const itemLabel = isExtraObject ? null:extra;
     const label = itemLabel || type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     const key = typeToStateKey[type];
-    const dataArr = data[key] || [];
-
+const dataArr = (isExtraObject && extra.dataOverride) ? extra.dataOverride : (data[key] || []);
     // This correctly creates a list of ONLY active items
     const activeData = dataArr.filter(item => item.status !== 'inactive');
 
@@ -1889,6 +1991,7 @@ return (
           ? extra.activeSection
           : type
       }
+      customFilter={isExtraObject ? extra.customFilter : null} // <-- Add this line
     />
 
     <PaginationControls
@@ -1948,35 +2051,118 @@ return (
 
                     </>);
                 });
-// Inside the renderSection function...
-// In AdminDashboard.js, inside renderSection...
-case "equipment":
-  return makeTableWithPagination(
-    "equipment",
-    "Equipment Management",
-    ["ID", "Name", "Category Name", "Department", "Category No.", "VIN No.", "Status"],
-    e => (
-      <>
-        <td key={e.id}>{e.id}</td>
-        <td key={e.name} className="expandable" title={e.name}>{e.name}</td>
-        <td>{e.category_rel?.name || "N/A"}</td>
-        <td>{e.department_rel?.name || "N/A"}</td>
-        <td>{e.category_rel?.number || "N/A"}</td>
-        <td key={e.vin_number}>{e.vin_number}</td>
-        <td>
-          {(() => {
-            const statusMap = {
-              active: "Active",
-              inactive: "Inactive",
-              maintenance: "In Maintenance",
-              on_leave: "On Leave",
-            };
-            return statusMap[e.status?.toLowerCase()] || e.status;
-          })()}
-        </td>
-      </>
-    )
-  );
+case "equipment": {
+    const equipmentData = data.equipment || [];
+    const normalizeDept = (name = "") => name.replace(/\s+/g, "").toUpperCase();
+    
+    const availableDepts = Array.from(
+        equipmentData.reduce((map, e) => {
+            const name = e.department_rel?.name;
+            if (!name) return map;
+            const key = normalizeDept(name);
+            if (!map.has(key)) map.set(key, name);
+            return map;
+        }, new Map()).values()
+    ).sort((a, b) => a.localeCompare(b));
+
+    const filteredEquipment = equipmentDeptFilter === "All"
+        ? equipmentData
+        : equipmentData.filter(e => normalizeDept(e.department_rel?.name) === normalizeDept(equipmentDeptFilter));
+
+    // **NEW: Custom edit handler with data transformation**
+const handleEditEquipment = (equipment) => {
+    // Find actual category ID from categorynumber
+    const categoryMatch = categories.find(cat => cat.number === equipment.category_rel?.number);
+    const realCategoryId = categoryMatch?.id || '';
+    
+    const formData = {
+        id: equipment.id || '',
+        name: equipment.name || '',
+        departmentId: equipment.department_rel?.id?.toString() || '',
+        categorynumber: equipment.category_rel?.number?.toString() || '',
+        categoryid: realCategoryId.toString(),  // ← ADD THIS: Real category ID
+        category: equipment.category_rel?.name || '',
+        vinnumber: equipment.vin_number || '',
+        status: equipment.status === 'active' ? 'Active' : 'Inactive'
+    };
+    
+    setSelectedDepartmentId(formData.departmentId);
+    setSelectedCategoryNumber(formData.categorynumber);
+    
+    setModal({ shown: true, type: 'equipment', title: 'Edit Equipment', mode: 'edit', item: formData });
+};
+
+
+
+    // Your existing filter dropdown (unchanged)
+    const filterDropdown = (
+        <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            backgroundColor: "#f8f9fa",
+            padding: "2px 12px", 
+            borderRadius: "8px", 
+            border: "1px solid #00bcd4",
+            boxShadow: "inset 0 1px 2px rgba(0,0,0,0.075)",
+            gap: "8px"
+        }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#007b8a" }}>
+                <FaBars style={{ fontSize: "12px" }} /> 
+                <span style={{ fontWeight: "700", fontSize: "13px", textTransform: "uppercase" }}>Dept:</span>
+            </div>
+            <select
+                value={equipmentDeptFilter}
+                onChange={(e) => setEquipmentDeptFilter(e.target.value)}
+                style={{ 
+                    width: "180px", 
+                    height: "38px", 
+                    border: "none", 
+                    backgroundColor: "transparent", 
+                    fontSize: "14px", 
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    outline: "none",
+                    color: "#333"
+                }}
+            >
+                <option value="MLCJOBS">MLC JOBS</option>
+                <option value="All">All Departments</option>
+                {availableDepts.filter(d => normalizeDept(d) !== "MLCJOBS").map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                ))}
+            </select>
+        </div>
+    );
+
+    return (
+        <div>
+            {makeTableWithPagination(
+                "equipment",
+                "Equipment Inventory",
+                ["ID", "Name", "Category Name", "Department", "Category No.", "VIN No.", "Status"],
+                (e) => (
+                    <>
+                        <td>{e.id}</td>
+                        <td className="expandable" title={e.name}>{e.name}</td>
+                        <td>{e.category_rel?.name || "N/A"}</td>
+                        <td>{e.department_rel?.name || "N/A"}</td>
+                        <td>{e.category_rel?.number || "N/A"}</td>
+                        <td>{e.vin_number || "-"}</td>
+                        <td>{capitalizeFirstLetter(e.status)}</td>
+                    </>
+                ),
+                { 
+                    dataOverride: filteredEquipment, 
+                    customFilter: filterDropdown,
+                    onEdit: handleEditEquipment,  // **CRITICAL: Add this line**
+                    onDelete: (id) => handleDeleteItem('equipment', id),
+                    onToggleStatus: (item, newStatus) => handleToggleStatus('equipment', item, newStatus)
+                }
+            )}
+        </div>
+    );
+}
+
 
 
 // Inside the renderSection function (case "vendors"):
@@ -2351,9 +2537,42 @@ const getStatusOptions = (type) => {
 };
 
 // ✅ FIX: Added handleToggleStatus and activeSection to props
-const DataTableSection = ({ title, headers, data = [], renderRow, onDelete, onAdd, onEdit, extraActions, handleToggleStatus, activeSection }) => (
-    <div className="data-table-container">
-        <div className="section-header"><h2>{title}</h2>{onAdd && <button onClick={onAdd} className="btn btn-primary">Add New</button>}</div>
+const DataTableSection = ({ title, headers, data = [], renderRow, onDelete, onAdd, onEdit, extraActions, handleToggleStatus, activeSection,customFilter }) => (
+<div className="data-table-container">
+    <div className="section-header" style={{ 
+      display: "flex", 
+      justifyContent: "space-between", 
+      alignItems: "center", // Vertically centers everything in the row
+      marginBottom: "20px" 
+    }}>
+      <h2 style={{ margin: 0, lineHeight: 1 }}>{title}</h2>
+      
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {customFilter && (
+          <div className="custom-filter-wrapper" style={{ display: "flex", alignItems: "center" }}>
+            {/* If the dropdown still looks small, add: 
+               style={{ height: '38px' }} to your <select> in renderSection 
+            */}
+            {customFilter}
+          </div>
+        )}
+        
+        {onAdd && (
+          <button 
+            onClick={onAdd} 
+            className="btn btn-primary" 
+            style={{ 
+              margin: 0, 
+              height: '38px', // Explicit height to match a standard form control
+              display: 'flex', 
+              alignItems: 'center' 
+            }}
+          >
+            Add New
+          </button>
+        )}
+      </div>
+    </div>
 <table className={`data-table ${title.includes("Equipment") ? "equipment-table" : ""}`}>
             <thead><tr>{headers.map(h => <th key={h}>{h}</th>)}<th>Actions</th></tr></thead>
             <tbody>

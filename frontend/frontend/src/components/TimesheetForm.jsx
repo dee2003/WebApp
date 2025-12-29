@@ -170,6 +170,7 @@ const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
         // Fetch all foremen
         axios.get(`${API_URL}/users/role/foreman`)
             .then(foremenRes => {
+                console.log("Foremen with class codes:", foremenRes.data); // Verify class_1/class_2 exist here
                 const allForemen = foremenRes.data;
 
                 // Fetch crew mappings to filter foremen
@@ -468,13 +469,11 @@ const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
     };
 const handleLocationChange = async (query) => {
     setLocation(query);
-
     if (query.length > 3) {
         try {
             const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
                 query
             )}.json?access_token=${MAPBOX_TOKEN}&country=us&types=address`;
-
             const res = await axios.get(endpoint);
             setSuggestions(res.data.features || []);
         } catch (err) {
@@ -539,31 +538,55 @@ const handleLocationChange = async (query) => {
         return result;
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+const handleSubmit = async (e) => {
+    e.preventDefault();
 
-        if (!selectedForemanId || !selectedJobCode) {
-            alert("Please select both Foreman and Job Code before submitting.");
+    if (!selectedForemanId || !selectedJobCode) {
+        alert("Please select both Foreman and Job Code before submitting.");
+        return;
+    }
+
+    setLoading(true);
+
+    try {
+        // ------------------- 1. Fetch Foreman Employee Data -------------------
+        const { data: foremanEmployee } = await axios.get(
+            `${API_URL}/employees/${selectedForemanId}`
+        );
+
+        if (!foremanEmployee) {
+            alert("Foreman employee record not found.");
+            setLoading(false);
             return;
         }
 
-        const selectedSupervisor = supervisors.find(
-            (sup) => sup.id === parseInt(selectedSupervisorId, 10)
-        );
+        console.log("1. Foreman Employee Data:", foremanEmployee);
 
-    
-        const selectionData = {
-            vendor_categories: selectedVendorCategories,
-            selectedvendors: selectedVendors,
-            selected_vendor_materials: getSelectedVendorMaterials(),
-            materialcategories: selectedMaterialCategories,
-            selectedmaterials: selectedMaterials,
-            selected_material_items: getSelectedMaterialItems(), // ✅ WITH UNDERSCORE
-            dumpingcategories: selectedDumpingCategories,
-            selecteddumpingsites: selectedDumpingSites,
-            selecteddumpingmaterials: getSelectedDumpingMaterials(),
+        // ------------------- 2. Crew Employees (excluding foreman) -------------------
+        const crewEmployees = foremanData?.employees ? [...foremanData.employees] : [];
+        console.log("2. Crew Employees:", crewEmployees);
+
+        // ------------------- 3. Build Foreman Object (fully dynamic) -------------------
+        const foremanAsFirstEmployee = {
+            id: String(foremanEmployee.id),
+            first_name: foremanEmployee.first_name,
+            last_name: foremanEmployee.last_name,
+            status: "active",
+            class_1: foremanEmployee.class_1 || "",
+            class_2: foremanEmployee.class_2 || "",
         };
 
+        console.log("3. Foreman Object:", foremanAsFirstEmployee);
+
+        // ------------------- 4. Final Ordered Employees -------------------
+        const finalOrderedEmployees = [foremanAsFirstEmployee, ...crewEmployees];
+
+        // ------------------- 5. Supervisor -------------------
+        const selectedSupervisor = supervisors.find(
+            sup => sup.id === parseInt(selectedSupervisorId, 10)
+        );
+
+        // ------------------- 6. Build Timesheet Data -------------------
         const timesheetData = {
             job_name: jobName,
             job: {
@@ -571,72 +594,59 @@ const handleLocationChange = async (query) => {
                 phase_codes: selectedPhases,
             },
             time_of_day: timeOfDay,
-            
             location,
             contract_no: contract,
             project_engineer: projectEngineer,
             supervisor: selectedSupervisor
                 ? {
-                    id: selectedSupervisor.id,
-                    name: `${selectedSupervisor.first_name} ${selectedSupervisor.last_name}`,
-                }
+                      id: selectedSupervisor.id,
+                      name: `${selectedSupervisor.first_name} ${selectedSupervisor.last_name}`,
+                  }
                 : null,
-            ...foremanData,
+            ...foremanData, // other crew metadata
+            employees: finalOrderedEmployees,
             workPerformed: workDescription,
-            ...selectionData,
+            vendor_categories: selectedVendorCategories,
+            selectedvendors: selectedVendors,
+            selected_vendor_materials: getSelectedVendorMaterials(),
+            selected_material_items: getSelectedMaterialItems(),
+            selecteddumpingmaterials: getSelectedDumpingMaterials(),
         };
 
+        // ------------------- 7. Payload -------------------
         const payload = {
             foreman_id: parseInt(selectedForemanId, 10),
-            date: date instanceof Date 
-                ? date.toISOString().split('T')[0] // "YYYY-MM-DD"
-                : date, // in case it’s already a string    
+            date: date instanceof Date ? date.toISOString().split("T")[0] : date,
             job_phase_id: selectedJobPhaseId,
             data: timesheetData,
             status: "Pending",
         };
 
-        console.log("📦 Sending Timesheet Payload:", payload);
-        setLoading(true);
+        console.log("4. Final Payload:", payload);
 
-        try {
-            // 1️⃣ Send timesheet to backend
-            const res = await axios.post(`${API_URL}/timesheets/`, payload);
-            const createdTimesheet = res.data;
+        // ------------------- 8. Submit Timesheet -------------------
+        const res = await axios.post(`${API_URL}/timesheets/`, payload);
+        alert("Timesheet sent successfully!");
 
-            alert("Timesheet sent successfully!");
-            const selectedForeman = foremen.find(f => f.id === parseInt(selectedForemanId, 10));
-            const recipientEmail = selectedForeman?.email;
-
-            console.log("Selected Foreman:", selectedForeman);
-            console.log("Recipient email:", recipientEmail);
-            // 2️⃣ Send email notification if valid email exists
-            // After timesheet creation (around line with "Send email notification"):
-
-            if (recipientEmail) {
-                const notificationPayload = {
-                    email: recipientEmail,
-                    subject: "Timesheet Created Successfully",
-                    message: `Hello, your timesheet ID ${createdTimesheet.id} has been successfully created.`
-                };
-
-                try {
-                    await axios.post(`${API_URL}/timesheets/send-notification`, notificationPayload);
-                    console.log("Notification sent successfully");
-                } catch (notifErr) {
-                    console.error("Failed to send notification", notifErr.response?.data || notifErr.message);
-                }
-            } else {
-                console.warn("No foreman email available for notification");
-            }
-            onClose();
-        } catch (err) {
-            console.error("❌ Error sending timesheet:", err.response?.data || err.message);
-            alert(`Error: ${JSON.stringify(err.response?.data?.detail || err.message)}`);
-        } finally {
-            setLoading(false);
+        // ------------------- 9. Notification -------------------
+        if (foremanEmployee.email) {
+            await axios.post(`${API_URL}/timesheets/send-notification`, {
+                email: foremanEmployee.email,
+                subject: "Timesheet Created Successfully",
+                message: `Timesheet ID ${res.data.id} created.`,
+            });
         }
-    };
+
+        onClose();
+    } catch (err) {
+        console.error("❌ SUBMISSION ERROR:", err.response?.data || err.message);
+        alert("Error sending timesheet.");
+    } finally {
+        setLoading(false);
+    }
+};
+
+
 
 
     return (
