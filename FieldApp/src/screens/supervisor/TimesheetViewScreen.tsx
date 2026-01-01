@@ -2803,10 +2803,7 @@ const populateMaterialUnits = (materials: any[] = []): UnitState => {
   const state: UnitState = {};
   materials.forEach(e => {
     const id = String(e.id);  // "123"
-    const unit =
-      e.unit ||                         // from materials_trucking
-      e.selectedMaterials?.[0]?.unit || // if metadata style
-      null;
+const unit = e.unit || 'Hrs';
     state[id] = unit;
   });
   return state;
@@ -4123,19 +4120,25 @@ const renderTableBlock = (
                         </Text>
                       </View>
                     )}
-
-                    {/* Unit */}
-                    {isSimple && (
-                      <View
-                        style={[
-                          styles.dataCell,
-                          { width: COL_UNIT },
-                          styles.borderRight,
-                        ]}
-                      >
-                        <Text>{unitState?.[entityId] || ''}</Text>
-                      </View>
-                    )}
+{/* Unit Cell inside renderTableBlock entities.map */}
+{isSimple && (
+  <View
+    style={[
+      styles.dataCell,
+      { width: COL_UNIT },
+      styles.borderRight,
+    ]}
+  >
+    <Text>
+      {/* Priority: 
+        1. State (if edited)
+        2. Specifically 'Hrs' for Materials/Trucking
+        3. 'Loads' for Dumping
+      */}
+      {unitState?.[entityId] || (isMaterial ? 'Hrs' : (type === 'dumping_site' ? 'Loads' : ''))}
+    </Text>
+  </View>
+)}
 
                     {/* Tickets */}
                     {isSimple && (

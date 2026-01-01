@@ -452,21 +452,19 @@ def get_status_for_date(date: str, supervisor_id: int, db: Session = Depends(get
     try:
         query_date = datetime.strptime(date, "%Y-%m-%d").date()
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format, expected YYYY-MM-DD")
+        raise HTTPException(status_code=400, detail="Invalid date format")
 
-    # --- 1. Check for UNREVIEWED Timesheets (Timesheets still in SUBMITTED status) ---
-    # We group by foreman to show the count per foreman in the error message
+    # 1. Timesheets (already using date)
     unreviewed_timesheets = (
         db.query(models.User.first_name, models.User.last_name, func.count(models.Timesheet.id).label("count"))
         .join(models.Timesheet, models.Timesheet.foreman_id == models.User.id)
         .filter(
             models.Timesheet.date == query_date,
-            models.Timesheet.status == "SUBMITTED", # Assuming 'SUBMITTED' means waiting for supervisor action
+            models.Timesheet.status == "SUBMITTED",
         )
         .group_by(models.User.first_name, models.User.last_name)
         .all()
     )
-    
     unreviewed_ts_list = [
         {"foreman_name": f"{name} {last}".strip(), "count": count} 
         for name, last, count in unreviewed_timesheets
@@ -474,17 +472,18 @@ def get_status_for_date(date: str, supervisor_id: int, db: Session = Depends(get
 
     # --- 2. Check for INCOMPLETE Tickets (Tickets missing a job code) ---
     # Note: Ticket model is not fully provided, so we assume a 'job_phase_id' check is sufficient
+# --- 2. Check for INCOMPLETE Tickets ---
     incomplete_tickets = (
-        db.query(models.User.first_name, models.User.last_name, func.count(models.Ticket.id).label("count"))
-        .join(models.Ticket, models.Ticket.foreman_id == models.User.id)
-        .filter(
-            cast(models.Ticket.created_at, Date) == query_date,
-            models.Ticket.status == "SUBMITTED", # Only check submitted tickets
-            models.Ticket.phase_code_id.is_(None)  # Use phase_code_id instead of job_phase_id
+            db.query(models.User.first_name, models.User.last_name, func.count(models.Ticket.id).label("count"))
+            .join(models.Ticket, models.Ticket.foreman_id == models.User.id)
+            .filter(
+                cast(models.Ticket.created_at, Date) == query_date,
+                models.Ticket.status == "SUBMITTED",
+                models.Ticket.phase_code_id.is_(None)
+            )
+            .group_by(models.User.first_name, models.User.last_name)
+            .all()
         )
-        .group_by(models.User.first_name, models.User.last_name)
-        .all()
-    )
 
     incomplete_ticket_list = [
         {"foreman_name": f"{name} {last}".strip(), "count": count} 

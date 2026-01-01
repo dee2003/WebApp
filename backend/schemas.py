@@ -840,3 +840,12 @@ class TimesheetWorkflowSchema(TimesheetWorkflowBase):
 
     class Config:
         from_attributes = True
+from pydantic import BaseModel, EmailStr
+
+class NotificationRequest(BaseModel):
+    email: str # You can use EmailStr if you have 'pydantic[email]' installed
+    subject: str
+    message: str
+
+    class Config:
+        from_attributes = True

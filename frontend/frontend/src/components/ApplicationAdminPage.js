@@ -15,7 +15,7 @@ import axios from "axios";
 import "./ApplicationAdmin.css";
 import { useLocation } from 'react-router-dom'; // Import useLocation
 
-const TIMESHEETS_PER_PAGE = 2;
+const TIMESHEETS_PER_PAGE = 10;
 const API_URL = "http://127.0.0.1:8000/api";
 
 export default function ApplicationAdmin({ user, onLogout }) {  // ✅ Add props
@@ -40,6 +40,7 @@ const [activeSection, setActiveSection] = useState(
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [filterDate, setFilterDate] = useState("");
   const timesheetsPerPage = TIMESHEETS_PER_PAGE;
 
   // --- NEW SEARCH STATE ---
@@ -47,20 +48,26 @@ const [activeSection, setActiveSection] = useState(
   const [searchQuery, setSearchQuery] = useState("");
 
   // --- UPDATED FILTER LOGIC ---
-  const filteredTimesheets = timesheets.filter((ts) => {
-    if (searchQuery.trim() === "") return true; // Show all if query is empty
+  // const filteredTimesheets = timesheets.filter((ts) => {
+  //   if (searchQuery.trim() === "") return true; // Show all if query is empty
 
-    const query = searchQuery.toLowerCase();
+  //   const query = searchQuery.toLowerCase();
 
-    if (searchType === "foreman") {
-      return ts.foreman_name?.toLowerCase().includes(query);
-    }
-    if (searchType === "jobCode") {
-      return ts.data?.job?.job_code?.toLowerCase().includes(query);
-    }
-    return true;
-  });
-
+  //   if (searchType === "foreman") {
+  //     return ts.foreman_name?.toLowerCase().includes(query);
+  //   }
+  //   if (searchType === "jobCode") {
+  //     return ts.data?.job?.job_code?.toLowerCase().includes(query);
+  //   }
+  //   return true;
+  // });
+const filteredTimesheets = timesheets.filter((ts) => {
+  const matchesSearch = searchType === "foreman"
+  ? ts.foreman_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  : ts.data?.job?.job_code?.toLowerCase().includes(searchQuery.toLowerCase());
+  const matchesDate = filterDate === "" || ts.date === filterDate;
+  return matchesSearch && matchesDate;
+})
   const totalPages = Math.ceil(filteredTimesheets.length / timesheetsPerPage);
 
   const currentDate = new Date().toLocaleDateString("en-US", {
@@ -169,6 +176,20 @@ const handleResendClick = async (timesheet) => {
   }
 };
 
+const handleFinalizeSchedule = async () => {
+  if(!filterDate){
+    alert("Please select a date first to finalize the schedule.");
+    return;
+  }
+  try{
+    await axios.post(`${API_URL}/timesheets/send-daily-schedule`,{
+      date:filterDate
+    });
+    setSuccessMessage(`Daily Schedule for ${filterDate} sent to the group!`);
+  } catch(err){
+    setError("Failed to send the group schedule.");
+  }
+};
 
   const confirmDelete = async () => {
     try {
@@ -383,7 +404,9 @@ const handleResendClick = async (timesheet) => {
                   Search
                 </button>
               </div>
+              
 
+              
               <button
                 className="btn btn-outline btn-sm"
                 onClick={() => {
@@ -394,6 +417,23 @@ const handleResendClick = async (timesheet) => {
               >
                 Clear Filter
               </button>
+                <div className="date-finalize-wrapper" style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+              <input
+              type="date"
+              className="search-input"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              />
+              <button
+              className="btn btn-primary"
+              onClick={handleFinalizeSchedule}
+              disabled={!filterDate || filteredTimesheets.length === 0}
+              >
+                <FaPaperPlane style={{marginRight: '8px'}}/>
+                Finalize & Send Schedule
+              </button>
+              </div>
+              
             </div>
             {/* --- END NEW SEARCH BAR --- */}
 
@@ -446,7 +486,7 @@ const handleResendClick = async (timesheet) => {
   <button
     className="btn btn-warning btn-sm resend-btn"
     onClick={(e) => {
-      e.stopPropagation();
+      e.stopPropagatin();
       handleResendClick(ts);  // ✅ Pass full timesheet object (ts)
     }}
     title="Edit & Resend timesheet"
