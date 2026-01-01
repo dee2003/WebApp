@@ -1382,3 +1382,5 @@ def notify_natalia(timesheet_id: int, db: Session = Depends(get_db)):
         message=alert_msg
     )
     return send_notification(notification)
+
+

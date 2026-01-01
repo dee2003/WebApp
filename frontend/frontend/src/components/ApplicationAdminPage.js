@@ -446,7 +446,7 @@ const handleResendClick = async (timesheet) => {
   <button
     className="btn btn-warning btn-sm resend-btn"
     onClick={(e) => {
-      e.stopPropagatin();
+      e.stopPropagation();
       handleResendClick(ts);  // ✅ Pass full timesheet object (ts)
     }}
     title="Edit & Resend timesheet"
