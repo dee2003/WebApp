@@ -25,6 +25,7 @@ class UserRole(str, enum.Enum):
     PROJECT_ENGINEER = "PROJECT_ENGINEER"
     ACCOUNTANT = "ACCOUNTANT"
     EXECUTIVE = "EXECUTIVE"
+    FLAGGER = "FLAGGER"  # ✅ ADD THIS LINE
 
 
 class ResourceStatus(str, enum.Enum):

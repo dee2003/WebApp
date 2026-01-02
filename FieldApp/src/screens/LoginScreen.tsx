@@ -53,7 +53,7 @@ type Props = {
   navigation: LoginScreenNavigationProp;
 };
 
-const validRoles = ['foreman', 'supervisor', 'project_engineer', 'executive'] as const;
+const validRoles = ['foreman', 'supervisor', 'project_engineer', 'executive', 'flagger'] as const;
 type ValidRole = (typeof validRoles)[number];
 
 function isValidRole(role: string): role is ValidRole {
@@ -137,7 +137,7 @@ const handleLogin = async () => {
 
     const userData: User = {
       ...response.data.user,
-      role: backendRole as "foreman" | "supervisor" | "project_engineer",
+role: backendRole as "foreman" | "supervisor" | "project_engineer" | "flagger",
     };
 
     // --- Handle Remember Me ---

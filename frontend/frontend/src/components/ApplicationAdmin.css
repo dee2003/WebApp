@@ -295,22 +295,44 @@
   background-color: #c0392b;
 }
 
+/* Floating Toast Notification */
 .alert {
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: 6px;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 16px 24px;
+  border-radius: 8px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  animation: slideIn 0.3s ease-out;
+  min-width: 300px;
   font-weight: 500;
-  text-align: center;
 }
 
 .alert-success {
-  background-color: #e8f5e9;
-  color: #2e7d32;
+  background-color: #ecfdf5;
+  color: #065f46;
+  border-left: 5px solid #10b981;
 }
 
 .alert-error {
-  background-color: #fdecea;
-  color: #c62828;
+  background-color: #fef2f2;
+  color: #991b1b;
+  border-left: 5px solid #ef4444;
+}
+
+/* Animation for the notification */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 
@@ -504,6 +526,21 @@
   margin-bottom: 20px;
   flex-wrap: wrap; /* Allows "Clear" button to wrap on small screens */
 }
+.filter-bar {
+  display: flex;
+  align-items: center; /* Align to top so card height doesn't stretch search */
+  justify-content: space-between; /* This pushes the card to the right */
+  gap: 15px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.filter-left-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1; /* Takes up available space on the left */
+}
 .styled-search-container {
   display: flex;
   flex-grow: 1; /* Allows search bar to take available space */
@@ -591,6 +628,127 @@
   align-items: center;
 }
 
+
+/* Container for the Date and Button */
+.admin-action-card {
+  background: #ffffff;
+  border: 1px solid #e0e4e8;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 380px;
+}
+
+.action-header {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.action-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+/* Modern Date Picker Design */
+.date-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.date-input-wrapper label {
+  font-size: 0.8rem;
+  color: #1e293b;
+  font-weight: 600;
+}
+.react-datepicker-wrapper {
+  width: 100%;
+}
+.modern-date-picker {
+  width: 150px;
+  padding: 10px 14px;
+  border: 2px solid #38a3a5; /* Matches your search bar theme */
+  border-radius: 8px;
+  font-size: 0.95rem;
+  color: #333;
+  outline: none;
+  background-color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modern-date-picker:focus {
+  border-color: #22577a;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(56, 163, 165, 0.1);
+}
+
+/* Finalize Button Design */
+.finalize-btn {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 24px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.finalize-btn:hover:not(.disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.finalize-btn.disabled {
+  background: #729bce;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.btn-content {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.plane-icon {
+  font-size: 1.4rem;
+  transition: transform 0.3s;
+}
+
+.finalize-btn:hover:not(.disabled) .plane-icon {
+  transform: translateX(3px) translateY(-3px);
+}
+
+.btn-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.main-text {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.react-datepicker__close-icon::after {
+  background-color: #38a3a5;
+  font-size: 12px;
+}
+.sub-text {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  font-weight: 400;
+}
 @media (max-width: 768px) {
   .resend-btn {
     padding: 4px 8px;

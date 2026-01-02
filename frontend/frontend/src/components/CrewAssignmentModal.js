@@ -81,8 +81,9 @@ const CrewAssignmentModal = ({ mode, initialData, onSave, onClose, allCrews, all
         onSave({ foreman_id: selectedForeman, ...assignments });
     };
 
-    const availableForemen = users.filter(u => u.role?.toLowerCase() === "foreman");
-
+const availableForemen = users.filter(u => 
+    u.role?.toLowerCase() === "foreman" || u.role?.toLowerCase() === "flagger"
+);
     return (
         <div className="modal">
             <div className="modal-content large">

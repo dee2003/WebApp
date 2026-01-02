@@ -1515,7 +1515,7 @@ const handleToggleStatus = async (type, item, newStatus) => {
             { value: 'PROJECT_ENGINEER', label: 'Project Engineer' },
             { value: 'ACCOUNTANT', label: 'Accountant' },
             { value: 'EXECUTIVE', label: 'Executive' },
-
+{ value: 'FLAGGER', label: 'Flagger' }, // <--- ADD THIS LINE
         ], required: true, defaultValue: 'ADMIN' },
 
         // --- ADD THIS OBJECT ---
@@ -2353,8 +2353,12 @@ case "job-phases": {
 
 
             case "crewMapping": 
-                const allResources = { 
-                            users: (data.users || []).filter(u => u.status === 'active'),
+const allResources = { 
+        // Update this line to include both FOREMAN and FLAGGER roles
+        users: (data.users || []).filter(u => 
+            u.status === 'active' && 
+            (u.role === 'FOREMAN' || u.role === 'FLAGGER')
+        ),
 employees: data.employees || [], equipment: data.equipment || [], 
                     materials: data.materials || [], vendors: data.vendors || [], dumping_sites: data.dumping_sites || []
                 }; 

@@ -1,4 +1,4 @@
 // src/config.ts
-const API_URL: string = "https://0ae6f7f8ad66.ngrok-free.app";
+const API_URL: string = "https://f91dac1e068e.ngrok-free.app";
 
 export default API_URL;

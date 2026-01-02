@@ -14,7 +14,7 @@ from fastapi.security import OAuth2PasswordRequestForm  # <--- ADD THIS LINE
 from . import token  # <--- ADD THIS LINE
 from . import models, schemas, database, crud
 from .crud import create_crud_router
-from .routers import timesheet, tickets, review, equipment, submissions, project_engineer,job_phases,vendor_options,vendor_router, vendor_materials, material_trucking_router, material_option_router, dumping_site_router,section_category_router, section_list_router  
+from .routers import timesheet, tickets, review, equipment, submissions, project_engineer,job_phases,vendor_options,vendor_router, vendor_materials, material_trucking_router, material_option_router, dumping_site_router,section_category_router, section_list_router,crew_mapping
 from .ocr import ocr_main
 from sqlalchemy import and_
 from .routers.dropdowns import router as dropdowns_router
@@ -143,6 +143,8 @@ def get_crew_mapping_by_id(crew_id: int, db: Session = Depends(database.get_db))
     if not mapping:
         raise HTTPException(status_code=404, detail=f"Crew mapping with id {crew_id} not found")
     return mapping
+
+
 # In backend/main.py
 
 # -------------------------------
@@ -551,6 +553,7 @@ app.include_router(section_list_router.router)
 app.include_router(auth.router)           # Login + OTP (if it has them)
 app.include_router(password_reset.router) # Token reset ← MOUNT LAST
 app.include_router(web_password_reset.router)
+app.include_router(crew_mapping.router)
 
 
 

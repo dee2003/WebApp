@@ -14,6 +14,7 @@ import TimesheetForm from "./TimesheetForm";
 import axios from "axios";
 import "./ApplicationAdmin.css";
 import { useLocation } from 'react-router-dom'; // Import useLocation
+import DatePicker from "react-datepicker";
 
 const TIMESHEETS_PER_PAGE = 10;
 const API_URL = "http://127.0.0.1:8000/api";
@@ -176,21 +177,57 @@ const handleResendClick = async (timesheet) => {
   }
 };
 
+// const handleFinalizeSchedule = async () => {
+//   if(!filterDate){
+//     alert("Please select a date first to finalize the schedule.");
+//     return;
+//   }
+//   try{
+//     await axios.post(`${API_URL}/timesheets/send-daily-schedule`,{
+//       date:filterDate
+//     });
+//     setSuccessMessage(`Daily Schedule for ${filterDate} sent to the group!`);
+//   } catch(err){
+//     setError("Failed to send the group schedule.");
+//   }
+// };
 const handleFinalizeSchedule = async () => {
-  if(!filterDate){
-    alert("Please select a date first to finalize the schedule.");
+  if (!filterDate) {
+    setError("Please select a date first.");
     return;
   }
-  try{
-    await axios.post(`${API_URL}/timesheets/send-daily-schedule`,{
-      date:filterDate
+
+  // 1. Add Confirmation Dialog
+  const isConfirmed = window.confirm(
+    `Are you sure you want to finalize and send the schedule for ${new Date(filterDate.replace(/-/g, '/')).toLocaleDateString()}?`
+  );
+
+  if (!isConfirmed) return;
+
+  try {
+    // Show a temporary "Sending..." state if you like, or just proceed
+    await axios.post(`${API_URL}/timesheets/send-daily-schedule`, {
+      date: filterDate
     });
-    setSuccessMessage(`Daily Schedule for ${filterDate} sent to the group!`);
-  } catch(err){
-    setError("Failed to send the group schedule.");
+
+    // 2. Set Success Message
+    setSuccessMessage(`Daily Schedule for ${filterDate} sent successfully!`);
+    
+    // 3. Auto-hide notification after 4 seconds
+    setTimeout(() => {
+      setSuccessMessage("");
+    }, 4000);
+
+  } catch (err) {
+    console.error("Schedule send error:", err);
+    setError("Failed to send the group schedule. Please try again.");
+    
+    // Auto-hide error after 4 seconds
+    setTimeout(() => {
+      setError("");
+    }, 4000);
   }
 };
-
   const confirmDelete = async () => {
     try {
       await axios.delete(`${API_URL}/timesheets/${selectedId}/`);
@@ -392,12 +429,7 @@ const handleFinalizeSchedule = async () => {
                       setCurrentPage(1);
                     }}
                   />
-                  {/* <button
-                    className="camera-btn"
-                    title="Image search (not implemented)"
-                  >
-                    <FaCamera />
-                  </button> */}
+                  
                 </div>
                 <button className="search-submit-btn">
                   <FaSearch />
@@ -417,22 +449,51 @@ const handleFinalizeSchedule = async () => {
               >
                 Clear Filter
               </button>
-                <div className="date-finalize-wrapper" style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-              <input
-              type="date"
-              className="search-input"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-              />
-              <button
-              className="btn btn-primary"
-              onClick={handleFinalizeSchedule}
-              disabled={!filterDate || filteredTimesheets.length === 0}
-              >
-                <FaPaperPlane style={{marginRight: '8px'}}/>
-                Finalize & Send Schedule
-              </button>
-              </div>
+              {/* --- ADMIN ACTION SECTION --- */}
+<div className="admin-action-card">
+
+  <div className="action-controls">
+   <div className="date-input-wrapper">
+        {/* <label htmlFor="schedule-date">Select Date (MM/DD/YYYY)</label> */}
+        <DatePicker
+  id="schedule-date"
+  // FIX: Use forward slashes to force local timezone parsing
+  selected={filterDate ? new Date(filterDate.replace(/-/g, '/')) : null}
+  onChange={(date) => {
+    if (!date) {
+      setFilterDate("");
+      return;
+    }
+    // FIX: Extract local year, month, and day to avoid UTC shifts
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    const formattedDate = `${year}-${month}-${day}`;
+    setFilterDate(formattedDate);
+    setCurrentPage(1);
+  }}
+  dateFormat="MM/dd/yyyy"
+  placeholderText="Select Date (MM/DD/YYYY)"
+  className="modern-date-picker"
+  isClearable
+/>
+      </div>
+    
+    <button
+      className={`finalize-btn ${(!filterDate || filteredTimesheets.length === 0) ? 'disabled' : ''}`}
+      onClick={handleFinalizeSchedule}
+      disabled={!filterDate || filteredTimesheets.length === 0}
+    >
+      <div className="btn-content">
+        <FaPaperPlane className="plane-icon" />
+        <div className="btn-text">
+          <span className="main-text">Finalize & Send</span>
+        </div>
+      </div>
+    </button>
+  </div>
+</div>
               
             </div>
             {/* --- END NEW SEARCH BAR --- */}

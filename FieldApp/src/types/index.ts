@@ -5,7 +5,7 @@ export type TimesheetStatus = 'Pending' | 'Submitted' | 'Approved' | 'Rejected' 
 export interface User {
   id: number;
   username: string;
-  role: 'foreman' | 'supervisor' | 'project_engineer' | 'admin';
+  role: 'foreman' | 'supervisor' | 'project_engineer' | 'admin'| 'flagger';
   first_name: string;
   last_name: string;
   middle_name: string;
