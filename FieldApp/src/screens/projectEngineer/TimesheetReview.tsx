@@ -3482,31 +3482,30 @@ const renderTableBlock = (
               <Text>{classCode === 'N/A' ? '' : classCode}</Text>
             </View>
 
-            {/* Phase cells */}
-            {phaseCodes.map((phase, phaseIndex) => {
-              const value =
-                classCode === 'N/A'
-                  ? '0'
-                  : ((hoursState as EmployeeHourState)[entityId]?.[phase]?.[classCode] ||
-                      '0');
-              const isLastPhase = phaseIndex === phaseCodes.length - 1;
-              const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
-
-              return (
-                <View
-                  key={`${entityId}_${classCode}_${phase}`}
-                  style={[
-                    styles.dataCell,
-                    styles.dynamicPhaseColEmployee, // width only, no borderRight
-                    phaseBorder,                    // single vertical border
-                  ]}
-                >
-                  {renderCellContent(value, (text) =>
-                    updateEmployeeState(entityId, phase, classCode, text)
-                  )}
-                </View>
-              );
-            })}
+{phaseCodes.map((phase, phaseIndex) => {
+  const value =
+    classCode === 'N/A'
+      ? '0'
+      : ((hoursState as EmployeeHourState)[entityId]?.[phase]?.[classCode] ||
+         '0');
+  const isLastPhase = phaseIndex === phaseCodes.length - 1;
+  const phaseBorder = isLastPhase ? {} : styles.phaseGroupBorderRight;
+  const num = parseFloat(value) || 0;
+  return (
+    <View
+      key={`${entityId}_${classCode}_${phase}`}
+      style={[
+        styles.dataCell,
+        styles.dynamicPhaseColEmployee, // width only, no borderRight
+        phaseBorder,                    // single vertical border
+      ]}
+    >
+      <Text style={{ flex: 1, textAlign: 'center' }}>
+        {num.toFixed(1)}
+      </Text>
+    </View>
+  );
+})}
 
             {/* Total */}
 <View style={[styles.dataCell, styles.colTotal, styles.borderLeft]}>

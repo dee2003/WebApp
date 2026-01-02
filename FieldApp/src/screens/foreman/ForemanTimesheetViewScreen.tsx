@@ -138,26 +138,27 @@ const ForemanTimesheetViewScreen = ({ navigation, route }: any) => {
                     const state: UnitState = {};
                     entities.forEach(e => {
                         let id = (type === 'vendor') ? `${e.vendor_id || e.id}_${e.material_id || e.id}` : String(e.id);
-                        state[id] = e.unit || (type === 'dumping' ? 'Loads' : null);
-                    });
+state[id] = (type === 'material') ? 'Hrs' : (e.unit || (type === 'dumping' ? 'Loads' : null));                    });
                     return state;
                 };
-
-                const populateEmployeeComplex = (entities: any[] = []): EmployeeHourState => {
-                    const state: EmployeeHourState = {};
-                    entities.forEach((e) => {
-                        state[e.id] = {};
-                        if (e.hours_per_phase) {
-                            Object.entries(e.hours_per_phase).forEach(([phase, phaseHours]: any) => {
-                                state[e.id][phase] = {};
-                                Object.entries(phaseHours).forEach(([classCode, val]: any) => {
-                                    state[e.id][phase][classCode] = String(val || '0');
-                                });
-                            });
-                        }
+const populateEmployeeComplex = (entities: any[] = []): EmployeeHourState => {
+    const state: EmployeeHourState = {};
+    entities.forEach((e) => {
+        state[e.id] = {};
+        if (e.hours_per_phase) {
+            Object.entries(e.hours_per_phase).forEach(([phase, classData]: any) => {
+                state[e.id][phase] = {};
+                if (classData && typeof classData === 'object') {
+                    // This captures every class code key saved in the database
+                    Object.entries(classData).forEach(([classCode, val]: any) => {
+                        state[e.id][phase][classCode] = String(val || '0');
                     });
-                    return state;
-                };
+                }
+            });
+        }
+    });
+    return state;
+};
 
                 const populateEquipmentComplex = (entities: any[] = []): ComplexHourState => {
                     const state: ComplexHourState = {};
@@ -347,59 +348,117 @@ const handleSendTimesheet = async (id: number) => {
                             <Text style={[styles.headerCell, styles.colTotal, styles.lastCell, styles.borderLeft, styles.headerCellBottomBorder]}>Total</Text>
                         </View>
 
-                        {/* BODY */}
-                        {entities.map((e, idx) => {
-                            const eid = isVendor ? `${e.vendor_id || e.id}_${e.material_id || e.id}` : String(e.id);
-                            const total = isEquipment ? calculateTotalComplexHours(hoursState, eid) : isEmployee ? calculateTotalEmployeeHours(hoursState, eid) : calculateTotalSimpleHours(hoursState, eid);
-                            const name = isVendor ? e.vendor_name : (e.name || e.material_name || `${e.first_name || ''} ${e.last_name || ''}`);
-                            const isNew = (isVendor || type === 'material') ? name !== lastEntityName : true;
-                            if (isVendor || type === 'material') lastEntityName = name;
+{/* BODY */}
+{entities.map((e, idx) => {
+    // Unique ID for state lookup
+    const eid = isVendor ? `${e.vendor_id || e.id}_${e.material_id || e.id}` : String(e.id);
+    const name = isVendor ? e.vendor_name : (e.name || e.material_name || `${e.first_name || ''} ${e.last_name || ''}`);
+    
+    // --- SPECIAL HANDLING FOR EMPLOYEES WITH MULTIPLE CLASS CODES ---
+    if (isEmployee) {
+        const hoursForEmp = employeeHours[eid] || {};
+        // Get all unique class codes that have hours assigned for this employee
+        const activeClasses = new Set<string>();
+        Object.values(hoursForEmp).forEach(phaseObj => {
+            Object.keys(phaseObj).forEach(cls => activeClasses.add(cls));
+        });
 
-                            const tickTotal = isSimple ? calculateTotalSimpleHours(ticketsState, eid) : 0;
-                            const hasLink = isSimple && selectedTicketIds[eid] && selectedTicketIds[eid].length > 0;
+        // Fallback to default class if no hours are assigned yet
+        const displayClasses = activeClasses.size > 0 
+            ? Array.from(activeClasses) 
+            : [e.class_1 || '113'];
 
-                            return (
-                                <View key={idx} style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlternate]}>
-                                    {(type === 'material' || isDumping) && <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{isNew ? (e.id) : ''}</Text>}
-                                    {isVendor && <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{isNew ? e.vendor_id : ''}</Text>}
-                                    <View style={[styles.dataCell, styles.colName, styles.borderRight]}><Text style={styles.rowText} numberOfLines={2}>{isNew || isEquipment ? name : ''}</Text></View>
-                                    {isEmployee && <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{e.id}</Text>}
-                                    {isEquipment && <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{e.id}</Text>}
-                                    {isEmployee && <Text style={[styles.dataCell, styles.colClassCode, styles.borderRight]}>{e.class_1 || 'N/A'}</Text>}
-                                    {isVendor && <Text style={[styles.dataCell, styles.colMaterial, styles.borderRight]}>{e.material_name}</Text>}
-                                    {isSimple && <Text style={[styles.dataCell, styles.colUnit, styles.borderRight]}>{isDumping ? 'Loads' : (unitState[eid] || e.unit || '')}</Text>}
-                                    {isSimple && <Text style={[styles.dataCell, styles.colTickets, styles.borderRight]}>{tickTotal > 0 ? tickTotal : '-'}</Text>}
-                                    
-                                    {isSimple && (
-                                        <View style={[styles.dataCell, styles.colLink, styles.borderRight, { justifyContent: 'center' }]}>
-                                            {hasLink ? (
-                                                <TouchableOpacity onPress={() => handleViewLinkedTicket(eid)}>
-                                                    <Feather name="paperclip" size={16} color={THEME.primary} />
-                                                </TouchableOpacity>
-                                            ) : (
-                                                <Text style={{color: '#999'}}>-</Text>
-                                            )}
-                                        </View>
-                                    )}
+        return displayClasses.map((classCode, classIdx) => {
+            // Calculate total for this specific class code across all phases
+            const classTotal = Object.values(hoursForEmp).reduce((acc, phaseObj) => 
+                acc + (parseFloat(phaseObj[classCode] || '0')), 0
+            );
 
-                                    {phaseCodes.map((p: string, i: number) => (
-                                        <View key={p} style={[isEquipment ? styles.dynamicPhaseColEquipment : isEmployee ? styles.dynamicPhaseColEmployee : styles.dynamicPhaseColSimple, i === phaseCodes.length - 1 ? {} : styles.phaseGroupBorderRight]}>
-                                            {isEquipment ? (
-                                                <>
-                                                    <Text style={[styles.dataCell, styles.colHoursEquipment, styles.borderRight]}>{parseFloat(hoursState[eid]?.[p]?.REG || '0').toFixed(1)}</Text>
-                                                    <Text style={[styles.dataCell, styles.colHoursEquipment, styles.lastCell]}>{parseFloat(hoursState[eid]?.[p]?.['S.B'] || '0').toFixed(1)}</Text>
-                                                </>
-                                            ) : (
-                                                <Text style={[styles.dataCell, { flex: 1 }, styles.lastCell]}>
-                                                    {isEmployee ? parseFloat(hoursState[eid]?.[p]?.[e.class_1] || '0').toFixed(1) : parseFloat(hoursState[eid]?.[p] || '0').toFixed(1)}
-                                                </Text>
-                                            )}
-                                        </View>
-                                    ))}
-                                    <Text style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft]}>{total.toFixed(1)}</Text>
-                                </View>
-                            );
-                        })}
+            return (
+                <View key={`${eid}-${classCode}`} style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlternate]}>
+                    {/* Only show ID and Name on the first row of the employee group */}
+                    <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>
+                        {classIdx === 0 ? eid : ''}
+                    </Text>
+                    <View style={[styles.dataCell, styles.colName, styles.borderRight]}>
+                        <Text style={styles.rowText} numberOfLines={2}>
+                            {classIdx === 0 ? name : ''}
+                        </Text>
+                    </View>
+                    
+                    {/* This cell now correctly shows the dynamic class code */}
+                    <Text style={[styles.dataCell, styles.colClassCode, styles.borderRight]}>
+                        {classCode}
+                    </Text>
+
+                    {phaseCodes.map((p: string, i: number) => (
+                        <View key={p} style={[styles.dynamicPhaseColEmployee, i === phaseCodes.length - 1 ? {} : styles.phaseGroupBorderRight]}>
+                            <Text style={[styles.dataCell, { flex: 1 }, styles.lastCell]}>
+                                {parseFloat(hoursForEmp[p]?.[classCode] || '0').toFixed(1)}
+                            </Text>
+                        </View>
+                    ))}
+                    <Text style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft]}>
+                        {classTotal.toFixed(1)}
+                    </Text>
+                </View>
+            );
+        });
+    }
+
+    // --- STANDARD HANDLING FOR EQUIPMENT, MATERIALS, VENDORS, DUMPING ---
+    const total = isEquipment ? calculateTotalComplexHours(hoursState, eid) : calculateTotalSimpleHours(hoursState, eid);
+    const isNew = (isVendor || type === 'material') ? name !== lastEntityName : true;
+    if (isVendor || type === 'material') lastEntityName = name;
+
+    const tickTotal = isSimple ? calculateTotalSimpleHours(ticketsState, eid) : 0;
+    const hasLink = isSimple && selectedTicketIds[eid] && selectedTicketIds[eid].length > 0;
+
+    return (
+        <View key={idx} style={[styles.tableRow, idx % 2 === 1 && styles.tableRowAlternate]}>
+            {(type === 'material' || isDumping) && <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{isNew ? (e.id) : ''}</Text>}
+            {isVendor && <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{isNew ? e.vendor_id : ''}</Text>}
+            <View style={[styles.dataCell, styles.colName, styles.borderRight]}><Text style={styles.rowText} numberOfLines={2}>{isNew || isEquipment ? name : ''}</Text></View>
+            
+            {isEquipment && <Text style={[styles.dataCell, styles.colId, styles.borderRight]}>{e.id}</Text>}
+            {isVendor && <Text style={[styles.dataCell, styles.colMaterial, styles.borderRight]}>{e.material_name}</Text>}
+{isSimple && (
+    <Text style={[styles.dataCell, styles.colUnit, styles.borderRight]}>
+        {/* Forces 'Hrs' for Trucking/Materials, 'Loads' for Dumping, and dynamic units for Vendors */}
+        {type === 'material' ? 'Hrs' : (isDumping ? 'Loads' : (unitState[eid] || e.unit || ''))}
+    </Text>
+)}            {isSimple && <Text style={[styles.dataCell, styles.colTickets, styles.borderRight]}>{tickTotal > 0 ? tickTotal : '-'}</Text>}
+            
+            {isSimple && (
+                <View style={[styles.dataCell, styles.colLink, styles.borderRight, { justifyContent: 'center' }]}>
+                    {hasLink ? (
+                        <TouchableOpacity onPress={() => handleViewLinkedTicket(eid)}>
+                            <Feather name="paperclip" size={16} color={THEME.primary} />
+                        </TouchableOpacity>
+                    ) : (
+                        <Text style={{color: '#999'}}>-</Text>
+                    )}
+                </View>
+            )}
+
+            {phaseCodes.map((p: string, i: number) => (
+                <View key={p} style={[isEquipment ? styles.dynamicPhaseColEquipment : styles.dynamicPhaseColSimple, i === phaseCodes.length - 1 ? {} : styles.phaseGroupBorderRight]}>
+                    {isEquipment ? (
+                        <>
+                            <Text style={[styles.dataCell, styles.colHoursEquipment, styles.borderRight]}>{parseFloat(hoursState[eid]?.[p]?.REG || '0').toFixed(1)}</Text>
+                            <Text style={[styles.dataCell, styles.colHoursEquipment, styles.lastCell]}>{parseFloat(hoursState[eid]?.[p]?.['S.B'] || '0').toFixed(1)}</Text>
+                        </>
+                    ) : (
+                        <Text style={[styles.dataCell, { flex: 1 }, styles.lastCell]}>
+                            {parseFloat(hoursState[eid]?.[p] || '0').toFixed(1)}
+                        </Text>
+                    )}
+                </View>
+            ))}
+            <Text style={[styles.dataCell, styles.colTotal, styles.lastCell, styles.borderLeft]}>{total.toFixed(1)}</Text>
+        </View>
+    );
+})}
                     </View>
                 </ScrollView>
             </View>

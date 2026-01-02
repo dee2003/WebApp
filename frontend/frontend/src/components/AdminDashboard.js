@@ -1523,7 +1523,7 @@ const handleToggleStatus = async (type, item, newStatus) => {
             { value: 'inactive', label: 'Inactive' },
         ], required: true, defaultValue: 'active' }
     ];
-            case "employee": return [ { name: "id", label: "Employee ID", required: true }, { name: "first_name", label: "First Name", required: true }, { name: "middle_name", label: "Middle Name" }, { name: "last_name", label: "Last Name", required: true }, { name: "class_1", label: "Class Code 1" }, { name: "class_2", label: "Class Code 2" }, { name: "status", label: "Status", type: "select", options: [ { value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" } ], required: true, defaultValue: "Active" } ];
+            case "employee": return [ { name: "id", label: "Employee ID", required: true }, { name: "first_name", label: "First Name", required: true }, { name: "middle_name", label: "Middle Name" }, { name: "last_name", label: "Last Name", required: true }, { name: "class_1", label: "Class Code 1" }, { name: "status", label: "Status", type: "select", options: [ { value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" } ], required: true, defaultValue: "Active" } ];
 case 'equipment':
   return [
     { name: 'id', label: 'Equipment ID', required: true, readOnly: modal.mode === 'edit' }, // Usually ID is also read-only
@@ -2035,7 +2035,7 @@ return (
                     return (<> 
                         <td key={e.id}>{e.id}</td> 
                         <td key={fullName}>{fullName}</td> 
-                        <td key={e.class_1}>{`${e.class_1 || ""}${e.class_2 ? " / " + e.class_2 : ""}`}</td> 
+<td key={e.class_1}>{e.class_1 || ""}</td>
                         {/* <td key={e.status}>{capitalizeFirstLetter(e.status)}</td> */}
                         <td>
   {(() => {

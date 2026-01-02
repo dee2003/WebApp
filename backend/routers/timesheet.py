@@ -11,7 +11,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from sqlalchemy.orm.attributes import flag_modified
 import os
-from ..models import Timesheet,JobPhase   # <-- import your model
+from ..models import Timesheet,JobPhase,ClassCode  # <-- import your model
 from ..database import get_db
 from ..auditing import log_action
 from .. import oauth2
@@ -454,7 +454,14 @@ def get_timesheet_workflows(timesheet_id: int, db: Session = Depends(get_db)):
         .order_by(TimesheetWorkflow.timestamp.desc())
         .all()
     )
-
+@router.get("/class-codes")
+def get_class_codes(db: Session = Depends(get_db)):
+    """
+    Retrieves all available class codes from the database.
+    """
+    # Query all codes sorted by the code number
+    codes = db.query(ClassCode).order_by(ClassCode.code).all()
+    return [c.to_dict() for c in codes]
 @router.get("/{timesheet_id}")
 def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
     """
@@ -1366,21 +1373,133 @@ def pe_review_and_generate_excel(
     return {"status": "success", "file_url": file_url, "timesheet_id": ts.id}
 
 
-@router.post("/{timesheet_id}/notify-executive")
-def notify_natalia(timesheet_id: int, db: Session = Depends(get_db)):
-    ts = db.query(models.Timesheet).filter(models.Timesheet.id == timesheet_id).first()
-    foreman = db.query(models.User).filter(models.User.id == ts.foreman_id).first()
+async def send_html_notification(request: NotificationRequest):
+    """Modified to support HTML emails for the daily schedule report."""
+    if not sender_email or not sender_password:
+        raise HTTPException(status_code=500, detail="SMTP credentials missing.")
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = request.email
+        msg['Subject'] = request.subject
+        
+        # CRITICAL: Use 'html' subtype instead of 'plain'
+        msg.attach(MIMEText(request.message, 'html'))
+
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+
+        return {"status": "Daily Schedule Sent", "recipient": request.email}
+    except Exception as e:
+        print(f"Email failure: {e}")
+        raise HTTPException(status_code=500, detail="Failed to dispatch consolidated email.")
+from fastapi import Body
+from sqlalchemy import Date, cast
+from email.mime.text import MIMEText
+
+@router.post("/send-daily-schedule")
+async def send_daily_schedule(
+    payload: dict = Body(...), 
+    db: Session = Depends(get_db)
+):
+    target_date = payload.get("date")
+    if not target_date:
+        raise HTTPException(status_code=400, detail="Date is required")
+
+    # Fetch timesheets for the specified date
+    timesheets = db.query(models.Timesheet).filter(
+        cast(models.Timesheet.date, Date) == target_date
+    ).options(joinedload(models.Timesheet.foreman)).all()
+
+    if not timesheets:
+        raise HTTPException(status_code=404, detail="No schedules found for this date")
+
+    table_rows = ""
+    # Styling to match the reference image
+    HEADER_STYLE = "background-color: #7a2323; color: white; padding: 10px; font-size: 12px; border: 1px solid #ddd; text-align: center; text-transform: uppercase;"
+    CELL_STYLE = "padding: 10px; border: 1px solid #ddd; vertical-align: top; font-size: 13px; color: #333;"
     
-    foreman_name = f"{foreman.first_name}"
-    alert_msg = format_natalia_alert(ts.data, foreman_name)
-    
-    # Logic to send push notification or update Natalia's Dashboard
-    # For now, we reuse your existing email notification
-    notification = NotificationRequest(
-        email="natalia@mluisconstruction.com", 
-        subject="📍 Site Activity Alert",
-        message=alert_msg
+    for ts in timesheets:
+        data = ts.data or {}
+        f_name = f"{ts.foreman.first_name} {ts.foreman.last_name}" if ts.foreman else "N/A"
+        
+        # 1. Job & Contract Column
+        job_code = data.get('job', {}).get('job_code', 'N/A')
+        job_name = data.get('job_name', 'N/A')
+        contract = data.get('contract_no', 'N/A')
+        job_cell = f"<b>{job_code}</b><br/>{job_name}<br/><br/><small>Contract: {contract}</small>"
+
+        # 2. Category Mapping (Concrete, Asphalt, Top Soil)
+        col_data = {"Concrete": "", "Asphalt": "", "Top Soil": ""}
+        vendor_materials = data.get("selected_vendor_materials", {})
+        
+        for v_id, v_data in vendor_materials.items():
+            v_name = v_data.get('name', 'Vendor')
+            v_cat = v_data.get('vendor_category', '')
+            
+            # Get material names (Fixing the previous 'detail' vs 'material' issue)
+            m_names = [m.get('material') for m in v_data.get("selectedMaterials", []) if m.get('material')]
+            
+            if m_names:
+                formatted_entry = f"<b>{v_name}</b><br/>{', '.join(m_names)}<br/>"
+                # Map to specific column based on category string
+                if "Concrete" in v_cat: col_data["Concrete"] += formatted_entry
+                elif "Asphalt" in v_cat: col_data["Asphalt"] += formatted_entry
+                elif "Top Soil" in v_cat: col_data["Top Soil"] += formatted_entry
+
+        # 3. Logistics (Trucking)
+        logistics = ""
+        trucking_items = data.get("selected_material_items", {})
+        for t_id, t_data in trucking_items.items():
+            t_name = t_data.get('name', 'Hauler')
+            notes = t_data.get("notes", "").replace(";", "<br/>• ")
+            logistics += f"<b>{t_name}</b><br/>{f'• {notes}' if notes else ''}<br/>"
+
+        # 4. Location & Navigation
+        addr = data.get("location", "No Address")
+        maps_link = f"<a href='https://www.google.com/maps/search/?api=1&query={addr}' style='color: #007bff; text-decoration: none;'>{addr}</a>"
+
+        table_rows += f"""
+            <tr>
+                <td style="{CELL_STYLE} font-weight: bold;">{f_name}</td>
+                <td style="{CELL_STYLE}">{job_cell}</td>
+                <td style="{CELL_STYLE}">{maps_link}</td>
+                <td style="{CELL_STYLE}">{col_data["Concrete"] or ""}</td>
+                <td style="{CELL_STYLE}">{col_data["Asphalt"] or ""}</td>
+                <td style="{CELL_STYLE}">{col_data["Top Soil"] or ""}</td>
+                <td style="{CELL_STYLE}">{logistics or ""}</td>
+            </tr>
+        """
+
+    full_html = f"""
+    <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2 style="color: #333;">Daily Schedule - {target_date}</h2>
+        <table style="width: 100%; border-collapse: collapse; min-width: 800px;">
+            <thead>
+                <tr>
+                    <th style="{HEADER_STYLE}">Foreman</th>
+                    <th style="{HEADER_STYLE}">Job</th>
+                    <th style="{HEADER_STYLE}">Location</th>
+                    <th style="{HEADER_STYLE}">Concrete</th>
+                    <th style="{HEADER_STYLE}">Asphalt</th>
+                    <th style="{HEADER_STYLE}">Top Soil</th>
+                    <th style="{HEADER_STYLE}">Trucking</th>
+                </tr>
+            </thead>
+            <tbody>
+                {table_rows}
+            </tbody>
+        </table>
+    </div>
+    """
+
+    notification = schemas.NotificationRequest(
+        email="deekshitha0825@gmail.com", 
+        subject=f"MLC Daily Schedule - {target_date}",
+        message=full_html
     )
-    return send_notification(notification)
-
-
+    return await send_html_notification(notification)

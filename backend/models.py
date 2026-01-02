@@ -573,3 +573,20 @@ class TicketWorkflow(Base):
     by_role = Column(String, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
     comments = Column(String, nullable=True)
+
+class ClassCode(Base):
+    """
+    Model representing labor classification codes.
+    """
+    __tablename__ = "class_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String, unique=True, nullable=False, index=True) # e.g., "113"
+    description = Column(String, nullable=True)                  # e.g., "Laborer Foreman"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "code": self.code,
+            "description": self.description
+        }

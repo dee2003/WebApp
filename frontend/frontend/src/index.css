@@ -568,7 +568,7 @@ button:active {
 
 /* Main Content Area */
 .timesheet-page-content {
-    padding: 30px; /* Increased padding */
+     /* Increased padding */
     max-width: 1200px;
     margin: 0 auto;
 }

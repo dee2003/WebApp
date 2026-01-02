@@ -165,17 +165,20 @@ const loadDashboardData = useCallback(async (isInitialLoad: boolean = false) => 
     /**
      * Groups notifications by date for the SectionList.
      */
-    const sections = useMemo(() => {
-        const grouped = notifications.reduce((acc, item) => {
-            (acc[item.date] = acc[item.date] || []).push(item);
-            return acc;
-        }, {} as Record<string, Notification[]>);
+const sections = useMemo(() => {
+    const grouped = notifications.reduce((acc, item) => {
+        // Use work_date as the primary key so the section title matches the work performed
+        const groupKey = item.work_date || item.date; 
+        (acc[groupKey] = acc[groupKey] || []).push(item);
+        return acc;
+    }, {} as Record<string, Notification[]>);
 
-        // Sorts dates descending (most recent first)
-        return Object.entries(grouped)
-            .sort(([a], [b]) => (a < b ? 1 : -1))
-            .map(([date, notifs]) => ({ title: date, data: notifs }));
-    }, [notifications]);
+    return Object.entries(grouped)
+        .sort(([a], [b]) => (a < b ? 1 : -1))
+        .map(([date, notifs]) => ({ title: date, data: notifs }));
+}, [notifications]);
+
+
 
     const handleLogout = () => {
         logout();

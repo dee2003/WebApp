@@ -42,7 +42,10 @@ type Props = { route: any; navigation: any };
 type PhaseCode = string;
 type ClassCode = string;
 type HourType = 'REG' | 'SB';
-
+type ClassCodeOption = {
+  code: string;
+  description: string;
+};
 // --- MOVE THESE TO TOP OF TimesheetEditScreen ---
 const getImageUri = (ticket: any): string | null => {
   if (!ticket) return null;
@@ -130,8 +133,8 @@ const [truckingList, setTruckingList] = useState<any[]>([]);
 const [showDumpingPicker, setShowDumpingPicker] = useState(false);
 const [dumpingSearch, setDumpingSearch] = useState("");
 const [dumpingList, setDumpingList] = useState<any[]>([]);
-// ... all your existing state declarations (selectedPhases, phaseModalVisible, etc.)
-const getActiveCategory = () => {
+const [availableClassCodes, setAvailableClassCodes] = useState<ClassCodeOption[]>([]);
+const [classPickerVisible, setClassPickerVisible] = useState<{empId: string} | null>(null);const getActiveCategory = () => {
   if (!linkingRowId) return null;
 
   // Check which state array contains the current ID
@@ -191,7 +194,24 @@ const savePhasesImmediately = useCallback(
 );
 
 
-// ... existing useEffect hooks continue here
+console.log("🟢 TimesheetEditScreen rendered");
+
+useEffect(() => {
+  console.log("🔥 useEffect ran: fetching class codes");
+
+  const fetchClassCodes = async () => {
+    try {
+      const res = await apiClient.get('/api/timesheets/class-codes');
+      console.log("✅ backend responded", res.data);
+      setAvailableClassCodes(res.data || []);
+    } catch (e) {
+      console.warn("❌ Failed to load class codes", e);
+    }
+  };
+
+  fetchClassCodes();
+}, []);
+
 
 useEffect(() => {
   let unsubscribe: () => void;
@@ -1026,7 +1046,7 @@ const base = timesheet?.data ? { ...timesheet.data } : {};
   });
   return {
     ...timesheet.data,
-weather: weatherData,          // Sunny
+weather: weatherData,          
 temperature: temperatureData,  // 86°F
 location: locationData,
  
@@ -1045,12 +1065,17 @@ location: locationData,
       {}
     ),
 
-    // EMPLOYEES
-    employees: timesheet.data.employees.map((emp) => ({
-      ...emp,
-      hours_per_phase: processEmployees(employeeHours[emp.id]),
-      reason: employeeReasons[emp.id] || null,
-    })),
+ // Inside buildUpdatedData...
+employees: timesheet.data.employees.map((emp) => {
+  // Get all class codes for this employee from our local state
+  const hoursForThisEmp = employeeHours[emp.id] || {};
+  
+  return {
+    ...emp,
+    hours_per_phase: processEmployees(hoursForThisEmp),
+    reason: employeeReasons[emp.id] || null,
+  };
+}),
 
     // EQUIPMENT
     equipment: timesheet.data.equipment.map((eq) => {
@@ -1166,13 +1191,10 @@ setJobPhaseCodes(phases);
             }
         };
 
-        // Call immediately when focused and 'timesheet' data is available.
-        // It runs once on mount after the main useEffect updates 'timesheet',
-        // and again every time the screen is focused thereafter.
+        
         refetchPhaseCodes(); 
         
         return () => {
-            // No cleanup needed here if you remove the timeout
         };
     }, [timesheet]) // Dependency on 'timesheet' is key
 );
@@ -1456,7 +1478,6 @@ const toNumbersSimple = (
   return out;
 };
 
-// convert employee phase/class hours
 const processEmployees = (
   phaseHours: Record<string, Record<string, string>> = {}
 ): Record<string, Record<string, number>> => {
@@ -1465,8 +1486,11 @@ const processEmployees = (
   Object.keys(phaseHours).forEach((phase) => {
     out[phase] = {};
     Object.keys(phaseHours[phase]).forEach((cls) => {
-      const value = Number(phaseHours[phase][cls] || 0);
-      if (value > 0) out[phase][cls] = value;
+      // Filter out our UI placeholder and empty values
+      if (cls !== "ADD_NEW_CLASS") {
+        const value = Number(phaseHours[phase][cls] || 0);
+        if (value > 0) out[phase][cls] = value;
+      }
     });
   });
 
@@ -2008,11 +2032,26 @@ const phaseCodes = jobPhaseCodes;
 
   const phaseTotals = calculateEmployeePhaseTotals(employeeHours, selectedPhases);
 
-  const getEmployeeClasses = (emp: any, employeeHoursState: any) => {
-    const defaultClasses = [emp.class_1, emp.class_2].filter(Boolean);
-    
-return [emp.class_1, emp.class_2].filter(Boolean);
-  };
+const getEmployeeClasses = (emp: any) => {
+  const hoursForEmp = employeeHours[emp.id] || {};
+  
+  // 1. Get unique class codes that currently have hours assigned in any phase
+  const activeClasses = new Set<string>();
+  Object.values(hoursForEmp).forEach(phaseObj => {
+    Object.keys(phaseObj).forEach(cls => activeClasses.add(cls));
+  });
+
+  // 2. Ensure "113" is always first, then add other active ones
+  const finalClasses = Array.from(new Set(['113', ...Array.from(activeClasses)]));
+  
+  // 3. Limit to 4 and append "ADD_NEW_CLASS" placeholder if there's room
+  const result = finalClasses.slice(0, 4);
+  if (result.length < 4) {
+    result.push("ADD_NEW_CLASS");
+  }
+  
+  return result;
+};
 
 
   return (
@@ -2150,8 +2189,8 @@ return [emp.class_1, emp.class_2].filter(Boolean);
         {/* Body: rows */}
         <ScrollView style={{ maxHeight: 420 }} nestedScrollEnabled>
           {employees.map((emp: any, empIndex: number) => {
-            const allClasses = getEmployeeClasses(emp, employeeHours);
-            const name = `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
+const allClasses = getEmployeeClasses(emp); // Use the new helper logic here
+const name = `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
 
             return (
               <View key={emp.id} style={[tableStyles.employeeBlock]}>
@@ -2241,49 +2280,61 @@ return [emp.class_1, emp.class_2].filter(Boolean);
 </View>
 
 
-      {/* CLASS */}
-      <View style={[tableStyles.cellFixed, { width: 140, justifyContent: "flex-start", alignItems: "center" }]}>
-        <Text style={tableStyles.cellText}>{classCode}</Text>
-      </View>
+<View style={[tableStyles.cellFixed, { width: 140, justifyContent: "center" }]}>
+                {classCode === "ADD_NEW_CLASS" ? (
+                  <TouchableOpacity 
+                    style={tableStyles.addClassBtn}
+                    onPress={() => setClassPickerVisible({ empId: emp.id })}
+                  >
+                    <Text style={tableStyles.addClassText}>+ Add Class</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={tableStyles.cellText}>{classCode}</Text>
+                )}
+              </View>
     </View>
   
-
-                      {/* Phase columns (scrollable) */}
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: "center" }}>
+{/* Phase columns (scrollable) */}
+<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: "center" }}>
   <View style={tableStyles.phaseRow}>
     {selectedPhases.map((p: string) => {
       const hourValue = employeeHours[emp.id]?.[p]?.[classCode] ?? "";
-      const reasonSelected = !!employeeReasons[emp.id]; // check if reason is selected
+      const reasonSelected = !!employeeReasons[emp.id];
 
       return (
-       <View
-  key={`${emp.id}-${classCode}-${p}`}
-  style={[tableStyles.cell, { width: 96, opacity: reasonSelected ? 0.6 : 1 }]} // slightly dim if blocked
-  pointerEvents={reasonSelected ? "none" : "auto"} // BLOCK interaction
->
-  <InlineEditableNumber
-    value={hourValue}
-    onChange={(v) => handleEmployeeHourChange(emp.id, p, classCode, v)}
-    validateHours={true} 
-  />
-</View>
-
+        <View
+          key={`${emp.id}-${classCode}-${p}`}
+          style={[tableStyles.cell, { width: 96, opacity: reasonSelected ? 0.6 : 1 }]}
+          pointerEvents={reasonSelected ? "none" : "auto"}
+        >
+          {/* FIX: Only show the input if it is a real class code, not the Add Button row */}
+          {classCode !== "ADD_NEW_CLASS" ? (
+            <InlineEditableNumber
+              value={hourValue}
+              onChange={(v) => handleEmployeeHourChange(emp.id, p, classCode, v)}
+              validateHours={true}
+            />
+          ) : (
+            // Render an empty space for the placeholder row
+            <View style={{ height: 30 }} /> 
+          )}
+        </View>
       );
     })}
   </View>
 </ScrollView>
 
 
-                      {/* Right total fixed */}
-                      <View style={[tableStyles.cellFixed, { width: 88 }]}>
-                        {rowIsLastForEmp ? (
-                          <Text style={tableStyles.totalText}>
-                            {calculateTotalEmployeeHours(employeeHours, emp.id).toFixed(1)}
-                          </Text>
-                        ) : (
-                          <Text />
-                        )}
-                      </View>
+{/* Right total fixed column */}
+<View style={[tableStyles.cellFixed, { width: 88 }]}>
+  {rowIsLastForEmp && classCode !== "ADD_NEW_CLASS" ? (
+    <Text style={tableStyles.totalText}>
+      {calculateTotalEmployeeHours(employeeHours, emp.id).toFixed(1)}
+    </Text>
+  ) : (
+    <Text />
+  )}
+</View>
                        {/* Reason dropdown — only if employee has no hours */}
 
                     </View>
@@ -3429,7 +3480,51 @@ const getHourChangeHandler = () => {
     })()}
   </SafeAreaView>
 </Modal>
+<Modal visible={!!classPickerVisible} transparent animationType="slide">
+  <View style={styles.modalBackdrop}>
+    <View style={styles.modalContainer}>
+      <Text style={styles.modalTitle}>Select Class Code</Text>
+      <ScrollView style={{ maxHeight: 300 }}>
+        {availableClassCodes.map((item) => (
+          <TouchableOpacity
+            key={item.code}
+            style={styles.phaseItem}
+onPress={() => {
+  if (classPickerVisible) {
+    const newClassCode = item.code;
+    const empId = classPickerVisible.empId;
 
+    setEmployeeHours(prev => ({
+      ...prev,
+      [empId]: {
+        ...prev[empId],
+        [selectedPhases[0]]: {
+          ...prev[empId]?.[selectedPhases[0]],
+          [newClassCode]: "0" // Initialize with 0 to register the class
+        }
+      }
+    }));
+
+    setClassPickerVisible(null);
+    
+    // Explicitly trigger auto-save so the new class structure is stored
+    setTimeout(() => autoSaveDraft(), 500); 
+  }
+}}
+          >
+            <View>
+              <Text style={styles.phaseText}>{item.code}</Text>
+              <Text style={{ fontSize: 12, color: '#666' }}>{item.description}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      <TouchableOpacity style={styles.doneBtn} onPress={() => setClassPickerVisible(null)}>
+        <Text style={styles.doneBtnText}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
 
     </SafeAreaView>
     
