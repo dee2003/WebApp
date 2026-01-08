@@ -60,8 +60,7 @@ const AuditLogViewer = ({ apiClient }) => {
                         {logs.map(log => (
                             <tr key={log.id}>
                                 {/* <td>{log.id}</td>  */}
-                                <td>{new Date(log.timestamp).toLocaleString()}</td>
-                                <td>{log.user_id}</td>
+<td>{new Date(log.timestamp).toLocaleString('en-US')}</td>                                <td>{log.user_id}</td>
                                 <td>
                                     {/* Optional: Highlight critical actions (e.g., DELETE) */}
                                     <span style={{ color: log.action === 'DELETE' ? 'var(--clean-danger)' : 'var(--clean-primary)', fontWeight: 600 }}>

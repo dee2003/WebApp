@@ -1,4 +1,3 @@
-
 // export default AppNavigator;
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -19,11 +18,10 @@ import ForemanTimesheetViewScreen from '../screens/foreman/ForemanTimesheetViewS
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen'
 import OtpVerifyScreen from '../screens/OtpVerifyScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
-import MelindaTimesheet from '../screens/Flagger/MelindaTimesheet';
+import FlaggerTimesheetEditScreen from '../screens/foreman/FlaggerTimesheetEditScreen'; // ✅ IMPORT NEW SCREEN
 import TimesheetReviewScreen from '../screens/projectEngineer/TimesheetReview';
 // Project Engineer (PE)
-import MelindaDashboard from '../screens/Flagger/MelindaDashboard'; // Add this line
-import FlaggerEditor from '../screens/Flagger/FlaggerEditor'; // Ensure this matches your filename
+
 import PEDashboard from '../screens/projectEngineer/PEDashboard';
 import PETimesheetList from '../screens/projectEngineer/PETimesheetList';
 import PETicketList from '../screens/projectEngineer/PETicketList';
@@ -37,7 +35,7 @@ export type ForemanStackParamList = {
   TimesheetEdit: { timesheetId: number };
   Review: undefined; // <-- ADD NEW SCREEN
 TimesheetView: { timesheetId: number };
-
+FlaggerTimesheetEdit: { timesheetId: number }; // ✅ ADD TO PARAM LIST
 };
 // Supervisor Stack
 export type SupervisorStackParamList = {
@@ -61,11 +59,7 @@ export type ProjectEngineerStackParamList = {
 export type ExecutiveStackParamList = {
   ExecutiveDashboard: undefined;
 };
-export type FlaggerStackParamList = {
-  FlaggerDashboard: undefined;
-    FlaggerEditor: undefined; // ✅ ADD THIS
 
-};
 // --- Root Stack (combines all navigators) ---
 export type RootStackParamList = {
   Login: undefined;
@@ -76,7 +70,7 @@ export type RootStackParamList = {
   Supervisor: NavigatorScreenParams<SupervisorStackParamList>;
   ProjectEngineer: NavigatorScreenParams<ProjectEngineerStackParamList>;
   Executive: NavigatorScreenParams<ExecutiveStackParamList>; 
-  Flagger: NavigatorScreenParams<FlaggerStackParamList>; // ✅ ADD THIS
+  Flagger: NavigatorScreenParams<ForemanStackParamList>; // ✅ ADD THIS
 };
 
 // -------------------- Navigators --------------------
@@ -94,7 +88,11 @@ const ForemanNavigator = () => (
       component={TimesheetListScreen}
       options={{ title: "All Timesheets" }}
     />
-
+<ForemanStack.Screen
+      name="FlaggerTimesheetEdit"
+      component={FlaggerTimesheetEditScreen}
+      options={{ title: "Flagger Hours" }}
+    />
     <ForemanStack.Screen
       name="TimesheetEdit"
       component={TimesheetEditScreen}
@@ -175,23 +173,8 @@ const ExecutiveNavigator = () => (
     />
   </ExecutiveStack.Navigator>
 );
-// Add this before the Root Navigator section (around line 348)
-const FlaggerStack = createStackNavigator<FlaggerStackParamList>();
 
-const FlaggerNavigator = () => (
-  <FlaggerStack.Navigator initialRouteName="FlaggerDashboard">
-    <FlaggerStack.Screen 
-      name="FlaggerDashboard" 
-      component={MelindaDashboard} // Melinda lands here first
-      options={{ headerShown: false }} 
-    />
-    <FlaggerStack.Screen 
-      name="FlaggerEditor" 
-      component={FlaggerEditor} // This is the blank table template
-      options={{ title: 'Daily Flagger Log' }} 
-    />
-  </FlaggerStack.Navigator>
-);  
+
 // -------------------- Root Navigator --------------------
 const RootStack = createStackNavigator<RootStackParamList>();
 const AppNavigator = () => {
@@ -263,7 +246,7 @@ const role = user?.role?.toLowerCase();
 {role === "flagger" && (
             <RootStack.Screen
               name="Flagger"
-              component={FlaggerNavigator}
+               component={ForemanNavigator}
               options={{ headerShown: false }}
             />
           )}

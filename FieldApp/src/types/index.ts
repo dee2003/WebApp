@@ -96,6 +96,8 @@ supervisor?: string | { id: number; name: string } | null;
   created_at?: string;
     supervisorid?: string;
 linked_tickets?: { [rowId: string]: number[] }; // Add this line
+is_flagger?: boolean;
+role?: string;
 
 }
 

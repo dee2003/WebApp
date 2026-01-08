@@ -757,12 +757,21 @@ const ReviewTickets: React.FC = () => {
   const performFinalSave = async (dataToSave: typeof formData) => {
     try {
         setIsSaving(true);
+        
+        // ✅ Ensure the date is in MM-DD-YYYY format for the backend
+        let formattedDateForBackend = dataToSave.ticket_date;
+        const ts = parseAnyDate(dataToSave.ticket_date);
+        if (ts) {
+            formattedDateForBackend = formatDateToString(new Date(ts));
+        }
+
         const hoursFloat = parseFloat(dataToSave.hours);
         const payload = {
           ticket_id: selectedTicket!.id,
           foreman_id: user!.id,
           ticket_number: dataToSave.ticket_number,
-          ticket_date: dataToSave.ticket_date,
+          // ✅ Use the formatted string
+          ticket_date: formattedDateForBackend, 
           haul_vendor: dataToSave.haul_vendor,
           truck_number: dataToSave.truck_number,
           material: dataToSave.material,
@@ -772,7 +781,9 @@ const ReviewTickets: React.FC = () => {
           table_data: dataToSave.table_data,
           raw_text: dataToSave.extra_text,
         };
+
         await axios.post(`${API_BASE_URL}/api/ocr/update-ticket-text`, payload);
+        // ... rest of the function
         Alert.alert("Success", "Ticket updated successfully.");
         setIsEditingFullScreen(false);
         handleCloseModal();
@@ -884,21 +895,22 @@ const ReviewTickets: React.FC = () => {
             });
 
              return (
-               <View key={group.date} style={styles.groupContainer}>
-                 {/* --- DATE HEADER & SUBMIT BUTTON --- */}
-                 <View style={styles.headerRow}>
-                   {/* ✅ VISUALLY FORMAT HEADER AS MM-DD-YYYY */}
-                   <Text style={styles.dateText}>
-                      {(() => {
-                         const parts = group.date.split('-');
-                         if (parts.length === 3 && parts[0].length === 4) {
-                            return `${parts[1]}-${parts[2]}-${parts[0]}`;
-                         }
-                         return group.date;
-                      })()}
-                   </Text>
-
-                 </View>
+      <View key={group.date} style={styles.groupContainer}>
+  {/* --- DATE HEADER & SUBMIT BUTTON --- */}
+  <View style={styles.headerRow}>
+    {/* ✅ UPDATED: VISUALLY FORMAT HEADER AS MM-DD-YYYY */}
+    <Text style={styles.dateText}>
+      {(() => {
+        const parts = group.date.split('-');
+        // If the date is in YYYY-MM-DD format (length 4 for the first part)
+        if (parts.length === 3 && parts[0].length === 4) {
+          return `${parts[1]}-${parts[2]}-${parts[0]}`;
+        }
+        // If it's already in another format or doesn't match, return as is
+        return group.date;
+      })()}
+    </Text>
+  </View>
  
                  {/* --- SEPARATE ROWS PER CATEGORY --- */}
                  {categories.map((category) => {
@@ -1130,8 +1142,14 @@ const ReviewTickets: React.FC = () => {
 
               <ScrollView contentContainerStyle={styles.modalSectionScroll}>
                 <InfoRow label="Ticket #" value={selectedTicket?.ticket_number} />
-                <InfoRow label="Date" value={selectedTicket?.ticket_date} />
-                <InfoRow label="Vendor" value={selectedTicket?.haul_vendor} />
+<InfoRow 
+  label="Date" 
+  value={
+    selectedTicket?.ticket_date 
+      ? formatDateToString(new Date(parseAnyDate(selectedTicket.ticket_date) || Date.now()))
+      : "N/A"
+  } 
+/>                <InfoRow label="Vendor" value={selectedTicket?.haul_vendor} />
                 <InfoRow label="Truck #" value={selectedTicket?.truck_number} />
                 <InfoRow label="Material" value={selectedTicket?.material} />
                 <InfoRow label="Job #" value={selectedTicket?.job_number} />
@@ -1183,20 +1201,28 @@ const ReviewTickets: React.FC = () => {
               
               <FormField label="Ticket Number" value={formData.ticket_number} onChange={(t: string) => setFormData({ ...formData, ticket_number: t })} required />
               
-              {/* ✅ UPDATED EDIT DATE FIELD WITH RED ASTERISK */}
-              <View style={{ flexDirection: 'row' }}>
-                  <Text style={styles.formLabel}>Date</Text>
-                  <Text style={{ color: THEME.colors.danger, marginLeft: 4 }}>*</Text>
-              </View>
-              <TouchableOpacity 
-                style={[styles.formInput, { marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
-                onPress={() => openDatePicker('edit_ticket_date')}
-              >
-                <Text style={{ color: formData.ticket_date ? '#fff' : '#666' }}>
-                    {formData.ticket_date || "Select Date (MM-DD-YYYY)"}
-                </Text>
-                <Icon name="calendar" size={16} color={THEME.colors.primary} />
-              </TouchableOpacity>
+{/* --- Inside the Full-Screen Edit Modal --- */}
+
+<View style={{ flexDirection: 'row' }}>
+  <Text style={styles.formLabel}>Date</Text>
+  <Text style={{ color: THEME.colors.danger, marginLeft: 4 }}>*</Text>
+</View>
+
+<TouchableOpacity 
+  style={[styles.formInput, { marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+  onPress={() => openDatePicker('edit_ticket_date')}
+>
+  <Text style={{ color: formData.ticket_date ? '#fff' : '#666' }}>
+    {/* ✅ Apply formatting to the existing ISO string for display */}
+    {formData.ticket_date 
+      ? (() => {
+          const ts = parseAnyDate(formData.ticket_date);
+          return ts ? formatDateToString(new Date(ts)) : formData.ticket_date;
+        })()
+      : "Select Date (MM-DD-YYYY)"}
+  </Text>
+  <Icon name="calendar" size={16} color={THEME.colors.primary} />
+</TouchableOpacity>
 
               {/* ✅ ADDED PICKER COMPONENT HERE FOR EDIT MODAL */}
               {showDatePicker && datePickerMode === 'edit_ticket_date' && (

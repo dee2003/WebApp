@@ -17,7 +17,6 @@ const LoginScreen = ({ onLogin }) => {
     const [success, setSuccess] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    // --- LOGIN ---
     const handleLogin = async (e) => {
         e.preventDefault();
         setError(''); setSuccess(''); setIsLoading(true);
@@ -50,6 +49,43 @@ const LoginScreen = ({ onLogin }) => {
         } finally { setIsLoading(false); }
     };
 
+
+    // --- LOGIN ---
+// const handleLogin = async (e) => {
+//     e.preventDefault();
+//     setError(''); setSuccess(''); setIsLoading(true);
+
+//     const formData = new FormData(e.target);
+//     const username = formData.get('username');
+//     const password = formData.get('password');
+
+//     const body = new URLSearchParams();
+//     body.append('username', username);
+//     body.append('password', password);
+
+//     try {
+//         const response = await fetch('http://localhost:8000/api/auth/login', {
+//             method: 'POST',
+//             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+//             body
+//         });
+//         const data = await response.json();
+
+//         if (response.ok && data.access_token && data.role) {
+//             // CHANGED: Use sessionStorage instead of localStorage
+//             sessionStorage.setItem('token', data.access_token);
+//             sessionStorage.setItem('user_role', data.role);
+            
+//             onLogin({ username, role: data.role });
+//         } else {
+//             setError(data.detail || 'Invalid username or password.');
+//         }
+//     } catch (err) {
+//         setError('Cannot connect to server.');
+//     } finally { 
+//         setIsLoading(false); 
+//     }
+// };
     // --- REQUEST PASSWORD RESET ---
     const handleRequestReset = async (e) => {
         e.preventDefault();

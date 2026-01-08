@@ -543,7 +543,19 @@ def crop_cells_to_memory(image, all_lines_data):
 # ------------------------------------------------------------------- #
 # --- STRUCTURED DATA EXTRACTOR ---
 # ------------------------------------------------------------------- #
-
+def parse_ocr_date(date_str: str) -> Optional[datetime.date]:
+    if not date_str:
+        return None
+    # Remove common OCR noise
+    clean_date = re.sub(r'[^0-9/\-]', '', date_str)
+    
+    # Try common formats
+    for fmt in ("%m-%d-%Y", "%m/%d/%Y", "%m-%d-%y", "%m/%d/%y"):
+        try:
+            return datetime.strptime(clean_date, fmt).date()
+        except ValueError:
+            continue
+    return None
 def extract_structured_data(raw_text: str) -> dict:
     print("Extracting structured data from raw text...")
     
@@ -644,7 +656,23 @@ def extract_structured_data(raw_text: str) -> dict:
             results["hours"] = float(results["hours"])
         except (ValueError, TypeError): 
             results["hours"] = None
+# ... (existing regex logic) ...
 
+# --- Improved Fallback Patterns ---
+    # This searches for common date patterns anywhere in the text if results["ticket_date"] is still None
+    if results["ticket_date"] is None:
+        # Matches M-D-YY, MM-DD-YYYY, M/D/YY, etc.
+        date_pattern = r'(\b\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}\b)'
+        all_dates = re.findall(date_pattern, raw_text)
+        if all_dates:
+            # We take the first date found in the document
+            results["ticket_date"] = clean_value(all_dates[0])
+
+    # --- THE CRITICAL FIX: Convert string to Python Date object ---
+    if results["ticket_date"]:
+        # Use the helper we discussed to turn "6-17-25" into a real date object
+        # so PostgreSQL doesn't throw a "DatetimeFieldOverflow" error.
+        results["ticket_date"] = parse_ocr_date(results["ticket_date"])
     print(f"Structured data results: {results}")
     return results
 
@@ -918,8 +946,7 @@ def process_scan_in_background(
             table_data=final_table_rows,
             raw_text_content="\n".join(removed_lines),
             ticket_number=final_ticket_number,
-            ticket_date=structured_data.get("ticket_date"),
-            haul_vendor=structured_data.get("haul_vendor"),
+            ticket_date=structured_data.get("ticket_date"), # This is now a date object or None            haul_vendor=structured_data.get("haul_vendor"),
             truck_number=structured_data.get("truck_number"),
             material=structured_data.get("material"),
             job_number=structured_data.get("job_number"),
@@ -1155,6 +1182,16 @@ class TicketUpdatePayload(BaseModel):
     # ✅ RAW TEXT: The "Extra Text" field
     raw_text: Optional[str] = None
 
+def parse_us_date(date_str: str):
+    date_str = date_str.strip()
+
+    for fmt in ("%m-%d-%Y", "%m-%d-%y"):
+        try:
+            return datetime.strptime(date_str, fmt).date()
+        except ValueError:
+            continue
+
+    raise ValueError(f"Invalid US date format: {date_str}")
 @router.post("/update-ticket-text", status_code=status.HTTP_200_OK)
 def update_ticket_text(
     payload: TicketUpdatePayload,
@@ -1172,7 +1209,7 @@ def update_ticket_text(
 
     # 1. Update Structured Header Data
     ticket.ticket_number = payload.ticket_number
-    ticket.ticket_date = datetime.strptime(payload.ticket_date, "%m-%d-%Y").date()    
+    ticket.ticket_date = parse_us_date(payload.ticket_date)
     ticket.haul_vendor = payload.haul_vendor
     ticket.truck_number = payload.truck_number
     ticket.material = payload.material

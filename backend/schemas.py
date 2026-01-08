@@ -372,6 +372,7 @@ class JobPhaseUpdate(BaseModel):
 class JobPhase(BaseModel):
     id: int
     job_code: str
+    job_description: str  # 👈 Changed from job_name to job_description
     contract_no: Optional[str] = None
     job_description: Optional[str] = None
     project_engineer_id: Optional[int] = None
@@ -538,12 +539,11 @@ class TimesheetCreate(TimesheetBase):
     job_phase_id: Optional[int] = None
 
 
-
 class TimesheetUpdate(BaseModel):
     data: Optional[Dict[str, Any]] = None
     status: Optional[SubmissionStatus] = None
     date: Optional[date] = None
-
+    job_phase_id: Optional[int] = None
     @field_validator("status", mode="before")
     @classmethod
     def normalize_status(cls, v):
@@ -580,9 +580,9 @@ class Timesheet(BaseModel):
     job_phase_id: Optional[int] = None   # <-- Add this
     job_code: Optional[str] = None       # <-- Optional, if you want to send job code
     files: List[TimesheetFile] = []
+    role: Optional[str] = "foreman"      # To distinguish 'flagger' vs 'foreman'
+    is_flagger: Optional[bool] = False
     model_config = ConfigDict(from_attributes=True)
-
-
 
 
 class TimesheetResponse(BaseModel):

@@ -287,53 +287,51 @@ const sections = useMemo(() => {
                             <Text style={styles.emptySubText}>There are no pending submissions to review.</Text>
                         </View>
                     }
-                    renderSectionHeader={({ section }) => {
-                        // Dynamic Button Logic: If the section is rendered, it means there are pending items.
-                        // The button should be active unless actively processing.
-                        const hasBeenSubmittedBefore = submittedDates.includes(section.title);
-                        const isProcessing = submittingDate === section.title || checkingDate === section.title;
-                        
-                        // Button text clarifies if this is the first submission or a follow-up (resubmit)
-                        const buttonText = isProcessing 
-                            ? 'Processing...' 
-                            : hasBeenSubmittedBefore ? 'Resubmit All' : 'Submit All';
-                        
-                        const isDisabled = isProcessing;
+renderSectionHeader={({ section }) => {
+    // Determine if the specific date is currently being processed (submitting or validating)
+    const isProcessing = submittingDate === section.title || checkingDate === section.title;
+    
+    // CHANGED: Removed the check for submittedDates.includes(section.title)
+    // Now it only checks if it is processing, otherwise it defaults to 'Submit All'
+    const buttonText = isProcessing 
+        ? 'Processing...' 
+        : 'Submit All'; 
+    
+    const isDisabled = isProcessing;
 
-                        // Ensures date parsing is robust
-const dateText = new Date(section.title + 'T00:00:00').toLocaleDateString(
-  'en-US',
-  { month: 'long', day: '2-digit', year: 'numeric' }
-);
-
-                        
-                        return (
-                            <View style={styles.dateGroupContainer}>
-                                <View style={styles.dateHeaderRow}>
-                                    <Text style={styles.dateHeader}>{dateText}</Text>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.submitButton,
-                                            { backgroundColor: THEME_COLORS.primary }, 
-                                            isDisabled && { opacity: 0.7 }, // Visually dim the button when disabled
-                                        ]}
-                                        disabled={isDisabled}
-                                        onPress={() => handleSubmissionAttempt(section.title)}
-                                        activeOpacity={0.7}
-                                    >
-                                        {isProcessing ? (
-                                            <ActivityIndicator size="small" color={THEME_COLORS.cardLight} />
-                                        ) : (
-                                            <Text style={styles.submitButtonText}>
-                                                <Ionicons name="arrow-up-circle" size={16} color={THEME_COLORS.cardLight} />
-                                                {' '} {buttonText}
-                                            </Text>
-                                        )}
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        );
-                    }}
+    // Standard date parsing for the header display
+    const dateText = new Date(section.title + 'T00:00:00').toLocaleDateString(
+        'en-US',
+        { month: 'long', day: '2-digit', year: 'numeric' }
+    );
+    
+    return (
+        <View style={styles.dateGroupContainer}>
+            <View style={styles.dateHeaderRow}>
+                <Text style={styles.dateHeader}>{dateText}</Text>
+                <TouchableOpacity
+                    style={[
+                        styles.submitButton,
+                        { backgroundColor: THEME_COLORS.primary }, 
+                        isDisabled && { opacity: 0.7 },
+                    ]}
+                    disabled={isDisabled}
+                    onPress={() => handleSubmissionAttempt(section.title)}
+                    activeOpacity={0.7}
+                >
+                    {isProcessing ? (
+                        <ActivityIndicator size="small" color={THEME_COLORS.cardLight} />
+                    ) : (
+                        <Text style={styles.submitButtonText}>
+                            <Ionicons name="arrow-up-circle" size={16} color={THEME_COLORS.cardLight} />
+                            {' '} {buttonText}
+                        </Text>
+                    )}
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+}}
  renderItem={({ item }) => {
     // 1. Add this console log here
     console.log(`Checking Foreman: ${item.foreman_name} | Notification Date: ${item.date} | Work Date: ${item.work_date}`);

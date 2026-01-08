@@ -148,15 +148,18 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
 
       const result = await response.json();
       if (response.ok) {
-        Alert.alert('✅ Upload Successful', `Ticket sent for processing.\n\nUploaded ${uris.length} page(s).`);
-        setScreen('dashboard');
+  Alert.alert(
+    '✅ Upload Successful',
+    `Ticket sent for processing.\n\nUploaded ${uris.length} page(s).\n\n⏳ Processing usually takes around 10 minutes. You’ll be notified once it’s complete.`
+  );
+          setScreen('dashboard');
         setScannedImageUris([]);
         setSelectedTimesheetId(null);
       } else {
         Alert.alert('Scan Failed', result.detail || 'Server could not process images.');
       }
     } catch (err) {
-      Alert.alert('Error', 'Network request failed.');
+      Alert.alert('Error', 'Server is down. Please wait');
     } finally {
       setIsLoading(false);
     }

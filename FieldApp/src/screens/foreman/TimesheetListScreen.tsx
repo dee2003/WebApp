@@ -96,32 +96,52 @@ useEffect(() => {
     if (loading && timesheets.length === 0) {
         return <ActivityIndicator size="large" color={THEME.colors.primary} style={styles.loadingIndicator} />;
     }
+// Inside TimesheetListScreen
 
-    const renderItem = ({ item }: { item: Timesheet }) => {
-        // Fallback status if not present in your Timesheet type, assuming 'Draft' if no status is available.
-        const status = item.status || 'Draft';
-        const { badge, text } = getStatusStyle(status);
+const renderItem = ({ item }: { item: Timesheet }) => {
+    const status = item.status || 'Draft';
+    const { badge, text } = getStatusStyle(status);
+    
+    // Determine if the item is a flagger timesheet
+    const isFlagger = item.data?.is_flagger === true || item.data?.role === 'flagger';
 
-        return (
-            <TouchableOpacity 
-                style={styles.card}
-                onPress={() => navigation.navigate('TimesheetEdit', { timesheetId: item.id })}
-                activeOpacity={0.8}
-            >
-                <View style={styles.cardHeader}>
-                    <View style={{ flex: 1 }}>
-                        {/* Assuming job_name is available in item.data */}
-                        <Text style={styles.jobName} numberOfLines={1}>{item.data?.job_name || 'No Job Name'}</Text>
-                        <Text style={styles.date}>Date: {new Date(item.date).toLocaleDateString()}</Text>
-                    </View>
-                    
-                    <View style={[styles.statusBadge, badge]}>
-                        <Text style={[styles.statusText, text]}>{status.toUpperCase()}</Text>
-                    </View>
-                </View>
-            </TouchableOpacity>
-        );
+    const handlePress = () => {
+        if (isFlagger) {
+            // Navigate to Flagger Edit Screen if the role is flagger
+            // Ensure 'FlaggerTimesheetEdit' is defined in your ForemanStackParamList
+            navigation.navigate('FlaggerTimesheetEdit' as any, { timesheetId: item.id });
+        } else {
+            // Navigate to standard Timesheet Edit Screen for Foremen
+            navigation.navigate('TimesheetEdit', { timesheetId: item.id });
+        }
     };
+
+    return (
+        <TouchableOpacity 
+            style={styles.card}
+            onPress={handlePress} // Use the new conditional handler
+            activeOpacity={0.8}
+        >
+            <View style={styles.cardHeader}>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.jobName} numberOfLines={1}>
+                        {isFlagger ? "Daily Flagging Activity" : (item.data?.job_name || 'No Job Name')}
+                    </Text>
+                    <Text style={styles.date}>Date: {new Date(item.date).toLocaleDateString()}</Text>
+                    {isFlagger && (
+                        <Text style={[styles.date, { color: THEME.colors.primary, fontWeight: 'bold' }]}>
+                            Blank Template 
+                        </Text>
+                    )}
+                </View>
+                
+                <View style={[styles.statusBadge, badge]}>
+                    <Text style={[styles.statusText, text]}>{status.toUpperCase()}</Text>
+                </View>
+            </View>
+        </TouchableOpacity>
+    );
+};
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -136,7 +156,6 @@ useEffect(() => {
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                         <Text style={styles.emptyText}>You haven't created any timesheets yet.</Text>
-                        <Text style={styles.emptySubText}>Use the 'Scan a Ticket' action on your dashboard to begin.</Text>
                     </View>
                 }
                 refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchTimesheets} tintColor={THEME.colors.primary} />}

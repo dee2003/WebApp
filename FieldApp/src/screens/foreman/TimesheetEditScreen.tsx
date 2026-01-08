@@ -140,8 +140,7 @@ const [classPickerVisible, setClassPickerVisible] = useState<{empId: string} | n
   // Check which state array contains the current ID
   if (workPerformed.some(v => String(v.id) === String(linkingRowId))) return 'Materials';
   if (materialsTrucking.some(t => String(t.id) === String(linkingRowId))) return 'Trucking';
-  if (dumpingSites.some(d => String(d.id) === String(linkingRowId))) return 'Dumping Site';
-
+if (dumpingSites.some(d => String(d.id) === String(linkingRowId))) return 'Dumping';
   return null;
 };
 
@@ -873,22 +872,24 @@ setDumpingSiteHours(
   populateSimple(ts.data?.dumping_sites || [], 'hours_per_phase'),
 );
 
+// Replace lines 620-636 with this:
 if (Array.isArray(ts.data?.dumping_sites)) {
-  // 1) hydrate tickets
-  ts.data.dumping_sites.forEach((d: any) => {
-    const value = d.tickets_loads?.[d.id];
-    if (value != null) {
-      setTicketsLoads(prev => ({
-        ...prev,
-        [d.id]: String(value),
-      }));
+  const dsRows = ts.data.dumping_sites;
+  setDumpingSites(dsRows);
+
+  const newTicketLoads = { ...ticketsLoads }; // Keep existing state
+
+  dsRows.forEach((d: any) => {
+    // Check both potential locations for ticket data
+    const ticketValue = d.tickets_loads?.[d.id] ?? d.tickets_loads ?? d.tickets;
+    
+    if (ticketValue != null) {
+      newTicketLoads[String(d.id)] = String(ticketValue);
     }
   });
-
-  // 2) IMPORTANT: use server dump sites as table rows
-  setDumpingSites(ts.data.dumping_sites);
+  
+  setTicketsLoads(newTicketLoads);
 }
-
 
   // total quantities
   if (ts.data?.total_quantities) {
@@ -2033,24 +2034,51 @@ const phaseCodes = jobPhaseCodes;
   const phaseTotals = calculateEmployeePhaseTotals(employeeHours, selectedPhases);
 
 const getEmployeeClasses = (emp: any) => {
+
   const hoursForEmp = employeeHours[emp.id] || {};
+
   
-  // 1. Get unique class codes that currently have hours assigned in any phase
+
+  // 1. Get unique class codes that have hours
+
   const activeClasses = new Set<string>();
+
   Object.values(hoursForEmp).forEach(phaseObj => {
-    Object.keys(phaseObj).forEach(cls => activeClasses.add(cls));
+
+    Object.keys(phaseObj).forEach(cls => {
+
+        // Only consider it active if it has a value or isn't our placeholder
+
+        if(cls !== "ADD_NEW_CLASS") activeClasses.add(cls);
+
+    });
+
   });
 
-  // 2. Ensure "113" is always first, then add other active ones
-  const finalClasses = Array.from(new Set(['113', ...Array.from(activeClasses)]));
+
+
+  // 2. Ensure "113" is included as default if no other classes exist
+
+  if (activeClasses.size === 0) activeClasses.add('113');
+
+
+
+  const finalClasses = Array.from(activeClasses);
+
   
-  // 3. Limit to 4 and append "ADD_NEW_CLASS" placeholder if there's room
-  const result = finalClasses.slice(0, 4);
-  if (result.length < 4) {
-    result.push("ADD_NEW_CLASS");
+
+  // 3. Append the "Add" button ONLY if we are under the limit of 4
+
+  if (finalClasses.length < 4) {
+
+    finalClasses.push("ADD_NEW_CLASS");
+
   }
+
   
-  return result;
+
+  return finalClasses;
+
 };
 
 
@@ -2323,14 +2351,25 @@ const name = `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
 
 
 {/* Right total fixed column */}
+
 <View style={[tableStyles.cellFixed, { width: 88 }]}>
-  {rowIsLastForEmp && classCode !== "ADD_NEW_CLASS" ? (
+
+  {/* 🔥 FIX: Show total on the last ACTUAL class code row, or if it's the only row */}
+
+  {(classIndex === allClasses.length - 1 || allClasses[classIndex + 1] === "ADD_NEW_CLASS") && classCode !== "ADD_NEW_CLASS" ? (
+
     <Text style={tableStyles.totalText}>
+
       {calculateTotalEmployeeHours(employeeHours, emp.id).toFixed(1)}
+
     </Text>
+
   ) : (
+
     <Text />
+
   )}
+
 </View>
                        {/* Reason dropdown — only if employee has no hours */}
 
@@ -2516,6 +2555,7 @@ const handleMaterialHourChange = (entityId: string, phaseCode: string, value: st
   }));
 
 };
+
 const handleDumpingSiteHourChange = (entityId: string, phaseCode: string, value: string) => {
   const sanitized = value.replace(/[^0-9.]/g, ''); // Sanitize input
   setDumpingSiteHours(prev => ({
@@ -2537,7 +2577,6 @@ const handleVendorTicketsChange = useCallback((rowId: string, value: string) => 
     row.id === rowId ? { ...row, ticketsloads: sanitized } : row
   ));
   
-  // ✅ NOTHING ELSE - debounced useEffect handles it (1.5s)
   console.log('🎫 TICKETS UPDATED - autosave in 1.5s');
 }, []);
 
@@ -2578,10 +2617,6 @@ const renderEntityTable = (
     : calculateSimplePhaseTotalsByEntities(hoursState, safeEntities, phaseCodes);
 
   return (
-    // ... rest of renderEntityTable stays exactly as in your file
-
-    
-     
 <View style={styles.tableCard}>
       <View style={styles.headerRow}>
         <Text style={styles.sectionTitle}>{title}</Text>
@@ -3358,12 +3393,18 @@ const getHourChangeHandler = () => {
             </Text>
           </View>
         ) : (
-          filteredTickets.map(ticket => {
-            const tId = Number(ticket.id || ticket.ID);
-            const isSelected =
-              linkingRowId &&
-              selectedTicketIds[linkingRowId]?.includes(tId);
-
+filteredTickets.map(ticket => {
+  const tId = Number(ticket.id || ticket.ID);
+  const isSelected = linkingRowId && selectedTicketIds[linkingRowId]?.includes(tId);
+const displayDate = (() => {
+    if (!ticket.date) return 'N/A';
+    const parts = ticket.date.split('-');
+    // Check if it's in YYYY-MM-DD format
+    if (parts.length === 3 && parts[0].length === 4) {
+      return `${parts[1]}-${parts[2]}-${parts[0]}`;
+    }
+    return ticket.date;
+  })();
             return (
               <View
                 key={tId}
@@ -3391,12 +3432,13 @@ const getHourChangeHandler = () => {
                   }}
                 >
                   <Text style={styles.phaseText}>
-                    Ticket #{ticket.ticket_number || tId}
-                  </Text>
-                  <Text style={tableStyles.smallText}>
-                    {ticket.date} | {ticket.vendor_name}
-                  </Text>
-                </TouchableOpacity>
+          Ticket #{ticket.ticket_number || tId}
+        </Text>
+        {/* ✅ UPDATED: Now uses displayDate instead of ticket.date */}
+        <Text style={tableStyles.smallText}>
+          {displayDate} | {ticket.vendor_name}
+        </Text>
+      </TouchableOpacity>
 
                 {/* VIEW PDF BUTTON */}
                 <TouchableOpacity

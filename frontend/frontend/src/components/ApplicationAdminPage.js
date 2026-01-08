@@ -449,51 +449,7 @@ const handleFinalizeSchedule = async () => {
               >
                 Clear Filter
               </button>
-              {/* --- ADMIN ACTION SECTION --- */}
-<div className="admin-action-card">
 
-  <div className="action-controls">
-   <div className="date-input-wrapper">
-        {/* <label htmlFor="schedule-date">Select Date (MM/DD/YYYY)</label> */}
-        <DatePicker
-  id="schedule-date"
-  // FIX: Use forward slashes to force local timezone parsing
-  selected={filterDate ? new Date(filterDate.replace(/-/g, '/')) : null}
-  onChange={(date) => {
-    if (!date) {
-      setFilterDate("");
-      return;
-    }
-    // FIX: Extract local year, month, and day to avoid UTC shifts
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    
-    const formattedDate = `${year}-${month}-${day}`;
-    setFilterDate(formattedDate);
-    setCurrentPage(1);
-  }}
-  dateFormat="MM/dd/yyyy"
-  placeholderText="Select Date (MM/DD/YYYY)"
-  className="modern-date-picker"
-  isClearable
-/>
-      </div>
-    
-    <button
-      className={`finalize-btn ${(!filterDate || filteredTimesheets.length === 0) ? 'disabled' : ''}`}
-      onClick={handleFinalizeSchedule}
-      disabled={!filterDate || filteredTimesheets.length === 0}
-    >
-      <div className="btn-content">
-        <FaPaperPlane className="plane-icon" />
-        <div className="btn-text">
-          <span className="main-text">Finalize & Send</span>
-        </div>
-      </div>
-    </button>
-  </div>
-</div>
               
             </div>
             {/* --- END NEW SEARCH BAR --- */}
@@ -547,7 +503,7 @@ const handleFinalizeSchedule = async () => {
   <button
     className="btn btn-warning btn-sm resend-btn"
     onClick={(e) => {
-      e.stopPropagatin();
+      e.stopPropagation();
       handleResendClick(ts);  // ✅ Pass full timesheet object (ts)
     }}
     title="Edit & Resend timesheet"

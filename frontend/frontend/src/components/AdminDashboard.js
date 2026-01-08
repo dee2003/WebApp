@@ -9,8 +9,9 @@ import {
 } from 'react-icons/fa';
 import Tickets from './Tickets'; // <--- ADD THIS
 import TimesheetCounts from './TimesheetCounts';
+import PendingTimesheetsPage from './PendingTimesheetsPage'; // new import
 import './Equipment.css';
-import AuditLogViewer from './AuditLogViewer'; // <-- ADD THIS LINE
+import AuditLogViewer from './AuditLogViewer'; 
 import { apiClient } from "../api";
 export const ITEMSPERPAGE = 10;
 // Pagination controls component (reusable)
@@ -63,7 +64,6 @@ const Modal = ({ title, children, onClose, size = "medium" }) => (
         </div>
     </div>
 );
-// --- Notification & Confirmation Modals (Unchanged) ---
 const NotificationModal = ({ message, onClose }) => (
     // MODIFIED: Added inline style for centering the modal on the screen
     <div className="modal" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -80,7 +80,6 @@ const NotificationModal = ({ message, onClose }) => (
     </div>
 );
 const ConfirmationModal = ({ message, onConfirm, onCancel }) => (
-    // MODIFIED: Added inline style for centering the modal on the screen
     <div className="modal" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="modal-content small">
             <div className="modal-header">
@@ -864,7 +863,14 @@ const [selectedCategoryNumber, setSelectedCategoryNumber] = useState("");
 const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
 const [equipmentDeptFilter, setEquipmentDeptFilter] = useState("MLCJobs");
 const [subModal, setSubModal] = useState({ shown: false, type: null, title: '' }); // <-- ADD THIS
+  const [pendingViewRole, setPendingViewRole] = useState(null);
+  const handleTimesheetCardClick = (role) => {
+    setPendingViewRole(role);
+  };
 
+  const handlePendingBack = () => {
+    setPendingViewRole(null);
+  };
 const [dumpingSiteOptions, setDumpingSiteOptions] = useState({
   type: [],
   category: [],
@@ -1179,6 +1185,7 @@ const handleAddOrUpdateItem = async (type, itemData, mode, existingItem = null) 
   const stateKey = typeToStateKey[type];
   setFormError('');
   setFieldErrors({});
+  
 
   const formData = {
     ...itemData,
@@ -1187,7 +1194,15 @@ const handleAddOrUpdateItem = async (type, itemData, mode, existingItem = null) 
   let payload;
 
   try {
-    
+    if (type === 'user') {
+      const numericId = parseInt(formData.id, 10);
+      if (isNaN(numericId)) {
+        setFieldErrors({ id: 'User ID must be a valid integer.' });
+        return;
+      }
+      formData.id = numericId; // Update the formData with the actual integer
+      payload = { ...formData };
+    }
 if (type === "vendor") {
   const baseUrl = `/vendors/`;
   let response;
@@ -1508,7 +1523,7 @@ const handleToggleStatus = async (type, item, newStatus) => {
     
     const getFormFields = (type) => {
         switch (type) {
-            case "user": return [ { name: "id", label: "User ID", required: true },{ name: "username", label: "Username", required: true }, { name: "first_name", label: "First Name", required: true }, { name: "middle_name", label: "Middle Name" }, { name: "last_name", label: "Last Name", required: true }, { name: "email", label: "Email", required: true, type: "email" }, { name: "password", label: "Password", type: "password", required: true },
+            case "user": return [ { name: "id", label: "User ID",type: "number", required: true },{ name: "username", label: "Username", required: true }, { name: "first_name", label: "First Name", required: true }, { name: "middle_name", label: "Middle Name" }, { name: "last_name", label: "Last Name", required: true }, { name: "email", label: "Email", required: true, type: "email" }, { name: "password", label: "Password", type: "password", required: true },
                { name: 'role', label: 'Role', type: 'select', options: [
             { value: 'FOREMAN', label: 'Foreman' },
             { value: 'SUPERVISOR', label: 'Supervisor' },
@@ -2007,29 +2022,53 @@ return (
 };
 
         switch (activeSection) {
-            case 'dashboard':
-            return <TimesheetCounts />;
+               case 'dashboard':
+      if (pendingViewRole) {
+        return (
+          <PendingTimesheetsPage
+            role={pendingViewRole}
+            onBack={handlePendingBack}
+          />
+        );
+      }
+      return (
+        <TimesheetCounts onCardClick={handleTimesheetCardClick} />
+      );
             case "tickets":
                 return <Tickets />;
-            case "users": 
-                return makeTableWithPagination(
-                    "user", 
-                    "User Management", 
-                    ["ID", "Username", "First Name", "Last Name", "Role","Status"], 
-                    u => (
-                        <>
-                    <td key={u.id}>{u.id}</td>
-
-                            <td key={u.username}>{u.username}</td>
-                            <td key={u.first_name}>{u.first_name}</td>
-                            <td key={u.last_name}>{u.last_name}</td>
-                            <td key={u.role}>{formatRole(u.role)}</td>
-                                        <td key={u.status}>{capitalizeFirstLetter(u.status)}</td>
-
-                        </>
-                    )
-                    
-                );
+case "users": 
+    return makeTableWithPagination(
+        "user", 
+        "User Management", 
+        ["ID", "Username", "First Name", "Last Name", "Role", "Status"], 
+        u => (
+            <>
+                <td>{u.id}</td>
+                <td>{u.username}</td>
+                <td>{u.first_name}</td>
+                <td>{u.last_name}</td>
+                <td>{formatRole(u.role)}</td>
+                <td>{capitalizeFirstLetter(u.status)}</td>
+            </>
+        ),
+        {
+            // Add this extra object to handle the edit click
+            onEdit: (user) => {
+                setModal({
+                    shown: true,
+                    type: "user",
+                    title: "Edit User",
+                    mode: "edit",
+                    // If your user object HAS a password field, this will pass it.
+                    // If not, we use a placeholder so the field isn't empty.
+                    item: { 
+                        ...user, 
+                        password: user.password || "********" 
+                    }
+                });
+            }
+        }
+    );
             case "employees": 
                 return makeTableWithPagination("employee", "Employee Management", ["ID", "Name", "Class", "Status"], e => {
                     const fullName = `${e.first_name} ${e.middle_name ? e.middle_name + ' ' : ''}${e.last_name}`;
@@ -2214,14 +2253,13 @@ case "vendors": return makeTableWithPagination(
     ), "Vendors"
 );
 
-
 case "materials_trucking":
   return makeTableWithPagination(
     "materials_trucking",
     "Materials & Trucking",
     ["ID", "Name", "Type", "Category", "Materials", "Unit", "Status"],
     (m) => {
-      // Extract materials & units safely
+      // Extract materials & units safely for table display
       const materialNames = m.materials?.length
         ? m.materials.map(mat => mat.material || "-").join(", ")
         : "-";
@@ -2242,8 +2280,27 @@ case "materials_trucking":
         </>
       );
     },
-   // The table will render correctly without this argument, but since you used it elsewhere:
-    "Material/Trucking Item"
+    {
+      // ADD THIS: Custom object to handle the edit data transformation
+      onEdit: (item) => {
+        // Map the materials objects into a simple array of IDs for the checkboxes
+        const selectedMaterialIds = (item.materials || []).map(mat => mat.id);
+        
+        setModal({
+          shown: true,
+          type: "materials_trucking",
+          title: "Edit Material/Trucking Item",
+          mode: "edit",
+          item: { 
+            ...item, 
+            material_ids: selectedMaterialIds // MultiSelectWithAdd uses this key
+          },
+        });
+      },
+      onDelete: (id) => handleDeleteItem("materials_trucking", id),
+      handleToggleStatus: handleToggleStatus,
+      activeSection: "materials_trucking"
+    }
   );
 
 case "job-phases": {

@@ -92,7 +92,8 @@ const ForemanTimesheetViewScreen = ({ navigation, route }: any) => {
     const [vendorUnits, setVendorUnits] = useState<UnitState>({});
     const [dumpingSiteHours, setDumpingSiteHours] = useState<SimpleHourState>({});
     const [dumpingSiteTickets, setDumpingSiteTickets] = useState<SimpleHourState>({});
-
+const [selectedTickets, setSelectedTickets] = useState<any[]>([]);
+const [currentTicketIndex, setCurrentTicketIndex] = useState(0);
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -263,18 +264,21 @@ const handleSendTimesheet = async (id: number) => {
         },
     ]);
 };
-    const handleViewLinkedTicket = (rowId: string) => {
-        const linkedIds = selectedTicketIds[rowId];
-        if (!linkedIds || linkedIds.length === 0) return;
+const handleViewLinkedTicket = (rowId: string) => {
+    const linkedIds = selectedTicketIds[rowId];
+    if (!linkedIds || linkedIds.length === 0) return;
 
-        const ticket = availableScannedTickets.find(t => linkedIds.includes(t.id || t.ID));
-        if (ticket) {
-            setSelectedTicket(ticket);
-            setIsPdfFullScreen(true);
-        } else {
-            Alert.alert("Error", "Ticket file not found.");
-        }
-    };
+    // Filter ALL tickets that match the linked IDs for this row
+    const tickets = availableScannedTickets.filter(t => linkedIds.includes(t.id || t.ID));
+    
+    if (tickets.length > 0) {
+        setSelectedTickets(tickets);
+        setCurrentTicketIndex(0); // Start at the first one
+        setIsPdfFullScreen(true);
+    } else {
+        Alert.alert("Error", "Ticket files not found.");
+    }
+};
 
     const calculateTotalSimpleHours = (state: SimpleHourState, id: string) => 
         Object.values(state[id] || {}).reduce((t, v) => t + (parseFloat(v) || 0), 0);
@@ -324,8 +328,8 @@ const handleSendTimesheet = async (id: number) => {
                         <View style={styles.tableHeader}>
                             {(type === 'material' || isDumping) && <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>ID</Text>}
                             {isVendor && <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>V-ID</Text>}
-                            <Text style={[styles.headerCell, styles.colName, styles.borderRight, styles.headerCellBottomBorder]}>Name</Text>
                             {isEmployee && <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>EMP#</Text>}
+                           <Text style={[styles.headerCell, styles.colName, styles.borderRight, styles.headerCellBottomBorder]}>Name</Text>
                             {isEquipment && <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>EQUIP#</Text>}
                             {isEmployee && <Text style={[styles.headerCell, styles.colClassCode, styles.borderRight, styles.headerCellBottomBorder]}>Class</Text>}
                             {isVendor && <Text style={[styles.headerCell, styles.colMaterial, styles.borderRight, styles.headerCellBottomBorder]}>Material</Text>}
@@ -352,7 +356,11 @@ const handleSendTimesheet = async (id: number) => {
 {entities.map((e, idx) => {
     // Unique ID for state lookup
     const eid = isVendor ? `${e.vendor_id || e.id}_${e.material_id || e.id}` : String(e.id);
-    const name = isVendor ? e.vendor_name : (e.name || e.material_name || `${e.first_name || ''} ${e.last_name || ''}`);
+const name = isVendor
+  ? e.vendor_name
+  : isEmployee
+    ? `${e.first_name || ''} ${e.last_name || ''}`.trim()
+    : (e.name || e.material_name || '');
     
     // --- SPECIAL HANDLING FOR EMPLOYEES WITH MULTIPLE CLASS CODES ---
     if (isEmployee) {
@@ -523,25 +531,57 @@ const handleSendTimesheet = async (id: number) => {
             </ScrollView>
 
             {/* --- PDF VIEWER --- */}
-            <Modal visible={isPdfFullScreen} transparent={false} animationType="slide">
-                <SafeAreaView style={styles.fullScreenPdfContainer}>
-                    <View style={styles.fullScreenHeader}>
-                        <Text style={styles.fullScreenTitle}>Ticket View</Text>
-                        <TouchableOpacity onPress={() => setIsPdfFullScreen(false)}><Text style={{color: '#fff'}}>Close</Text></TouchableOpacity>
+<Modal visible={isPdfFullScreen} transparent={false} animationType="slide">
+    <SafeAreaView style={styles.fullScreenPdfContainer}>
+        <View style={styles.fullScreenHeader}>
+            <View>
+                <Text style={styles.fullScreenTitle}>
+                    Ticket {currentTicketIndex + 1} of {selectedTickets.length}
+                </Text>
+            </View>
+            <TouchableOpacity onPress={() => setIsPdfFullScreen(false)}>
+                <Text style={{color: '#fff', fontWeight: 'bold'}}>Close</Text>
+            </TouchableOpacity>
+        </View>
+
+        {selectedTickets.length > 0 && (
+            <View style={{ flex: 1 }}>
+                {(() => {
+                    const ticket = selectedTickets[currentTicketIndex];
+                    const uri = getImageUri(ticket);
+                    if (!uri) return <Text style={{color: '#fff', textAlign: 'center'}}>File error</Text>;
+                    
+                    return uri.toLowerCase().endsWith('.pdf') ? (
+                        <Pdf source={{ uri, cache: true }} style={styles.fullScreenPdf} />
+                    ) : (
+                        <Image source={{ uri }} style={{ flex: 1, resizeMode: 'contain' }} />
+                    );
+                })()}
+
+                {/* Navigation Overlay */}
+                {selectedTickets.length > 1 && (
+                    <View style={styles.navigationOverlay}>
+                        <TouchableOpacity 
+                            disabled={currentTicketIndex === 0}
+                            onPress={() => setCurrentTicketIndex(prev => prev - 1)}
+                            style={[styles.navButton, currentTicketIndex === 0 && { opacity: 0.3 }]}
+                        >
+                            <Feather name="chevron-left" size={30} color="#fff" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            disabled={currentTicketIndex === selectedTickets.length - 1}
+                            onPress={() => setCurrentTicketIndex(prev => prev + 1)}
+                            style={[styles.navButton, currentTicketIndex === selectedTickets.length - 1 && { opacity: 0.3 }]}
+                        >
+                            <Feather name="chevron-right" size={30} color="#fff" />
+                        </TouchableOpacity>
                     </View>
-                    {selectedTicket && (
-                        (() => {
-                            const uri = getImageUri(selectedTicket);
-                            if (!uri) return <Text style={{color: '#fff', textAlign: 'center', marginTop: 20}}>File path error</Text>;
-                            return uri.toLowerCase().endsWith('.pdf') ? (
-                                <Pdf source={{ uri, cache: true }} style={styles.fullScreenPdf} />
-                            ) : (
-                                <Image source={{ uri }} style={{ flex: 1, resizeMode: 'contain' }} />
-                            );
-                        })()
-                    )}
-                </SafeAreaView>
-            </Modal>
+                )}
+            </View>
+        )}
+    </SafeAreaView>
+</Modal>
         </SafeAreaView>
     );
 };
@@ -597,6 +637,20 @@ const styles = StyleSheet.create({
     fullScreenPdf: { flex: 1, width: "100%" },
     fullScreenHeader: { flexDirection: "row", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: "#333" },
     fullScreenTitle: { fontSize: 16, color: "#fff", fontWeight: "bold" },
+    navigationOverlay: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 30,
+},
+navButton: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 10,
+    borderRadius: 25,
+},
 });
 
 export default ForemanTimesheetViewScreen;

@@ -24,6 +24,7 @@ from .token import SECRET_KEY, ALGORITHM # Assuming these are in token.py
 from . import oauth2  # <--- REPLACE IT WITH THIS
 from dotenv import load_dotenv
 import os
+from datetime import date  # <--- ADD THIS LINE
 from .routers import password_reset
 from routers import auth
 from routers import web_password_reset
@@ -31,7 +32,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi import FastAPI, Request, status
 from backend.schemas import LoginRequest   
-
+from apscheduler.schedulers.background import BackgroundScheduler
 # load_dotenv(".env")  
 # print("SMTP_USER:", os.getenv("SMTP_USER"))
 # print("SMTP_PASSWORD:", os.getenv("SMTP_PASSWORD"))
@@ -39,11 +40,59 @@ from backend.schemas import LoginRequest
 # Database: Create all tables
 # -------------------------------
 models.Base.metadata.create_all(bind=database.engine)
-
+def scheduled_daily_report():
+    """
+    Background task to trigger the daily schedule email.
+    It calls the logic defined in the timesheet router.
+    """
+    db = database.SessionLocal()
+    try:
+        import asyncio
+        today_str = date.today().isoformat()
+        logging.info(f"⏰ Scheduler: Starting 2:00 PM automated task for {today_str}")
+        
+        # This calls the shared logic we put in the timesheet router
+        from .routers.timesheet import generate_and_send_schedule_email
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(generate_and_send_schedule_email(today_str, db))
+        loop.close()
+        logging.info("⏰ Scheduler: Daily task completed successfully.")
+    except Exception as e:
+        logging.error(f"⏰ Scheduler Error: {e}")
+    finally:
+        db.close()
 # -------------------------------
 # App and Middleware
 # -------------------------------
 app = FastAPI()
+scheduler = BackgroundScheduler()
+
+# backend/main.py
+
+@app.on_event("startup")
+def on_startup():
+    print("--- Running startup tasks ---")
+    seed_admin_users()
+    
+    # Update the time here: 11:55 AM
+    scheduler.add_job(
+        scheduled_daily_report, 
+        'cron', 
+        hour=11, 
+        minute=57,
+        id="daily_schedule_job",
+        replace_existing=True
+    )
+    scheduler.start()
+    
+    print("🚀 Background Scheduler Started: Daily email set for 11:55 AM")
+
+@app.on_event("shutdown")
+def on_shutdown():
+    scheduler.shutdown()
+    print("--- Application shutdown complete ---")
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):

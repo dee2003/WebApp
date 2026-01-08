@@ -13,29 +13,48 @@ function App() {
     const [currentUser, setCurrentUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true); // <-- This is essential.
 
-    // This hook runs ONLY ONCE on startup to check for an existing session.
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        const role = localStorage.getItem('user_role'); // e.g., the string "APP_ADMIN"
+    // // This hook runs ONLY ONCE on startup to check for an existing session.
+    // useEffect(() => {
+    //     const token = localStorage.getItem('token');
+    //     const role = localStorage.getItem('user_role'); // e.g., the string "APP_ADMIN"
 
-        // Only restore the session if both token and a valid role string exist.
-        if (token && role) {
-            setCurrentUser({ username: 'user', role: role });
-        }
+    //     // Only restore the session if both token and a valid role string exist.
+    //     if (token && role) {
+    //         setCurrentUser({ username: 'user', role: role });
+    //     }
         
-        // Critical: After checking, we are done loading.
-        setIsLoading(false);
-    }, []); // The empty array ensures this runs only once on startup.
+    //     // Critical: After checking, we are done loading.
+    //     setIsLoading(false);
+    // }, []); // The empty array ensures this runs only once on startup.
+
+
+// Inside App.js useEffect
+useEffect(() => {
+    const token = sessionStorage.getItem('token'); // Use session
+    const role = sessionStorage.getItem('user_role'); // Use session
+
+    if (token && role) {
+        setCurrentUser({ username: 'user', role: role });
+    }
+    setIsLoading(false);
+}, []);
 
     const handleLogin = (user) => {
         setCurrentUser(user);
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user_role');
-        setCurrentUser(null);
-    };
+    // const handleLogout = () => {
+    //     localStorage.removeItem('token');
+    //     localStorage.removeItem('user_role');
+    //     setCurrentUser(null);
+    // };
+
+
+const handleLogout = () => {
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user_role');
+    setCurrentUser(null);
+};
 
     // While checking the session, show a loading message. This prevents all errors.
     if (isLoading) {

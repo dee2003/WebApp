@@ -21,7 +21,7 @@ import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import apiClient from '../../api/apiClient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ProjectEngineerStackParamList } from '../../navigation/AppNavigator';
-
+import DateTimePicker from '@react-native-community/datetimepicker';
 // ✅ IMPORT PDF LIBRARY
 import Pdf from 'react-native-pdf';
 
@@ -78,7 +78,7 @@ const PETicketList = () => {
     const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
     const [saving, setSaving] = useState(false);
     const [formData, setFormData] = useState<Partial<Ticket>>({});
-
+const [showDatePicker, setShowDatePicker] = useState(false); // 2. Add this state
     const loadTickets = useCallback(async () => {
         try {
             setLoading(true);
@@ -97,7 +97,26 @@ const PETicketList = () => {
     useEffect(() => {
         loadTickets();
     }, [loadTickets]);
+// 3. Robust US Formatter for display
+const formatDateUS = (dateString?: string) => {
+    if (!dateString) return '';
+    // Handle ISO format (YYYY-MM-DD) or similar
+    const [year, month, day] = dateString.split('-');
+    if (!year || !month || !day) return dateString;
+    return `${month}/${day}/${year}`;
+};
 
+// 4. Picker change handler
+const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+        // Save in YYYY-MM-DD format for backend compatibility
+        const year = selectedDate.getFullYear();
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(selectedDate.getDate()).padStart(2, '0');
+        handleFieldChange('ticket_date', `${year}-${month}-${day}`);
+    }
+};
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await loadTickets();
@@ -360,10 +379,27 @@ const PETicketList = () => {
                                             <Text style={styles.label}>Ticket Number</Text>
                                             <TextInput style={styles.input} value={formData.ticket_number} onChangeText={(t) => handleFieldChange('ticket_number', t)} />
                                         </View>
-                                        <View style={styles.inputGroup}>
-                                            <Text style={styles.label}>Date</Text>
-                                            <TextInput style={styles.input} value={formData.ticket_date} onChangeText={(t) => handleFieldChange('ticket_date', t)} />
-                                        </View>
+              <View style={styles.inputGroup}>
+    <Text style={styles.label}>Date</Text>
+    <TouchableOpacity 
+        style={[styles.input, { justifyContent: 'center' }]} 
+        onPress={() => setShowDatePicker(true)}
+    >
+        <Text style={{ color: formData.ticket_date ? '#333' : '#999' }}>
+            {formData.ticket_date ? formatDateUS(formData.ticket_date) : 'Select Date'}
+        </Text>
+    </TouchableOpacity>
+</View>
+
+{/* Place this outside the ScrollView but inside the Modal */}
+{showDatePicker && (
+    <DateTimePicker
+        value={formData.ticket_date ? new Date(formData.ticket_date + 'T12:00:00') : new Date()}
+        mode="date"
+        display={Platform.OS === 'ios' ? 'inline' : 'default'}
+        onChange={onDateChange}
+    />
+)}
                                     </View>
                                     <View style={styles.inputRow}>
                                         <View style={styles.inputGroup}>

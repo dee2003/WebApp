@@ -14,19 +14,17 @@ const API_BASE_URL = API_URL.replace(/\/api\/?$/, '');
 // --- HELPERS ---
 
 const formatDateForDisplay = (dateStr) => {
-    if (!dateStr) return "-";
+    if (!dateStr) return "";
     const s = String(dateStr).trim();
-    if (/^\d{2}-\d{2}-\d{4}$/.test(s)) return s;
+    
+    // Check for YYYY-MM-DD (standard calendar output)
     const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (isoMatch) {
         const [_, y, m, d] = isoMatch;
-        return `${m}-${d}-${y}`;
+        return `${m}-${d}-${y}`; // Result: MM-DD-YYYY
     }
-    const isoSlashMatch = s.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
-    if (isoSlashMatch) {
-        const [_, y, m, d] = isoSlashMatch;
-        return `${m}-${d}-${y}`;
-    }
+    
+    // Fallback for existing Date objects
     const d = new Date(s);
     if (!isNaN(d.getTime())) {
         const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -542,20 +540,52 @@ const Tickets = () => {
                         </div>
                         <div className="modal-body" style={{padding: '20px'}}>
                             <form onSubmit={handleSearchSubmit}>
-                                <div className="form-group">
-                                    <label>Date Range (YYYY-MM-DD)</label>
-                                    <div style={{display:'flex', gap:'10px'}}>
-                                        <input type="date" className="form-control" 
-                                            value={searchFilters.date_from} 
-                                            onChange={e => setSearchFilters({...searchFilters, date_from: e.target.value})} 
-                                        />
-                                        <span style={{alignSelf:'center'}}>to</span>
-                                        <input type="date" className="form-control" 
-                                            value={searchFilters.date_to} 
-                                            onChange={e => setSearchFilters({...searchFilters, date_to: e.target.value})} 
-                                        />
-                                    </div>
-                                </div>
+<div className="form-group">
+    <label>Date Range (MM-DD-YYYY)</label>
+    <div style={{ display: 'flex', gap: '10px' }}>
+        
+        {/* FROM DATE */}
+        <div className="custom-date-wrapper" style={{ position: 'relative', flex: 1 }}>
+            <input 
+                type="date" 
+                className="hidden-date-picker"
+                value={searchFilters.date_from} 
+                onChange={e => setSearchFilters({...searchFilters, date_from: e.target.value})} 
+                style={{
+                    position: 'absolute',
+                    top: 0, left: 0, width: '100%', height: '100%',
+                    opacity: 0, cursor: 'pointer', zIndex: 2
+                }}
+            />
+            <div className="form-control" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff' }}>
+                <span>{searchFilters.date_from ? formatDateForDisplay(searchFilters.date_from) : "MM-DD-YYYY"}</span>
+                <FaCalendarAlt color="#007bff" />
+            </div>
+        </div>
+
+        <span style={{ alignSelf: 'center' }}>to</span>
+
+        {/* TO DATE */}
+        <div className="custom-date-wrapper" style={{ position: 'relative', flex: 1 }}>
+            <input 
+                type="date" 
+                className="hidden-date-picker"
+                value={searchFilters.date_to} 
+                onChange={e => setSearchFilters({...searchFilters, date_to: e.target.value})} 
+                style={{
+                    position: 'absolute',
+                    top: 0, left: 0, width: '100%', height: '100%',
+                    opacity: 0, cursor: 'pointer', zIndex: 2
+                }}
+            />
+            <div className="form-control" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff' }}>
+                <span>{searchFilters.date_to ? formatDateForDisplay(searchFilters.date_to) : "MM-DD-YYYY"}</span>
+                <FaCalendarAlt color="#007bff" />
+            </div>
+        </div>
+
+    </div>
+</div>
                                 <div className="form-group">
                                     <label>Ticket Number</label>
                                     <input type="text" className="form-control" placeholder="e.g. 12345"

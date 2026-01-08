@@ -5,7 +5,7 @@ import styles from './TimesheetCounts.module.css'; // Import CSS Module
 
 const API_URL = 'http://127.0.0.1:8000/api';
 
-const TimesheetCounts = () => {
+const TimesheetCounts = ({ onCardClick }) => {
   const [counts, setCounts] = useState({
     foreman: 0,
     supervisor: 0,
@@ -14,6 +14,11 @@ const TimesheetCounts = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hoveredCard, setHoveredCard] = useState(null);
+const handleClick = (role) => {
+  if (onCardClick) {
+    onCardClick(role);
+  }
+};
 
   useEffect(() => {
     const fetchTimesheetCounts = async () => {
@@ -53,6 +58,7 @@ const TimesheetCounts = () => {
           className={getCardClasses('foreman')}
           onMouseEnter={() => setHoveredCard('foreman')}
           onMouseLeave={() => setHoveredCard(null)}
+          onClick={() => handleClick('foreman')}
         >
           <div className={styles.cardHeaderBar}>
             <FaUserTie size={20} /> With Foreman
@@ -64,10 +70,11 @@ const TimesheetCounts = () => {
         </div>
 
         {/* Supervisor Card */}
-        <div
+<div
           className={getCardClasses('supervisor')}
           onMouseEnter={() => setHoveredCard('supervisor')}
           onMouseLeave={() => setHoveredCard(null)}
+          onClick={() => handleClick('supervisor')}
         >
           <div className={styles.cardHeaderBar}>
             <FaUserShield size={20} /> With Supervisor
@@ -79,10 +86,11 @@ const TimesheetCounts = () => {
         </div>
 
         {/* Project Engineer Card */}
-        <div
-          className={getCardClasses('project_engineer')}
-          onMouseEnter={() => setHoveredCard('project_engineer')}
+         <div
+          className={getCardClasses('projectengineer')}
+          onMouseEnter={() => setHoveredCard('projectengineer')}
           onMouseLeave={() => setHoveredCard(null)}
+          onClick={() => handleClick('projectengineer')}
         >
           <div className={styles.cardHeaderBar}>
             <FaUserCog size={20} /> With Project Engineer

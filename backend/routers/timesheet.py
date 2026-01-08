@@ -11,7 +11,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from sqlalchemy.orm.attributes import flag_modified
 import os
-from ..models import Timesheet,JobPhase,ClassCode  # <-- import your model
+from ..models import Timesheet,JobPhase,ClassCode , UserRole,User # <-- import your model
 from ..database import get_db
 from ..auditing import log_action
 from .. import oauth2
@@ -37,41 +37,53 @@ BASE_URL = os.getenv("BASE_URL")
 print("🔗 [Router] BASE_URL loaded:", BASE_URL)
 @router.get("/counts-by-status", response_model=schemas.TimesheetCountsResponse)
 def get_timesheet_counts_by_status(db: Session = Depends(get_db)):
+    """
+    Returns pending timesheet counts for foreman, supervisor, and project engineer,
+    excluding FLAGGER users.
+    """
     try:
-        foreman_statuses = [
-            models.SubmissionStatus.DRAFT.value,
-            models.SubmissionStatus.PENDING.value,
-        ]
+        # Foreman counts
+        foreman_count = (
+            db.query(func.count(Timesheet.id))
+            .join(User, Timesheet.foreman_id == User.id)
+            .filter(
+                Timesheet.status.in_([SubmissionStatus.DRAFT.value, SubmissionStatus.PENDING.value]),
+                User.role != UserRole.FLAGGER
+            )
+            .scalar()
+        )
 
-        supervisor_statuses = [
-            models.SubmissionStatus.SUBMITTED.value,
-        ]
+        # Supervisor counts
+        supervisor_count = (
+            db.query(func.count(Timesheet.id))
+            .join(User, Timesheet.foreman_id == User.id)
+            .filter(
+                Timesheet.status.in_([SubmissionStatus.SUBMITTED.value]),
+                User.role != UserRole.FLAGGER
+            )
+            .scalar()
+        )
 
-        engineer_status = models.SubmissionStatus.APPROVED_BY_SUPERVISOR.value
-
-        counts_query = db.query(
-            func.count(
-                case((models.Timesheet.status.cast(String).in_(foreman_statuses), 1))
-            ).label("foreman_total"),
-
-            func.count(
-                case((models.Timesheet.status.cast(String).in_(supervisor_statuses), 1))
-            ).label("supervisor_total"),
-
-            func.count(
-                case((models.Timesheet.status.cast(String) == engineer_status, 1))
-            ).label("engineer_total"),
-        ).first()
+        # Project Engineer counts
+        engineer_count = (
+            db.query(func.count(Timesheet.id))
+            .join(User, Timesheet.foreman_id == User.id)
+            .filter(
+                Timesheet.status == SubmissionStatus.APPROVED_BY_SUPERVISOR.value,
+                User.role != UserRole.FLAGGER
+            )
+            .scalar()
+        )
 
         return {
-            "foreman": int(counts_query.foreman_total or 0),
-            "supervisor": int(counts_query.supervisor_total or 0),
-            "project_engineer": int(counts_query.engineer_total or 0),
+            "foreman": int(foreman_count or 0),
+            "supervisor": int(supervisor_count or 0),
+            "project_engineer": int(engineer_count or 0),
         }
 
     except Exception as e:
+        print(f"Counts-by-status ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
 import httpx 
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
 OFFICE_COORDS = {"lat": 38.9072, "lon": -77.0369}
@@ -201,12 +213,19 @@ def create_timesheet(
     db.commit()
     return db_ts
 
+
+
+
 @router.get("/by-foreman/{foreman_id}", response_model=List[schemas.Timesheet])
 def get_timesheets_by_foreman(foreman_id: int, db: Session = Depends(get_db)):
     """
     Returns only editable timesheets (Draft or Pending) for a given foreman.
     'Sent' or 'Approved' timesheets will no longer appear in the app list.
     """
+    user = db.query(models.User).filter(models.User.id == foreman_id).first()
+    # 2. If it's Melinda (FLAGGER), ensure today's blank record exists first
+    if user and user.role == "FLAGGER":
+        ensure_flagger_record(foreman_id, db)
     timesheets = (
         db.query(models.Timesheet)
         .options(joinedload(models.Timesheet.files))
@@ -222,6 +241,33 @@ def get_timesheets_by_foreman(foreman_id: int, db: Session = Depends(get_db)):
     )
     return timesheets
 
+@router.post("/ensure-flagger-record/{foreman_id}")
+def ensure_flagger_record(foreman_id: int, db: Session = Depends(get_db)):
+    """Ensures a blank record exists for Melinda for today's date."""
+    today = datetime.utcnow().date()
+    existing = db.query(models.Timesheet).filter(
+        models.Timesheet.foreman_id == foreman_id,
+        models.Timesheet.date == today
+    ).first()
+    if not existing:
+        # Create the 'Blank Template' as requested
+        new_ts = models.Timesheet(
+            foreman_id=foreman_id,
+            date=today,
+            status="DRAFT",
+            timesheet_name="Daily Flagging Activity",
+            data={
+                "is_flagger": True,
+                "role": "flagger",
+                "employees": [],
+                "equipment": [],
+                "vendors": []
+            }
+        )
+        db.add(new_ts)
+        db.commit()
+        return {"status": "created", "id": new_ts.id}
+    return {"status": "exists", "id": existing.id}
 
 from datetime import date as date_type
 from sqlalchemy import cast, Date
@@ -305,7 +351,7 @@ def get_class_codes(db: Session = Depends(get_db)):
     # Query all codes sorted by the code number
     codes = db.query(ClassCode).order_by(ClassCode.code).all()
     return [c.to_dict() for c in codes]
-@router.get("/{timesheet_id}")
+@router.get("/{timesheet_id:int}")
 def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
     """
     Returns a single timesheet, prioritizing saved JSON data and only enriching
@@ -319,12 +365,24 @@ def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
     )
     if not timesheet:
         raise HTTPException(status_code=404, detail="Timesheet not found")
+    is_flagger = timesheet.foreman and timesheet.foreman.role == "FLAGGER"
     saved_data = timesheet.data or {}
     if isinstance(saved_data, str):
         try:
             saved_data = json.loads(saved_data)
         except json.JSONDecodeError:
             saved_data = {}
+    saved_data["role"] = "flagger" if is_flagger else "foreman"
+    saved_data["is_flagger"] = is_flagger
+    # If it's Melinda (Flagger), we skip the heavy DB enrichment to preserve the blank state
+    if is_flagger:
+        return {
+            "id": timesheet.id,
+            "foreman_id": timesheet.foreman_id,
+            "date": timesheet.date,
+            "status": timesheet.status,
+            "data": saved_data, # Return as-is
+        }
     # --- ENRICHMENT HELPER FUNCTION ---
     def enrich_entities(entity_key: str, model, name_fields: list, add_phase_defaults: bool = False, skip_name_enrichment: bool = False):
         source_data = saved_data.get(entity_key, [])
@@ -399,6 +457,7 @@ def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
         "timesheet_name": timesheet.timesheet_name,
         "data": saved_data,
     }
+
 from sqlalchemy.orm.attributes import flag_modified # Needed for JSONB updates
 @router.put("/{timesheet_id}", response_model=schemas.Timesheet)
 
@@ -528,7 +587,7 @@ def update_timesheet(
             create_df(data.get("vendors", [])).to_excel(writer, index=False, sheet_name="Vendors")
             create_dumping_site_df(data.get("dumping_sites", [])).to_excel(writer, index=False, sheet_name="DumpingSites")
         
-        NGROK_BASE_URL = "https://0ae6f7f8ad66.ngrok-free.app"
+        NGROK_BASE_URL = "https://7b813b4cce0e.ngrok-free.app"
         file_url = f"{NGROK_BASE_URL}/storage/{ts_date_str}/{file_name}"
         # :white_check_mark: Save file info in DB
         file_record = models.TimesheetFile(
@@ -1225,29 +1284,114 @@ async def send_html_notification(request: NotificationRequest):
     except Exception as e:
         print(f"Email failure: {e}")
         raise HTTPException(status_code=500, detail="Failed to dispatch consolidated email.")
-from fastapi import Body
-from sqlalchemy import Date, cast
-from email.mime.text import MIMEText
 
-@router.post("/send-daily-schedule")
-async def send_daily_schedule(
-    payload: dict = Body(...), 
+
+
+ROLE_MAP = {
+    "foreman": UserRole.FOREMAN,
+    "supervisor": UserRole.SUPERVISOR,
+    "projectengineer": UserRole.PROJECT_ENGINEER,
+    "project_engineer": UserRole.PROJECT_ENGINEER,
+    "accountant": UserRole.ACCOUNTANT,
+    "executive": UserRole.EXECUTIVE,
+    "admin": UserRole.ADMIN,
+    "app_admin": UserRole.APP_ADMIN,
+    "flagger": UserRole.FLAGGER,
+}
+
+@router.get("/pending")
+def get_pending_timesheets(
+    approver_role: str = Query(..., description="FOREMAN, SUPERVISOR, or PROJECT_ENGINEER"),
     db: Session = Depends(get_db)
 ):
-    target_date = payload.get("date")
-    if not target_date:
-        raise HTTPException(status_code=400, detail="Date is required")
+    """
+    Get pending timesheets for a given approver role.
+    Excludes users with role FLAGGER.
+    """
+    try:
+        # Normalize role
+        role_enum = ROLE_MAP.get(approver_role.lower())
+        if not role_enum:
+            raise HTTPException(status_code=400, detail=f"Invalid approver_role: {approver_role}")
 
-    # Fetch timesheets for the specified date
+        # Determine which statuses to include based on approver role
+        if role_enum == UserRole.FOREMAN:
+            statuses = [SubmissionStatus.DRAFT.value, SubmissionStatus.PENDING.value]
+        elif role_enum == UserRole.SUPERVISOR:
+            statuses = [SubmissionStatus.SUBMITTED.value]
+        elif role_enum == UserRole.PROJECT_ENGINEER:
+            statuses = [SubmissionStatus.APPROVED_BY_SUPERVISOR.value]
+        else:
+            # Default: no statuses, just in case
+            statuses = []
+
+        # Query timesheets, exclude FLAGGER users
+        timesheets_query = (
+            db.query(
+                Timesheet.id,
+                Timesheet.date,
+                Timesheet.status,
+                Timesheet.foreman_id,
+                User.first_name.label("foreman_first"),
+                User.last_name.label("foreman_last"),
+                User.role.label("foreman_role"),
+                JobPhase.job_code,
+                JobPhase.job_description.label("job_name"),
+            )
+            .outerjoin(User, Timesheet.foreman_id == User.id)
+            .outerjoin(JobPhase, Timesheet.job_phase_id == JobPhase.id)
+            .filter(
+                Timesheet.status.in_(statuses),
+                User.role != UserRole.FLAGGER  # ✅ Exclude flagger
+            )
+            .order_by(Timesheet.date.desc())
+            .all()
+        )
+
+        # Transform query results into flat JSON
+        result = []
+        for row in timesheets_query:
+            foreman_name = f"{row.foreman_first or ''} {row.foreman_last or ''}".strip()
+            result.append({
+                "id": row.id,
+                "employee_id": row.foreman_id,
+                "employee_name": foreman_name or f"Foreman ID: {row.foreman_id}",
+                "date": row.date.strftime("%Y-%m-%d") if row.date else "",
+                "status": row.status,
+                "job_code": row.job_code,
+                "job_name": row.job_name,
+                "approver_role": role_enum.value,
+                "total_hours": 0.0,  # Optional: can be populated if needed
+            })
+
+        return result
+
+    except Exception as e:
+        print(f"Pending timesheets ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+
+from fastapi import APIRouter, Depends, HTTPException, Body, status, Query
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import Date, cast
+from datetime import date, datetime
+import asyncio
+from apscheduler.schedulers.background import BackgroundScheduler
+from ..database import SessionLocal, get_db  # Ensure SessionLocal is imported for background tasks
+from .. import models, schemas
+
+# --- SHARED CORE LOGIC ---
+async def generate_and_send_schedule_email(target_date: str, db: Session):
+    """Fetches schedules for a date and dispatches the HTML email."""
     timesheets = db.query(models.Timesheet).filter(
         cast(models.Timesheet.date, Date) == target_date
     ).options(joinedload(models.Timesheet.foreman)).all()
 
     if not timesheets:
-        raise HTTPException(status_code=404, detail="No schedules found for this date")
+        return {"status": "skipped", "message": f"No schedules found for {target_date}"}
 
     table_rows = ""
-    # Styling to match the reference image
     HEADER_STYLE = "background-color: #7a2323; color: white; padding: 10px; font-size: 12px; border: 1px solid #ddd; text-align: center; text-transform: uppercase;"
     CELL_STYLE = "padding: 10px; border: 1px solid #ddd; vertical-align: top; font-size: 13px; color: #333;"
     
@@ -1255,31 +1399,25 @@ async def send_daily_schedule(
         data = ts.data or {}
         f_name = f"{ts.foreman.first_name} {ts.foreman.last_name}" if ts.foreman else "N/A"
         
-        # 1. Job & Contract Column
         job_code = data.get('job', {}).get('job_code', 'N/A')
         job_name = data.get('job_name', 'N/A')
         contract = data.get('contract_no', 'N/A')
         job_cell = f"<b>{job_code}</b><br/>{job_name}<br/><br/><small>Contract: {contract}</small>"
 
-        # 2. Category Mapping (Concrete, Asphalt, Top Soil)
         col_data = {"Concrete": "", "Asphalt": "", "Top Soil": ""}
         vendor_materials = data.get("selected_vendor_materials", {})
         
         for v_id, v_data in vendor_materials.items():
             v_name = v_data.get('name', 'Vendor')
             v_cat = v_data.get('vendor_category', '')
-            
-            # Get material names (Fixing the previous 'detail' vs 'material' issue)
             m_names = [m.get('material') for m in v_data.get("selectedMaterials", []) if m.get('material')]
             
             if m_names:
                 formatted_entry = f"<b>{v_name}</b><br/>{', '.join(m_names)}<br/>"
-                # Map to specific column based on category string
                 if "Concrete" in v_cat: col_data["Concrete"] += formatted_entry
                 elif "Asphalt" in v_cat: col_data["Asphalt"] += formatted_entry
                 elif "Top Soil" in v_cat: col_data["Top Soil"] += formatted_entry
 
-        # 3. Logistics (Trucking)
         logistics = ""
         trucking_items = data.get("selected_material_items", {})
         for t_id, t_data in trucking_items.items():
@@ -1287,25 +1425,24 @@ async def send_daily_schedule(
             notes = t_data.get("notes", "").replace(";", "<br/>• ")
             logistics += f"<b>{t_name}</b><br/>{f'• {notes}' if notes else ''}<br/>"
 
-        # 4. Location & Navigation
         addr = data.get("location", "No Address")
-        maps_link = f"<a href='https://www.google.com/maps/search/?api=1&query={addr}' style='color: #007bff; text-decoration: none;'>{addr}</a>"
+        maps_link = f"<a href='http://maps.google.com/?q={addr}' style='color: #007bff; text-decoration: none;'>{addr}</a>"
 
         table_rows += f"""
             <tr>
                 <td style="{CELL_STYLE} font-weight: bold;">{f_name}</td>
                 <td style="{CELL_STYLE}">{job_cell}</td>
                 <td style="{CELL_STYLE}">{maps_link}</td>
-                <td style="{CELL_STYLE}">{col_data["Concrete"] or ""}</td>
-                <td style="{CELL_STYLE}">{col_data["Asphalt"] or ""}</td>
-                <td style="{CELL_STYLE}">{col_data["Top Soil"] or ""}</td>
-                <td style="{CELL_STYLE}">{logistics or ""}</td>
+                <td style="{CELL_STYLE}">{col_data["Concrete"]}</td>
+                <td style="{CELL_STYLE}">{col_data["Asphalt"]}</td>
+                <td style="{CELL_STYLE}">{col_data["Top Soil"]}</td>
+                <td style="{CELL_STYLE}">{logistics}</td>
             </tr>
         """
 
     full_html = f"""
     <div style="font-family: Arial, sans-serif; padding: 20px;">
-        <h2 style="color: #333;">Daily Schedule - {target_date}</h2>
+        <h2 style="color: #333;">Daily Schedule Report - {target_date}</h2>
         <table style="width: 100%; border-collapse: collapse; min-width: 800px;">
             <thead>
                 <tr>
@@ -1318,9 +1455,7 @@ async def send_daily_schedule(
                     <th style="{HEADER_STYLE}">Trucking</th>
                 </tr>
             </thead>
-            <tbody>
-                {table_rows}
-            </tbody>
+            <tbody>{table_rows}</tbody>
         </table>
     </div>
     """
@@ -1331,3 +1466,35 @@ async def send_daily_schedule(
         message=full_html
     )
     return await send_html_notification(notification)
+
+# --- AUTOMATED BACKGROUND JOB ---
+def scheduled_daily_email_task():
+    """Sync wrapper for the scheduler."""
+    db = SessionLocal()
+    try:
+        today_str = date.today().isoformat()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(generate_and_send_schedule_email(today_str, db))
+        loop.close()
+    except Exception as e:
+        print(f"Background Task Error: {e}")
+    finally:
+        db.close()
+
+# --- MANUAL ENDPOINT (FOR THE FRONTEND BUTTON) ---
+@router.post("/send-daily-schedule")
+async def send_daily_schedule(
+    payload: dict = Body(...), 
+    db: Session = Depends(get_db)
+):
+    target_date = payload.get("date")
+    if not target_date:
+        raise HTTPException(status_code=400, detail="Date is required")
+
+    result = await generate_and_send_schedule_email(target_date, db)
+    
+    if isinstance(result, dict) and result.get("status") == "skipped":
+        raise HTTPException(status_code=404, detail=result["message"])
+        
+    return result

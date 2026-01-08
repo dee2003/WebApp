@@ -8,6 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
@@ -26,22 +27,59 @@ const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Helper to validate email format before hitting the API
+  const validateEmail = (email: string) => {
+    const re = /\S+@\S+\.\S+/;
+    return re.test(email);
+  };
+
   const sendOtp = async () => {
-    if (!email.trim()) {
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail) {
       Alert.alert("Email required", "Please enter your email.");
+      return;
+    }
+
+    if (!validateEmail(trimmedEmail)) {
+      Alert.alert("Invalid Email", "Please enter a valid email address.");
       return;
     }
 
     try {
       setLoading(true);
-      await apiClient.post("/api/auth/send-reset-otp", { email });
+
+      /**
+       * BACKEND LOGIC EXPECTATION:
+       * Your API should check if the email exists in the DB.
+       * - If found: Send OTP and return 200 OK.
+       * - If NOT found: Return 404 Not Found or 400 Bad Request.
+       */
+      const response = await apiClient.post("/api/auth/send-reset-otp", { 
+        email: trimmedEmail 
+      });
+
+      // If we reach here, it means the request was successful (200 OK)
       Alert.alert("Success", "Reset instructions have been sent to your email.");
-      navigation.navigate("VerifyOtp", { email });
+      
+      // Navigate to the next screen only on success
+      navigation.navigate("VerifyOtp", { email: trimmedEmail });
+
     } catch (err: any) {
-      Alert.alert(
-        "Error",
-        err?.response?.data?.detail || "Something went wrong. Please try again."
-      );
+      // If the backend returns a 404 or 400, it falls into this block
+      const status = err?.response?.status;
+      const errorMessage = err?.response?.data?.detail;
+
+      if (status === 404) {
+        Alert.alert("Account Not Found", "This email address is not registered.");
+      } else if (status === 429) {
+        Alert.alert("Too Many Requests", "Please wait a moment before trying again.");
+      } else {
+        Alert.alert(
+          "Error",
+          errorMessage || "Something went wrong. Please check your connection."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -73,6 +111,7 @@ const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
               onChangeText={setEmail}
               style={styles.input}
               autoCapitalize="none"
+              autoCorrect={false}
               keyboardType="email-address"
               placeholderTextColor="#9CA3AF"
               editable={!loading}
@@ -83,11 +122,13 @@ const ForgotPasswordScreen: React.FC<Props> = ({ navigation }) => {
             style={[styles.button, isDisabled && styles.buttonDisabled]}
             onPress={sendOtp}
             disabled={isDisabled}
-            activeOpacity={0.9}
+            activeOpacity={0.8}
           >
-            <Text style={styles.buttonText}>
-              {loading ? "Sending..." : "Reset password"}
-            </Text>
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.buttonText}>Reset password</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -113,24 +154,22 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    justifyContent: "center", // centers card vertically
+    justifyContent: "center",
     paddingHorizontal: 24,
-      paddingTop: 80, // adjust as needed
-
   },
-card: {
-  backgroundColor: "#FFFFFF",
-  borderRadius: 16,
-  paddingVertical: 32,
-  paddingHorizontal: 24,
-  shadowColor: "#000",
-  shadowOpacity: 0.04,
-  shadowRadius: 20,
-  shadowOffset: { width: 0, height: 10 },
-  elevation: 3,
-  marginTop: -170, // 👈 moves the card up
-},
-
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 3,
+    // Use a percentage or smaller margin if the screen feels too empty
+    marginTop: -40, 
+  },
   iconWrapper: {
     width: 52,
     height: 52,
@@ -182,9 +221,12 @@ card: {
     borderRadius: 8,
     alignItems: "center",
     marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    minHeight: 48,
   },
   buttonDisabled: {
-    backgroundColor: "#5C6BC0",
+    backgroundColor: "#9FA8DA", // Lighter shade to indicate disabled state
   },
   buttonText: {
     color: "#FFFFFF",
@@ -195,6 +237,7 @@ card: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 8,
   },
   backArrow: {
     fontSize: 14,
@@ -204,5 +247,6 @@ card: {
   backText: {
     fontSize: 14,
     color: "#6B7280",
+    fontWeight: "500",
   },
 });

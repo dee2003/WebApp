@@ -7,9 +7,9 @@ from email.mime.text import MIMEText
 from sqlalchemy.orm import Session
 from .. import database, models, utils_comman
 import os
-
+from fastapi import APIRouter, HTTPException, Depends, status # Added 'status'
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
-
+from ..models import User
 # Temporary OTP + token store
 otp_store = {}
 
@@ -43,16 +43,33 @@ class ResetRequestTokenOnly(BaseModel):
     new_password: str
 
 # ---------------- Endpoints ----------------
+from ..database import get_db
+
 @router.post("/send-reset-otp")
-def send_otp(data: EmailRequest):
+def send_otp(data: EmailRequest, db: Session = Depends(get_db)): # Ensure you inject your DB session
     email = data.email.lower()
+
+    # 1. Check if the user exists in your database
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user:
+        # 2. Raise a 404 error if email is not in the database
+        # This is what triggers the 'catch' block in your React Native code
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This email address is not registered."
+        )
+
+    # 3. If user exists, proceed with OTP generation
     otp = random.randint(100000, 999999)
     otp_store[email] = {
         "otp": str(otp),
         "expires": datetime.utcnow() + timedelta(minutes=5),
         "token": None
     }
+    
     send_email(email, "Your OTP Code", f"Your OTP code is {otp}. It expires in 5 minutes.")
+    
     print(f"[DEBUG] OTP {otp} sent to {email}")
     return {"message": "OTP sent successfully"}
 

@@ -3136,17 +3136,25 @@ if (total > 24) {
         });
         return newState;
     };
+    
+// 1. Add index state near your other ticket states
+const [currentTicketIndex, setCurrentTicketIndex] = useState(0);
+const [selectedTickets, setSelectedTickets] = useState<any[]>([]); // Rename to plural
+
+// 2. Updated handler to capture ALL matching tickets
 const handleViewLinkedTicket = (rowId: string) => {
     const linkedIds = selectedTicketIds[rowId];
     if (!linkedIds || linkedIds.length === 0) return;
 
-    // Find the first matching ticket object to display in the viewer
-    const ticket = availableScannedTickets.find(t => linkedIds.includes(t.id || t.ID));
-    if (ticket) {
-        setSelectedTicket(ticket);
+    // Filter ALL tickets that match the linked IDs
+    const tickets = availableScannedTickets.filter(t => linkedIds.includes(t.id || t.ID));
+    
+    if (tickets.length > 0) {
+        setSelectedTickets(tickets);
+        setCurrentTicketIndex(0); // Start at the first ticket
         setIsPdfFullScreen(true);
     } else {
-        Alert.alert("Error", "Ticket file not found.");
+        Alert.alert("Error", "Ticket files not found.");
     }
 };
     const handlePhaseCodeRename = (oldPhase: string, newPhase: string, isFromQuantityBlock: boolean = false) => {
@@ -4612,25 +4620,61 @@ const label = count === 1 ? "employee" : "employees";
                         <Text style={styles.notesText}>{notes || 'No notes provided.'}</Text>
                     )}
                 </View>
-                <Modal visible={isPdfFullScreen} transparent={false} animationType="slide">
+<Modal visible={isPdfFullScreen} transparent={false} animationType="slide">
     <SafeAreaView style={styles.fullScreenPdfContainer}>
         <View style={styles.fullScreenHeader}>
-            <Text style={styles.fullScreenTitle}>Ticket View</Text>
+            <View>
+                <Text style={styles.fullScreenTitle}>Ticket View</Text>
+                {selectedTickets.length > 1 && (
+                    <Text style={{color: '#999', fontSize: 12}}>
+                        {currentTicketIndex + 1} of {selectedTickets.length}
+                    </Text>
+                )}
+            </View>
             <TouchableOpacity onPress={() => setIsPdfFullScreen(false)}>
                 <Text style={{color: THEME.primary, fontSize: 16, fontWeight: '600'}}>Done</Text>
             </TouchableOpacity>
         </View>
-        {selectedTicket && (
-            (() => {
-                const uri = getImageUri(selectedTicket);
-                if (!uri) return <Text style={{color: '#fff', textAlign: 'center'}}>Path Error</Text>;
-                return uri.toLowerCase().endsWith('.pdf') ? (
-                    <Pdf source={{ uri, cache: true }} style={{flex: 1}} trustAllCerts={false} />
-                ) : (
-                    <Image source={{ uri }} style={{ flex: 1, resizeMode: 'contain' }} />
-                );
-            })()
-        )}
+
+        <View style={{ flex: 1 }}>
+            {selectedTickets.length > 0 && (
+                (() => {
+                    const ticket = selectedTickets[currentTicketIndex];
+                    const uri = getImageUri(ticket);
+                    if (!uri) return <Text style={{color: '#fff', textAlign: 'center'}}>Path Error</Text>;
+                    return uri.toLowerCase().endsWith('.pdf') ? (
+                        <Pdf 
+                            source={{ uri, cache: true }} 
+                            style={{flex: 1}} 
+                            trustAllCerts={false} 
+                        />
+                    ) : (
+                        <Image source={{ uri }} style={{ flex: 1, resizeMode: 'contain' }} />
+                    );
+                })()
+            )}
+
+            {/* Navigation Overlay for Multiple Tickets */}
+            {selectedTickets.length > 1 && (
+                <View style={styles.ticketNavigation}>
+                    <TouchableOpacity 
+                        disabled={currentTicketIndex === 0}
+                        onPress={() => setCurrentTicketIndex(prev => prev - 1)}
+                        style={[styles.navBtn, currentTicketIndex === 0 && { opacity: 0.3 }]}
+                    >
+                        <Feather name="chevron-left" size={35} color="#fff" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        disabled={currentTicketIndex === selectedTickets.length - 1}
+                        onPress={() => setCurrentTicketIndex(prev => prev + 1)}
+                        style={[styles.navBtn, currentTicketIndex === selectedTickets.length - 1 && { opacity: 0.3 }]}
+                    >
+                        <Feather name="chevron-right" size={35} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+            )}
+        </View>
     </SafeAreaView>
 </Modal>
             </ScrollView>
@@ -4671,6 +4715,20 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  ticketNavigation: {
+    position: 'absolute',
+    bottom: 50,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 30,
+},
+navBtn: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 10,
+    borderRadius: 30,
+},
 fullScreenPdfContainer: {
         flex: 1,
         backgroundColor: "#000",
