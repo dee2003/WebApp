@@ -256,6 +256,10 @@
   font-size: 0.95rem;
   color: #333;
   cursor: pointer;
+  /* --- FIX FOR WRAPPING --- */
+  white-space: normal;    /* Allows text to go to next line */
+  word-wrap: break-word;  /* Breaks very long words if necessary */
+  padding-right: 10px;    /* Prevents text from touching the next column */
 }
 
 .timesheet-row span:last-child {

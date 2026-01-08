@@ -2033,24 +2033,51 @@ const phaseCodes = jobPhaseCodes;
   const phaseTotals = calculateEmployeePhaseTotals(employeeHours, selectedPhases);
 
 const getEmployeeClasses = (emp: any) => {
+
   const hoursForEmp = employeeHours[emp.id] || {};
+
   
-  // 1. Get unique class codes that currently have hours assigned in any phase
+
+  // 1. Get unique class codes that have hours
+
   const activeClasses = new Set<string>();
+
   Object.values(hoursForEmp).forEach(phaseObj => {
-    Object.keys(phaseObj).forEach(cls => activeClasses.add(cls));
+
+    Object.keys(phaseObj).forEach(cls => {
+
+        // Only consider it active if it has a value or isn't our placeholder
+
+        if(cls !== "ADD_NEW_CLASS") activeClasses.add(cls);
+
+    });
+
   });
 
-  // 2. Ensure "113" is always first, then add other active ones
-  const finalClasses = Array.from(new Set(['113', ...Array.from(activeClasses)]));
+
+
+  // 2. Ensure "113" is included as default if no other classes exist
+
+  if (activeClasses.size === 0) activeClasses.add('113');
+
+
+
+  const finalClasses = Array.from(activeClasses);
+
   
-  // 3. Limit to 4 and append "ADD_NEW_CLASS" placeholder if there's room
-  const result = finalClasses.slice(0, 4);
-  if (result.length < 4) {
-    result.push("ADD_NEW_CLASS");
+
+  // 3. Append the "Add" button ONLY if we are under the limit of 4
+
+  if (finalClasses.length < 4) {
+
+    finalClasses.push("ADD_NEW_CLASS");
+
   }
+
   
-  return result;
+
+  return finalClasses;
+
 };
 
 
@@ -2242,37 +2269,34 @@ const name = `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
 
 
       {/* Reason dropdown under name */}
-    
-
-{calculateTotalEmployeeHours(employeeHours, emp.id) === 0 && (
-  <Dropdown
-    style={{
+      {calculateTotalEmployeeHours(employeeHours, emp.id) === 0 && (
+        <View
+           style={{
       marginTop: 4,
       backgroundColor: "white",
       borderWidth: 1,
       borderColor: "#ccc",
       borderRadius: 8,
-      width: 140,
-      height: 36,
-      paddingHorizontal: 8,
+      width: 120,
+      height: 36, // reduce container height
+      justifyContent: "center", // vertically center the picker
+      paddingHorizontal: 4,
     }}
-    placeholderStyle={{ fontSize: 12, color: '#999' }}
-    selectedTextStyle={{ fontSize: 12, color: '#000' }}
-    data={[
-      { label: 'Sick', value: 'Sick' },
-      { label: 'Safe', value: 'Safe' },
-      { label: 'Off', value: 'Off' },
-      { label: 'Other Crew', value: 'Other Crew' },
-    ]}
-    labelField="label"
-    valueField="value"
-    placeholder="Select Reason..."
-    value={employeeReasons[emp.id] || ""}
-    onChange={item => {
-      setEmployeeReasons((prev) => ({ ...prev, [emp.id]: item.value }));
-    }}
-  />
-)}
+        >
+          <Picker
+            selectedValue={employeeReasons[emp.id] || ""}
+            onValueChange={(v) =>
+              setEmployeeReasons((prev) => ({ ...prev, [emp.id]: v }))
+            }
+          >
+            <Picker.Item label="Select Reason…" value="" />
+            <Picker.Item label="Sick" value="Sick" />
+            <Picker.Item label="Safe" value="Safe" />
+            <Picker.Item label="Off" value="Off" />
+            <Picker.Item label="Other Crew" value="Other Crew" />
+          </Picker>
+        </View>
+      )}
     </View>
   ) : (
     <Text />
@@ -2326,14 +2350,25 @@ const name = `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
 
 
 {/* Right total fixed column */}
+
 <View style={[tableStyles.cellFixed, { width: 88 }]}>
-  {rowIsLastForEmp && classCode !== "ADD_NEW_CLASS" ? (
+
+  {/* 🔥 FIX: Show total on the last ACTUAL class code row, or if it's the only row */}
+
+  {(classIndex === allClasses.length - 1 || allClasses[classIndex + 1] === "ADD_NEW_CLASS") && classCode !== "ADD_NEW_CLASS" ? (
+
     <Text style={tableStyles.totalText}>
+
       {calculateTotalEmployeeHours(employeeHours, emp.id).toFixed(1)}
+
     </Text>
+
   ) : (
+
     <Text />
+
   )}
+
 </View>
                        {/* Reason dropdown — only if employee has no hours */}
 

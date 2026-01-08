@@ -324,8 +324,9 @@ const handleSendTimesheet = async (id: number) => {
                         <View style={styles.tableHeader}>
                             {(type === 'material' || isDumping) && <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>ID</Text>}
                             {isVendor && <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>V-ID</Text>}
-                            <Text style={[styles.headerCell, styles.colName, styles.borderRight, styles.headerCellBottomBorder]}>Name</Text>
                             {isEmployee && <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>EMP#</Text>}
+                            <Text style={[styles.headerCell, styles.colName, styles.borderRight, styles.headerCellBottomBorder]}>Name</Text>
+                 
                             {isEquipment && <Text style={[styles.headerCell, styles.colId, styles.borderRight, styles.headerCellBottomBorder]}>EQUIP#</Text>}
                             {isEmployee && <Text style={[styles.headerCell, styles.colClassCode, styles.borderRight, styles.headerCellBottomBorder]}>Class</Text>}
                             {isVendor && <Text style={[styles.headerCell, styles.colMaterial, styles.borderRight, styles.headerCellBottomBorder]}>Material</Text>}
@@ -352,7 +353,11 @@ const handleSendTimesheet = async (id: number) => {
 {entities.map((e, idx) => {
     // Unique ID for state lookup
     const eid = isVendor ? `${e.vendor_id || e.id}_${e.material_id || e.id}` : String(e.id);
-    const name = isVendor ? e.vendor_name : (e.name || e.material_name || `${e.first_name || ''} ${e.last_name || ''}`);
+    const name = isVendor
+  ? e.vendor_name
+  : isEmployee
+    ? `${e.first_name || ''} ${e.last_name || ''}`.trim()
+    : (e.name || e.material_name || '');
     
     // --- SPECIAL HANDLING FOR EMPLOYEES WITH MULTIPLE CLASS CODES ---
     if (isEmployee) {

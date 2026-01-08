@@ -64,66 +64,66 @@ async def get_mapbox_distance(address: str):
     except Exception:
         return 0
 
-@router.get("/morning-brief")
-async def get_morning_brief(db: Session = Depends(get_db)):
-    """Enriched endpoint for Natalia's Dashboard."""
-    timesheets = db.query(models.Timesheet).filter(
-        models.Timesheet.status == "DRAFT"
-    ).options(joinedload(models.Timesheet.foreman)).all()
+# @router.get("/morning-brief")
+# async def get_morning_brief(db: Session = Depends(get_db)):
+#     """Enriched endpoint for Natalia's Dashboard."""
+#     timesheets = db.query(models.Timesheet).filter(
+#         models.Timesheet.status == "DRAFT"
+#     ).options(joinedload(models.Timesheet.foreman)).all()
     
-    results = []
-    for ts in timesheets:
-        f_name = f"{ts.foreman.first_name} {ts.foreman.last_name}" if ts.foreman else "Unknown"
+#     results = []
+#     for ts in timesheets:
+#         f_name = f"{ts.foreman.first_name} {ts.foreman.last_name}" if ts.foreman else "Unknown"
         
-        # Build nested data Category -> Vendor -> Materials
-        categorized_data = {"Concrete": {}, "Asphalt": {}, "Top Soil": {}, "Trucking": {}}
+#         # Build nested data Category -> Vendor -> Materials
+#         categorized_data = {"Concrete": {}, "Asphalt": {}, "Top Soil": {}, "Trucking": {}}
         
-        # 1. Process Vendors
-        vendor_mats = ts.data.get("selected_vendor_materials", {})
-        for v_id, v_data in vendor_mats.items():
-            v_name = v_data.get("name", "Vendor")
-            cat = v_data.get("vendor_category", "General")
-            if "Asphalt" in cat: cat = "Asphalt"
+#         # 1. Process Vendors
+#         vendor_mats = ts.data.get("selected_vendor_materials", {})
+#         for v_id, v_data in vendor_mats.items():
+#             v_name = v_data.get("name", "Vendor")
+#             cat = v_data.get("vendor_category", "General")
+#             if "Asphalt" in cat: cat = "Asphalt"
             
-            if cat in categorized_data:
-                if v_name not in categorized_data[cat]: categorized_data[cat][v_name] = []
-                for m in v_data.get("selectedMaterials", []):
-                    if m.get('detail'):
-                        categorized_data[cat][v_name].append({
-                            "important": m.get('detail').strip(),
-                            "material": m.get('material')
-                        })
+#             if cat in categorized_data:
+#                 if v_name not in categorized_data[cat]: categorized_data[cat][v_name] = []
+#                 for m in v_data.get("selectedMaterials", []):
+#                     if m.get('detail'):
+#                         categorized_data[cat][v_name].append({
+#                             "important": m.get('detail').strip(),
+#                             "material": m.get('material')
+#                         })
 
-        # 2. Process Trucking
-        trucking = ts.data.get("selected_material_items", {})
-        for t_id, t_data in trucking.items():
-            t_name = t_data.get("name", "Hauler")
-            if t_data.get("notes"):
-                if t_name not in categorized_data["Trucking"]: categorized_data["Trucking"][t_name] = []
-                categorized_data["Trucking"][t_name].append({
-                    "important": t_data.get("notes").strip(),
-                    "material": "Trucking Services"
-                })
+#         # 2. Process Trucking
+#         trucking = ts.data.get("selected_material_items", {})
+#         for t_id, t_data in trucking.items():
+#             t_name = t_data.get("name", "Hauler")
+#             if t_data.get("notes"):
+#                 if t_name not in categorized_data["Trucking"]: categorized_data["Trucking"][t_name] = []
+#                 categorized_data["Trucking"][t_name].append({
+#                     "important": t_data.get("notes").strip(),
+#                     "material": "Trucking Services"
+#                 })
 
-        # Distance logic (Await async helper)
-        address = ts.data.get("location", "No Address")
-        dist_meters = await get_mapbox_distance(address)
+#         # Distance logic (Await async helper)
+#         address = ts.data.get("location", "No Address")
+#         dist_meters = await get_mapbox_distance(address)
 
-        results.append({
-            "id": ts.id,
-            "status": ts.status,
-            "date": str(ts.date),
-            "brief": {
-                "foreman": f_name,
-                "job_code": ts.data.get("job", {}).get("job_code", "N/A"),
-                "job_name": ts.data.get("job_name", "N/A"),
-                "categorized_data": categorized_data,
-                "address": address,
-                "distanceMeters": dist_meters,
-                "distanceMiles": round(dist_meters / 1609.34, 1) if dist_meters > 0 else "N/A"
-            }
-        })
-    return results
+#         results.append({
+#             "id": ts.id,
+#             "status": ts.status,
+#             "date": str(ts.date),
+#             "brief": {
+#                 "foreman": f_name,
+#                 "job_code": ts.data.get("job", {}).get("job_code", "N/A"),
+#                 "job_name": ts.data.get("job_name", "N/A"),
+#                 "categorized_data": categorized_data,
+#                 "address": address,
+#                 "distanceMeters": dist_meters,
+#                 "distanceMiles": round(dist_meters / 1609.34, 1) if dist_meters > 0 else "N/A"
+#             }
+#         })
+#     return results
 
     
 # def format_natalia_alert(ts_data: dict, foreman_name: str):
@@ -250,9 +250,14 @@ async def get_mapbox_distance(address: str):
 @router.get("/morning-brief")
 async def get_morning_brief(db: Session = Depends(get_db)):
     """Enriched endpoint for Natalia's Dashboard."""
-    timesheets = db.query(models.Timesheet).filter(
-        models.Timesheet.status == "DRAFT"
+    timesheets = db.query(models.Timesheet).join(
+        models.User, models.Timesheet.foreman_id == models.User.id
+    ).filter(
+        models.Timesheet.status == "DRAFT",
+        # Explicitly cast the ENUM role to a String for the ILIKE operator
+        cast(models.User.role, String).ilike("foreman")
     ).options(joinedload(models.Timesheet.foreman)).all()
+
     results = []
     for ts in timesheets:
         f_name = f"{ts.foreman.first_name} {ts.foreman.last_name}" if ts.foreman else "Unknown"
@@ -300,6 +305,7 @@ async def get_morning_brief(db: Session = Depends(get_db)):
             }
         })
     return results
+
 @router.post("/", response_model=schemas.Timesheet)
 
 def create_timesheet(
@@ -358,17 +364,56 @@ def create_timesheet(
     return db_ts
 
 
+# @router.get("/by-foreman/{foreman_id}", response_model=List[schemas.Timesheet])
+# def get_timesheets_by_foreman(foreman_id: int, db: Session = Depends(get_db)):
+#     """
+#     Returns only editable timesheets (Draft or Pending) for a given foreman.
+#     'Sent' or 'Approved' timesheets will no longer appear in the app list.
+#     """
+
+#     user = db.query(models.User).filter(models.User.id == foreman_id).first()
+    
+#     # 2. If it's Melinda (FLAGGER), ensure today's blank record exists first
+#     if user and user.role == "FLAGGER":
+#         ensure_flagger_record(foreman_id, db)
+
+#     timesheets = (
+#         db.query(models.Timesheet)
+#         .options(joinedload(models.Timesheet.files))
+#         .filter(
+#             models.Timesheet.foreman_id == foreman_id,
+#             models.Timesheet.status.in_([
+#                 models.SubmissionStatus.DRAFT,
+#                 models.SubmissionStatus.PENDING
+#             ])
+#         )
+#         .order_by(models.Timesheet.date.desc())
+#         .all()
+#     )
+#     return timesheets
+
+# --- timesheet.py ---
+from datetime import datetime, timedelta
+
 @router.get("/by-foreman/{foreman_id}", response_model=List[schemas.Timesheet])
 def get_timesheets_by_foreman(foreman_id: int, db: Session = Depends(get_db)):
-    """
-    Returns only editable timesheets (Draft or Pending) for a given foreman.
-    'Sent' or 'Approved' timesheets will no longer appear in the app list.
-    """
+    user = db.query(models.User).filter(models.User.id == foreman_id).first()
+    
+    # Identify if the user is a flagger to ensure today's record
+    if user and user.role == "FLAGGER":
+        ensure_flagger_record(foreman_id, db)
+        # Only show the last 7 days for flaggers to keep the list clean
+        date_limit = datetime.utcnow().date() - timedelta(days=7)
+    else:
+        # Standard foremen can see a longer history if needed
+        date_limit = datetime.utcnow().date() - timedelta(days=30)
+
     timesheets = (
         db.query(models.Timesheet)
         .options(joinedload(models.Timesheet.files))
         .filter(
             models.Timesheet.foreman_id == foreman_id,
+            models.Timesheet.date >= date_limit, # ✅ Date filter added
             models.Timesheet.status.in_([
                 models.SubmissionStatus.DRAFT,
                 models.SubmissionStatus.PENDING
@@ -379,6 +424,37 @@ def get_timesheets_by_foreman(foreman_id: int, db: Session = Depends(get_db)):
     )
     return timesheets
 
+
+@router.post("/ensure-flagger-record/{foreman_id}")
+def ensure_flagger_record(foreman_id: int, db: Session = Depends(get_db)):
+    """Ensures a blank record exists for Melinda for today's date."""
+    today = datetime.utcnow().date()
+    
+    existing = db.query(models.Timesheet).filter(
+        models.Timesheet.foreman_id == foreman_id,
+        models.Timesheet.date == today
+    ).first()
+
+    if not existing:
+        # Create the 'Blank Template' as requested
+        new_ts = models.Timesheet(
+            foreman_id=foreman_id,
+            date=today,
+            status="DRAFT",
+            timesheet_name="Daily Flagging Activity",
+            data={
+                "is_flagger": True,
+                "role": "flagger",
+                "employees": [],
+                "equipment": [],
+                "vendors": []
+            }
+        )
+        db.add(new_ts)
+        db.commit()
+        return {"status": "created", "id": new_ts.id}
+    
+    return {"status": "exists", "id": existing.id}
 
 from datetime import date as date_type
 from sqlalchemy import cast, Date
@@ -476,12 +552,27 @@ def get_single_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
     )
     if not timesheet:
         raise HTTPException(status_code=404, detail="Timesheet not found")
+    
+    is_flagger = timesheet.foreman and timesheet.foreman.role == "FLAGGER"
     saved_data = timesheet.data or {}
     if isinstance(saved_data, str):
         try:
             saved_data = json.loads(saved_data)
         except json.JSONDecodeError:
             saved_data = {}
+    
+    saved_data["role"] = "flagger" if is_flagger else "foreman"
+    saved_data["is_flagger"] = is_flagger
+
+    # If it's Melinda (Flagger), we skip the heavy DB enrichment to preserve the blank state
+    if is_flagger:
+        return {
+            "id": timesheet.id,
+            "foreman_id": timesheet.foreman_id,
+            "date": timesheet.date,
+            "status": timesheet.status,
+            "data": saved_data, # Return as-is
+        }
     # --- ENRICHMENT HELPER FUNCTION ---
     def enrich_entities(entity_key: str, model, name_fields: list, add_phase_defaults: bool = False, skip_name_enrichment: bool = False):
         source_data = saved_data.get(entity_key, [])
@@ -825,11 +916,36 @@ def delete_timesheet(timesheet_id: int, db: Session = Depends(get_db)):
 # In your routers/timesheet.py
 
 
+# @router.get("/", response_model=List[schemas.TimesheetResponse])
+# def list_timesheets(db: Session = Depends(get_db)):
+#     """
+#     Returns a list of all timesheets with foreman names and job names included.
+#     This is optimized for the admin dashboard view.
+#     """
+#     timesheets = db.query(models.Timesheet).options(joinedload(models.Timesheet.foreman)).all()
+    
+#     response = []
+#     for ts in timesheets:
+#         foreman_name = f"{ts.foreman.first_name} {ts.foreman.last_name}" if ts.foreman else "N/A"
+        
+#         # Create the response object, ensuring all required fields are present
+#         response.append(schemas.TimesheetResponse(
+#             id=ts.id,
+#             date=ts.date,
+#             foreman_id=ts.foreman_id,
+#             foreman_name=foreman_name,
+#             job_name=ts.timesheet_name,  # <-- The FIX: Populate the required 'job_name' field
+#             data=ts.data,
+#             status=ts.status
+#         ))
+        
+#     return response
+
 @router.get("/", response_model=List[schemas.TimesheetResponse])
 def list_timesheets(db: Session = Depends(get_db)):
     """
     Returns a list of all timesheets with foreman names and job names included.
-    This is optimized for the admin dashboard view.
+    Modified to include role identification for filtering.
     """
     timesheets = db.query(models.Timesheet).options(joinedload(models.Timesheet.foreman)).all()
     
@@ -837,18 +953,27 @@ def list_timesheets(db: Session = Depends(get_db)):
     for ts in timesheets:
         foreman_name = f"{ts.foreman.first_name} {ts.foreman.last_name}" if ts.foreman else "N/A"
         
-        # Create the response object, ensuring all required fields are present
+        # Determine if this is a Melinda/Flagger exception
+        is_flagger = ts.foreman.role == "FLAGGER" if ts.foreman else False
+        
+        # Create a copy of the data and inject the role for the frontend
+        updated_data = ts.data.copy() if ts.data else {}
+        updated_data["role"] = "flagger" if is_flagger else "foreman"
+        updated_data["is_flagger"] = is_flagger
+
         response.append(schemas.TimesheetResponse(
             id=ts.id,
             date=ts.date,
             foreman_id=ts.foreman_id,
             foreman_name=foreman_name,
-            job_name=ts.timesheet_name,  # <-- The FIX: Populate the required 'job_name' field
-            data=ts.data,
+            job_name=ts.timesheet_name,
+            data=updated_data, # Now contains role info
             status=ts.status
         ))
         
     return response
+
+
 from sqlalchemy import or_
 from ..models import SubmissionStatus  # ✅ use your enum safely
 

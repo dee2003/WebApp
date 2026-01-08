@@ -5,7 +5,7 @@ export type TimesheetStatus = 'Pending' | 'Submitted' | 'Approved' | 'Rejected' 
 export interface User {
   id: number;
   username: string;
-  role: 'foreman' | 'supervisor' | 'project_engineer' | 'admin';
+  role: 'foreman' | 'supervisor' | 'project_engineer' | 'admin'| 'flagger';
   first_name: string;
   last_name: string;
   middle_name: string;
@@ -95,7 +95,8 @@ export interface TimesheetData {
 supervisor?: string | { id: number; name: string } | null;
     supervisorid?: string;
 linked_tickets?: { [rowId: string]: number[] }; // Add this line
-
+role?: string;           // ✅ Add this
+  is_flagger?: boolean;
 }
 
 export interface Timesheet {

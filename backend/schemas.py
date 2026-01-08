@@ -1299,7 +1299,7 @@ class TimesheetUpdate(BaseModel):
     status: Optional[SubmissionStatus] = None
     
     date: Optional[date] = None
-
+    job_phase_id: Optional[int] = None
     @field_validator("status", mode="before")
     @classmethod
     def normalize_status(cls, v):
@@ -1334,6 +1334,8 @@ class Timesheet(BaseModel):
     job_phase_id: Optional[int] = None   # <-- Add this
     job_code: Optional[str] = None       # <-- Optional, if you want to send job code
     files: List[TimesheetFile] = []
+    role: Optional[str] = "foreman"      # To distinguish 'flagger' vs 'foreman'
+    is_flagger: Optional[bool] = False
     model_config = ConfigDict(from_attributes=True)
 
 

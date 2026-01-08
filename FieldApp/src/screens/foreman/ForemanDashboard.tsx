@@ -13,7 +13,8 @@ import {
   Animated,
   Platform,
   Modal,
-  Pressable
+  Pressable,
+  StatusBar
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext'; 
 import DocumentScanner from 'react-native-document-scanner-plugin';
@@ -148,7 +149,9 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
 
       const result = await response.json();
       if (response.ok) {
-        Alert.alert('✅ Upload Successful', `Ticket sent for processing.\n\nUploaded ${uris.length} page(s).`);
+        Alert.alert('✅ Upload Successful',
+    `Ticket sent for processing.\n\nUploaded ${uris.length} page(s).\n\n:hourglass_flowing_sand: Processing usually takes around 10 minutes. You’ll be notified once it’s complete.`
+  );
         setScreen('dashboard');
         setScannedImageUris([]);
         setSelectedTimesheetId(null);
@@ -168,7 +171,11 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
          <Image source={require('../../assets/profile-placeholder.png')} style={styles.headerProfileImage} />
       </View>
       <View style={styles.headerRight}>
-        <TouchableOpacity style={styles.headerButton} onPress={logout}>
+        <TouchableOpacity 
+          style={styles.headerButton} 
+          onPress={logout}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} // Makes it easier to tap
+        >
           <Feather name="log-out" size={24} color={theme.colors.contentLight} />
         </TouchableOpacity>
       </View>
@@ -331,8 +338,17 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
   // --- DASHBOARD SCREEN ---
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Ensures the status bar doesn't overlap content and looks clean */}
+      <StatusBar 
+        barStyle="dark-content" 
+        backgroundColor={theme.colors.backgroundLight} 
+        translucent={false} 
+      />
       <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <AppHeader />
           <View style={styles.mainContent}>
             <View style={styles.welcomeHeader}>
@@ -360,14 +376,22 @@ const ForemanDashboard = ({ navigation }: { navigation: any }) => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: theme.colors.backgroundLight },
+  safeArea: { flex: 1, backgroundColor: theme.colors.backgroundLight,paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
   container: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingBottom: 100 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24 },
+  scrollContent: { 
+    flexGrow: 1, 
+    paddingBottom: Platform.OS === 'ios' ? 120 : 100 // Extra space for home indicator
+  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24,paddingVertical: 16, // Defined vertical padding instead of just 'padding'
+    minHeight: 60 },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
   headerProfileImage: { width: 40, height: 40, borderRadius: theme.borderRadius.full, backgroundColor: '#ddd' },
   headerRight: { width: 40, alignItems: 'flex-end' },
-  headerButton: { padding: 8 },
+  headerButton: { 
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
   mainContent: { paddingHorizontal: 24 },
   welcomeHeader: { marginBottom: 32 },
   welcomeTitle: { fontSize: 30, fontWeight: 'bold', color: theme.colors.contentLight },

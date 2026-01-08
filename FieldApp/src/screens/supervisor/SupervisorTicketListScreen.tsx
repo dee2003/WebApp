@@ -1233,25 +1233,37 @@ tickets.forEach((t) => {
         }
     };
 
-    const openTicketModal = (ticket: Ticket, initialViewMode: 'form' | 'file') => {
-        setSelectedTicket(ticket);
-        let safeTableData: any[] = Array.isArray(ticket.table_data) ? ticket.table_data : [];
+const openTicketModal = (ticket: Ticket, initialViewMode: 'form' | 'file') => {
+    setSelectedTicket(ticket);
 
-        setFormData({
-            ticket_number: ticket.ticket_number,
-            ticket_date: ticket.ticket_date,
-            haul_vendor: ticket.haul_vendor,
-            truck_number: ticket.truck_number,
-            material: ticket.material,
-            job_number: ticket.job_number,
-            zone: ticket.zone,
-            hours: ticket.hours,
-            table_data: safeTableData 
-        });
+    let safeTableData: any[] = Array.isArray(ticket.table_data) ? ticket.table_data : [];
 
-        setViewMode(initialViewMode);
-        setModalVisible(true);
-    };
+    // --- Convert ISO date to MM-DD-YYYY
+    let formattedDate = ticket.ticket_date;
+    if (formattedDate) {
+        const d = new Date(formattedDate);
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        formattedDate = `${mm}-${dd}-${yyyy}`;
+    }
+
+    setFormData({
+        ticket_number: ticket.ticket_number,
+        ticket_date: formattedDate,  // <-- formatted
+        haul_vendor: ticket.haul_vendor,
+        truck_number: ticket.truck_number,
+        material: ticket.material,
+        job_number: ticket.job_number,
+        zone: ticket.zone,
+        hours: ticket.hours,
+        table_data: safeTableData 
+    });
+
+    setViewMode(initialViewMode);
+    setModalVisible(true);
+};
+
 
     const handleFormChange = (key: keyof Ticket, value: any) => {
         setFormData(prev => ({ ...prev, [key]: value }));
@@ -1270,25 +1282,34 @@ tickets.forEach((t) => {
         }
         setFormData(prev => ({ ...prev, table_data: updatedTable }));
     };
-
-    const saveTicketChanges = async () => {
-        if (!selectedTicket) return;
-        setIsSaving(true);
-        try {
-            const payload = {
-                ...formData,
-                hours: formData.hours ? Number(formData.hours) : null
-            };
-            const res = await apiClient.patch(`/api/tickets/${selectedTicket.id}`, payload);
-            setTickets(prev => prev.map(t => t.id === selectedTicket.id ? { ...t, ...res.data } : t)); 
-            Alert.alert("Success", "Ticket details updated.");
-            setModalVisible(false);
-        } catch (error) {
-            Alert.alert("Error", "Failed to save changes.");
-        } finally {
-            setIsSaving(false);
+const saveTicketChanges = async () => {
+    if (!selectedTicket) return;
+    setIsSaving(true);
+    try {
+        let ticketDateIso = formData.ticket_date;
+        if (ticketDateIso) {
+            const parts = ticketDateIso.split('-'); // MM-DD-YYYY
+            if (parts.length === 3) {
+                ticketDateIso = `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`; // YYYY-MM-DD
+            }
         }
-    };
+
+        const payload = {
+            ...formData,
+            ticket_date: ticketDateIso,
+            hours: formData.hours ? Number(formData.hours) : null
+        };
+        const res = await apiClient.patch(`/api/tickets/${selectedTicket.id}`, payload);
+        setTickets(prev => prev.map(t => t.id === selectedTicket.id ? { ...t, ...res.data } : t)); 
+        Alert.alert("Success", "Ticket details updated.");
+        setModalVisible(false);
+    } catch (error) {
+        Alert.alert("Error", "Failed to save changes.");
+    } finally {
+        setIsSaving(false);
+    }
+};
+
 const getCategoryIcon = (title: string) => {
     switch (title) {
         case 'Materials':

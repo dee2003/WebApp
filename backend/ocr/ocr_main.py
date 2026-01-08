@@ -1155,6 +1155,16 @@ class TicketUpdatePayload(BaseModel):
     # ✅ RAW TEXT: The "Extra Text" field
     raw_text: Optional[str] = None
 
+from datetime import datetime
+def parse_us_date(date_str: str):
+    date_str = date_str.strip()
+    for fmt in ("%m-%d-%Y", "%m-%d-%y"):
+        try:
+            return datetime.strptime(date_str, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Invalid US date format: {date_str}")
+
 @router.post("/update-ticket-text", status_code=status.HTTP_200_OK)
 def update_ticket_text(
     payload: TicketUpdatePayload,
@@ -1172,7 +1182,7 @@ def update_ticket_text(
 
     # 1. Update Structured Header Data
     ticket.ticket_number = payload.ticket_number
-    ticket.ticket_date = datetime.strptime(payload.ticket_date, "%m-%d-%Y").date()    
+    ticket.ticket_date = parse_us_date(payload.ticket_date)    
     ticket.haul_vendor = payload.haul_vendor
     ticket.truck_number = payload.truck_number
     ticket.material = payload.material

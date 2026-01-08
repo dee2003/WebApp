@@ -63,6 +63,12 @@ const [activeSection, setActiveSection] = useState(
   //   return true;
   // });
 const filteredTimesheets = timesheets.filter((ts) => {
+// Check for flagger role in the data we just injected via backend
+  const isFlagger = ts.data?.is_flagger === true || ts.data?.role === "flagger";
+
+  // If it is a flagger timesheet, hide it from this list
+  if (isFlagger) return false;
+
   const matchesSearch = searchType === "foreman"
   ? ts.foreman_name?.toLowerCase().includes(searchQuery.toLowerCase())
   : ts.data?.job?.job_code?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -547,7 +553,7 @@ const handleFinalizeSchedule = async () => {
   <button
     className="btn btn-warning btn-sm resend-btn"
     onClick={(e) => {
-      e.stopPropagatin();
+      e.stopPropagation();
       handleResendClick(ts);  // ✅ Pass full timesheet object (ts)
     }}
     title="Edit & Resend timesheet"

@@ -9,6 +9,8 @@ import {
   TouchableOpacity,
   RefreshControl,
   SafeAreaView,
+  Platform, // Added for OS detection
+  StatusBar
 } from 'react-native';
 import { useNavigation, CommonActions, NavigationProp } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -163,6 +165,11 @@ const loadDashboard = useCallback(async () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar 
+        barStyle="dark-content" 
+        backgroundColor={THEME_COLORS.cardLight} 
+        translucent={false} 
+      />
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -170,7 +177,13 @@ const loadDashboard = useCallback(async () => {
             <Text style={styles.welcomeTitle}>Hello, {user?.first_name || 'Engineer'}</Text>
             <Text style={styles.welcomeSubtitle}>Review & Approve Submissions</Text>
           </View>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          {/* <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}> */}
+            <TouchableOpacity 
+            style={styles.logoutButton} 
+            onPress={handleLogout}
+            // 2. Make the logout button easier to tap near screen edges
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Ionicons name="log-out-outline" size={24} color={THEME_COLORS.danger} />
           </TouchableOpacity>
         </View>
@@ -179,6 +192,7 @@ const loadDashboard = useCallback(async () => {
         <SectionList
           sections={sections}
           keyExtractor={item => item.foreman_id + '-' + item.date}
+          contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -270,18 +284,23 @@ const loadDashboard = useCallback(async () => {
 
 // ---- STYLES ----
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: THEME_COLORS.backgroundLight },
+  safeArea: { flex: 1, backgroundColor: THEME_COLORS.backgroundLight,paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: THEME_COLORS.backgroundLight },
+  listContent: {
+    // 4. Add breathing room at the bottom for modern phone gesture bars
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20, 
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 16,
+  paddingVertical: Platform.OS === 'ios' ? 12 : 16,
     backgroundColor: THEME_COLORS.cardLight,
     borderBottomWidth: 1,
     borderBottomColor: THEME_COLORS.border,
+    minHeight: 70,
   },
   welcomeTitle: { fontSize: 24, fontWeight: 'bold', color: THEME_COLORS.contentLight },
   welcomeSubtitle: { fontSize: 14, color: THEME_COLORS.subtleLight },

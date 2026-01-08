@@ -507,9 +507,9 @@ button:active {
 }
 
 /* Temperature input group styling */
-.temp-input-group {
+.temp-input-group { 
     display: flex;
-    align-items: center;
+    align-items: center;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
     gap: 0.5rem;
 }
 .temp-input-group .form-input {

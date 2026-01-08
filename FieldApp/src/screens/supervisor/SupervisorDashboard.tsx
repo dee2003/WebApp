@@ -12,6 +12,7 @@ import {
     SafeAreaView,
     Platform,
     Dimensions,
+    StatusBar
 } from 'react-native';
 import { useNavigation, CommonActions, NavigationProp } from '@react-navigation/native';
 import apiClient from '../../api/apiClient'; // Assuming this is correct
@@ -260,6 +261,11 @@ const sections = useMemo(() => {
 
     return (
         <SafeAreaView style={styles.safeArea}>
+            <StatusBar 
+                barStyle="dark-content" 
+                backgroundColor={THEME_COLORS.cardLight} 
+                translucent={false} 
+            />
             <View style={styles.container}>
                 {/* Custom Header based on Tailwind HTML */}
                 <View style={styles.header}>
@@ -269,7 +275,14 @@ const sections = useMemo(() => {
                         </Text>
                         <Text style={styles.welcomeSubtitle}>Review & Approve Submissions</Text>
                     </View>
-                    <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}>
+                    {/* <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}> */}
+                        <TouchableOpacity 
+                        style={styles.logoutButton} 
+                        onPress={handleLogout} 
+                        activeOpacity={0.7}
+                        // 2. Added hitSlop to make the button easier to tap near edges
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
                         <Ionicons name="log-out-outline" size={24} color={THEME_COLORS.danger} />
                     </TouchableOpacity>
                 </View>
@@ -405,10 +418,10 @@ foremanId: item.foreman_id,
 
 const styles = StyleSheet.create({
     // Base & Layout
-    safeArea: { flex: 1, backgroundColor: THEME_COLORS.backgroundLight },
+    safeArea: { flex: 1, backgroundColor: THEME_COLORS.backgroundLight,paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
     container: { flex: 1 },
     listContent: {
-        paddingBottom: 20, // Add space at the bottom
+        paddingBottom: Platform.OS === 'ios' ? 40 : 20, // Add space at the bottom
     },
     centered: { 
         flex: 1, 
@@ -423,10 +436,11 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: HORIZONTAL_PADDING,
-        paddingVertical: 18,
+        paddingVertical: Platform.OS === 'ios' ? 12 : 18,
         backgroundColor: THEME_COLORS.cardLight,
         borderBottomWidth: 1,
         borderBottomColor: THEME_COLORS.brandStone + '20', 
+        minHeight: 70,
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
